@@ -8,7 +8,7 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 
 **Foundations**: seven single-language lanes (Python, PLC ladder, SQL, C#, C++, Java, HTML), 44 lessons.
 
-**Projects**: five tracks, 81 steps, that build one connected system for a sample cooperage line:
+**Projects**: six tracks, 98 steps, that build one connected system for a sample cooperage line:
 
 | Track | Steps | Builds |
 |---|---|---|
@@ -17,6 +17,7 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 | OEE Loss Report | 16 | A/P/Q from one SQL query, losses in barrels and dollars, a formatted Excel report |
 | Shift Handoff | 16 | Shift window logic, a generated one-page handoff, notes written back to SQL |
 | Plant Board Page | 16 | A live line board in HTML, CSS and JavaScript |
+| MES Helper | 17 | A .NET console tool in C#: PLC faults to coded MES downtime events, posted in one transaction, plus a shift summary and CSV |
 
 Three clean runs (90%+ accuracy, no peeks) at a rank unlock the next one. Each lane and track keeps its own rank. Progress saves in the browser, per device.
 
@@ -38,8 +39,8 @@ On a free GitHub account, Pages requires the repository to be public.
 ## Add or change a lesson
 
 1. Edit the lane or track file in `site/data/`. The format is in `docs/LESSON_FORMAT.md`.
-2. Run `node tools/verify.mjs`. It checks that every lesson can be completed by typing its own code, that Python and JavaScript steps compile, that titles are unique, and that every data file is loaded.
-3. If the step shows output, regenerate it with the scripts in `tools/output-checks/` rather than typing it by hand.
+2. Run `node tools/verify.mjs`. It checks that every lesson can be completed by typing its own code, that Python, JavaScript and C# steps compile (C# needs the .NET 8 SDK; without it the check is skipped with a warning), that titles are unique, and that every data file is loaded.
+3. If the step shows output, regenerate it with the scripts in `tools/output-checks/` rather than typing it by hand. The MES Helper track is generated whole: edit `tools/output-checks/track6-mes/lessons6.py` and run `build6.py`.
 
 ## Repository layout
 

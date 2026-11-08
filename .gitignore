@@ -10,3 +10,8 @@ tools/output-checks/**/*.xlsx
 tools/output-checks/**/*.sql
 tools/output-checks/**/outs*.json
 tools/output-checks/**/handoff_*.html
+
+# .NET build output (tools/output-checks/track6-mes)
+tools/output-checks/**/build/
+bin/
+obj/

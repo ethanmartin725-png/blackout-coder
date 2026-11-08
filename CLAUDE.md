@@ -16,7 +16,8 @@ Deployed with GitHub Pages from `site/`. No framework, no build step, no depende
 
 - Check every lesson: `node tools/verify.mjs` (must pass before any commit; CI runs it before deploy)
 - Run locally: `python3 -m http.server 8000 -d site`, or open `site/index.html` directly
-- Regenerate track outputs: see `tools/output-checks/` (needs pandas and openpyxl)
+- Regenerate track outputs: see `tools/output-checks/` (needs pandas and openpyxl; track 6 needs the .NET 8 SDK)
+- MES Helper track: edit `tools/output-checks/track6-mes/lessons6.py`, then `python3 build6.py` there. It compiles and runs the C# and writes `site/data/tracks/06-mes.js`. Do not edit the JS file by hand.
 
 ## Architecture
 
@@ -41,7 +42,8 @@ Key engine behaviors:
 - **PLC ladder**: Rockwell neutral text with spaces between instructions, e.g. `XIC(A) XIO(B) OTE(C);`. Branches use `BST … NXB … BND`.
 - **Structured Text**: Studio 5000 style (`:=`, `TONR` with FBD_TIMER, `END_IF;`).
 - **Ignition scripts**: Jython 2.7. No f-strings. `system.tag.readBlocking`, `system.db.runPrepUpdate` with `?` parameters.
-- **SQL**: T-SQL (SQL Server). Parameterized `?` placeholders when called from Python.
+- **SQL**: T-SQL (SQL Server). Parameterized `?` placeholders when called from Python, named `@name` parameters from C#.
+- **C#**: .NET 8, top-level statements in `Program.cs`, nullable enabled, `Microsoft.Data.SqlClient` 7.1.1. Typed `SqlDbType` parameters, `using` on connections, writes inside a transaction. The verifier compiles every C# lesson.
 - **Python**: pandas + pyodbc + openpyxl. Never paste values into SQL text; pass parameters.
 - **Copy**: plain, direct sentences. Explain why, not just what. Call out assumptions a number depends on. No em-dash asides.
 - **Design**: dark navy with gold accents. Caladea display, Public Sans body, JetBrains Mono code, VT323 for the LCD stat readouts. Every color is a CSS token in `css/app.css`.
@@ -63,6 +65,7 @@ Rates and margin are illustrative, not real plant figures.
 - **OEE Loss Report**: week 2026-10-31 06:00 to 2026-11-07 06:00 (45 of the 47 faults fall inside it). Planned 9,450 min per machine (7 days × 3 shifts × 450 min). OEE: Char Station 2 86.0%, Conveyor 3 73.8%, Hoop Driver 1 72.9%. Dollars per OEE point: $3,347 / $4,016 / $3,682. Weekly loss $251,876, of which performance $221,444.
 - **Shift Handoff**: shift A, 2026-11-07 06:00–14:00, run at 14:05. Barrels 301 / 352 / 274. Status DOWN (open char flare) / OK / BEHIND. Faults this shift: 5. The first two (Conveyor 3 jam 09:08:52, Hoop Driver 1 misfeed 10:09:40) are the same `fault_log` records DB Pulls ends on; the misfeed, open at 10:15 there, closes at 10:17:10. Down minutes 23.75 / 4.62 / 41.00.
 - **Plant Board**: reuses the OEE, Pareto and handoff numbers above. Biggest gap to 85%: Hoop Driver 1, 12.1 pts.
+- **MES Helper**: same shift A data as Shift Handoff, run at 2026-11-07T14:05. Down minutes are clipped to the shift window: 18.75 / 4.62 / 41.00 (Char Station 2 is 18.75, not the handoff's 23.75, because the open flare stops counting at 14:00). 4 closed faults coded and posted, 1 open held back; a rerun posts 0. Reason codes and `mes_downtime_event` are illustrative, not a real MES schema.
 
 Known simplification worth keeping visible to learners: `fault_log` holds only PLC-detected jams, so availability runs about 99% and nearly all loss lands in performance. The lessons say so.
 
