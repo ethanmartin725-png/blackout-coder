@@ -2,7 +2,7 @@
 
 ## Launch
 
-- [ ] Push to GitHub, enable Pages (Source: GitHub Actions), confirm the deploy.
+- [x] Push to GitHub, enable Pages (Source: GitHub Actions), confirm the deploy. Live at https://ethanmartin725-png.github.io/blackout-coder/
 - [x] License: MIT (`LICENSE`).
 - [ ] Test on the devices friends will actually use: a Windows laptop in Chrome/Edge, an iPhone, an Android phone.
 - [ ] Share the link and collect feedback through GitHub Issues (a lesson-problem template is in `.github/ISSUE_TEMPLATE/`).
