@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blackout Coder</title>
+<meta name="description" content="Learn to code by copying real plant code, then writing it as more of it blacks out.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caladea:wght@400;700&family=JetBrains+Mono:wght@400;600&family=Public+Sans:wght@400;500;600;700&family=VT323&display=swap">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Black<span class="bar">out</span> Coder</h1>
+      <small>Copy it. Then write it.</small>
+    </div>
+    <div class="nav">
+      <div class="modes" id="modes" role="group" aria-label="Mode">
+        <button data-m="found" aria-pressed="true">Foundations</button>
+        <button data-m="proj" aria-pressed="false">Projects</button>
+      </div>
+      <nav class="langs" id="langs" role="tablist" aria-label="Lane"></nav>
+    </div>
+  </header>
+
+  <section class="goal" aria-label="Lesson goal">
+    <div class="goal-label">GOAL</div>
+    <div style="min-width:0">
+      <span class="goal-meta" id="goalMeta"></span>
+      <p class="goal-text" id="goalText"></p>
+    </div>
+    <div class="lesson-nav">
+      <button class="icon-btn" id="prevBtn" aria-label="Previous lesson">&#9664;</button>
+      <select id="lessonSel" aria-label="Choose lesson"></select>
+      <button class="icon-btn" id="nextBtn" aria-label="Next lesson">&#9654;</button>
+    </div>
+  </section>
+
+  <section class="map-wrap" id="mapWrap" hidden aria-label="Project steps">
+    <div class="map-head"><span><b id="mapTitle"></b><span id="mapSub"></span></span><span id="mapCount"></span></div>
+    <div class="map" id="map"></div>
+  </section>
+
+  <section class="rankbar" aria-label="Rank">
+    <div class="ranks-wrap"><div class="ranks" id="ranks"></div></div>
+    <div class="rank-cap" id="rankCap"></div>
+  </section>
+
+  <main class="bench">
+    <div class="panel user">
+      <div class="panel-head"><strong>Your code</strong><span class="hint" id="modeHint"></span></div>
+      <div class="ctx" id="ctxU" hidden><div class="ctx-head"><span>Built in earlier steps</span><span class="ctx-n"></span></div><pre class="code"></pre></div>
+      <div class="editor code" id="editor">
+        <pre class="hl" id="hl" aria-hidden="true"></pre>
+        <textarea class="ta" id="ta" spellcheck="false" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" aria-label="Type your code here"></textarea>
+        <div class="finish" id="done" hidden>
+          <div class="done-card" role="dialog" aria-labelledby="doneTitle">
+            <h3 id="doneTitle">Lesson complete</h3>
+            <div class="row">
+              <div><span id="dWpm">0</span><small>WPM</small></div>
+              <div><span id="dAcc">0</span>%<small>Accuracy</small></div>
+              <div><span id="dTime">0:00</span><small>Time</small></div>
+              <div><span id="dPeek">0</span><small>Peeks</small></div>
+            </div>
+            <p id="dMsg"></p>
+            <div class="acts">
+              <button class="btn" id="retryBtn">Retry</button>
+              <button class="btn gold" id="doneNext">Next lesson</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel target">
+      <div class="panel-head"><strong id="tgtHead">Code to match</strong><span class="hint" id="maskHint"></span></div>
+      <div class="ctx" id="ctxT" hidden><div class="ctx-head"><span>Built in earlier steps</span><span class="ctx-n"></span></div><pre class="code"></pre></div>
+      <pre class="tgt code" id="tgt"></pre>
+    </div>
+  </main>
+
+  <section class="strip">
+    <div class="stats">
+      <div class="stat"><b id="sWpm">0</b><span>WPM</span></div>
+      <div class="stat"><b id="sAcc">--</b><span>Accuracy</span></div>
+      <div class="stat"><b id="sTime">0:00</b><span>Time</span></div>
+      <div class="stat"><b id="sLines">0/0</b><span>Lines</span></div>
+      <div class="stat"><b id="sPeek">0</b><span>Peeks</span></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="peekBtn" title="Show blacked-out code for 2 seconds">Peek</button>
+      <button class="btn gold" id="checkBtn">Check <kbd>Ctrl+Enter</kbd></button>
+      <button class="btn" id="restartBtn">Restart</button>
+    </div>
+  </section>
+
+  <section class="ref" aria-label="Reference">
+    <div class="ref-head">
+      <span class="eyebrow" id="refEyebrow"></span>
+      <h2 id="refTitle"></h2>
+      <p class="about" id="about"></p>
+      <p class="lang-note" id="langNote"></p>
+    </div>
+    <div class="viz" id="viz" hidden></div>
+    <div id="outWrap" hidden>
+      <h3>What it produces</h3>
+      <pre class="out" id="out"></pre>
+    </div>
+    <div>
+      <h3>Commands on screen</h3>
+      <p class="terms-tip">Click a command to outline it in the code panel.</p>
+      <div class="terms" id="terms"></div>
+    </div>
+    <div class="ref-foot">
+      <span>Clean run: 90%+ accuracy and no peeks. Three clean runs at your rank moves you up. Each lane and project keeps its own rank. Progress saves in this browser.</span>
+      <button class="linkish" id="resetBtn">Reset progress</button>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="js/registry.js"></script>
+<script src="js/core.js"></script>
+<!-- Lesson data. Order here is the order lanes and tracks appear in the app. -->
+<script src="data/languages.js"></script>
+<script src="data/foundations/01-python.js"></script>
+<script src="data/foundations/02-ladder.js"></script>
+<script src="data/foundations/03-sql.js"></script>
+<script src="data/foundations/04-csharp.js"></script>
+<script src="data/foundations/05-cpp.js"></script>
+<script src="data/foundations/06-java.js"></script>
+<script src="data/foundations/07-html.js"></script>
+<script src="data/tracks/01-plc.js"></script>
+<script src="data/tracks/02-db.js"></script>
+<script src="data/tracks/03-oee.js"></script>
+<script src="data/tracks/04-handoff.js"></script>
+<script src="data/tracks/05-board.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

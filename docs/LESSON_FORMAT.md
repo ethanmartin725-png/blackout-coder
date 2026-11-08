@@ -1,0 +1,75 @@
+# Lesson format
+
+All lesson content lives in `site/data/`. Each file calls one registry function. After any edit, run `node tools/verify.mjs`.
+
+## Foundations lane
+
+```js
+BC.addLane({
+  id: "python",          // stable; progress is saved under it
+  name: "Python",        // tab label
+  lang: "python",        // language id from data/languages.js; applies to every lesson
+  lessons: [ /* lessons */ ],
+});
+```
+
+## Project track
+
+```js
+BC.addTrack({
+  id: "t-plc",
+  name: "PLC & HMI",
+  sub: "One-line description shown above the step map",
+  lessons: [ /* lessons, each with lang and file */ ],
+});
+```
+
+Add `soon: true` with no lessons to show a greyed-out placeholder tab.
+
+## Lesson
+
+| Field | Required | Meaning |
+|---|---|---|
+| `t` | yes | Title. Must be unique within its lane or track: best scores are keyed by it. |
+| `goal` | yes | The task, shown in the top bar. Write it so a Master-rank learner could produce the code from it alone. |
+| `code` | yes | The exact code to type. Spaces, not tabs. |
+| `about` | yes | What the code does and why, shown in the reference panel. |
+| `terms` | yes | Command definitions. See below. |
+| `lang` | tracks | Language id for this step. |
+| `file` | tracks | The file this step belongs to. Consecutive steps with the same `file` build on each other: earlier code shows as locked context. |
+| `out` | no | Plain-text result, shown under "What it produces". Must come from running the code. |
+| `outHtml` | no | A generated HTML page, rendered as a preview. |
+
+### Terms
+
+Each term is `[key, label, definition]`:
+
+- `key`: the exact token in `code` that clicking the term outlines, e.g. `"readBlocking"`. Use `null` for a concept with no single token (scan order, indentation).
+- `label`: what the card shows, e.g. `"system.tag.readBlocking"`.
+- `definition`: one or two plain sentences.
+
+The verifier warns when a key is not found in that step's code.
+
+## Language mode
+
+```js
+BC.addLanguage("ignition", {
+  name: "Ignition script",   // shown in the reference panel and goal line
+  short: "IGN",              // step-map chip label
+  tab: 4,                    // spaces per Tab key
+  py: true,                  // grade indentation; auto-indent after a trailing colon
+  kw: "def return if ...",   // space-separated keywords for coloring
+  note: "One-paragraph description shown under every lesson in this language.",
+  // optional:
+  markup: "html" | "css",    // markup-aware coloring
+  preview: true,             // live page preview (html, css, js)
+  diagram: true,             // ladder diagram drawing
+});
+```
+
+## Grading rules worth knowing when writing code
+
+- A line completes on an exact match, or when its tokens match ignoring whitespace. So `a=b` and `a = b` both pass, except where `py: true` makes leading indentation count.
+- Blank lines in `code` are skipped; learners don't type them.
+- Long lines are harder on phones. Break them where the language allows.
+- Ladder: one rung per line, ending in `;`.
