@@ -21,23 +21,29 @@ int main() {
         ["cout", "std::cout <<", "Sends values to the console. std:: is the standard namespace."],
         [null, "\\n", "Newline character inside a string."],
       ],
+      out: `Good morning, cooperage`,
     },
     {
       t: "Do the math",
-      goal: "In main, declare a 0.86, p 0.91, q 0.98 on one line, compute oee, and print \"OEE: \" with oee * 100 and \"%\".",
-      code: `#include <iostream>
+      goal: "In main, declare a 0.86, p 0.91, q 0.98 on one line, compute oee, set fixed output with 1 decimal, and print \"OEE: \" with oee * 100 and \"%\".",
+      code: `#include <iomanip>
+#include <iostream>
 
 int main() {
     double a = 0.86, p = 0.91, q = 0.98;
     double oee = a * p * q;
+    std::cout << std::fixed << std::setprecision(1);
     std::cout << "OEE: " << oee * 100 << "%\\n";
     return 0;
 }`,
-      about: "One line declares three doubles. Each << adds the next piece to the output, so text and numbers can be chained.",
+      about: "One line declares three doubles. Each << adds the next piece to the output, so text and numbers can be chained. Without the formatting line, cout prints 6 significant digits: 76.6948%. std::fixed with setprecision(1) gives one decimal place, 76.7%, the same as the other languages, and it stays set for every number printed after it.",
       terms: [
         ["double", "double a = …, p = …", "Declares several variables of one type on one line."],
         ["<<", "<< chaining", "Each << appends the next value to the output."],
+        ["std::fixed", "std::fixed", "Prints numbers with a fixed number of decimal places instead of significant digits."],
+        ["setprecision", "std::setprecision(1)", "How many decimals to print. Needs #include <iomanip>."],
       ],
+      out: `OEE: 76.7%`,
     },
     {
       t: "Write a function",
@@ -56,6 +62,7 @@ int main() {
         ["oee", "double oee(…)", "Return type, name, typed parameters."],
         ["return", "return", "Hands the value back to the caller."],
       ],
+      out: `0.766948`,
     },
     {
       t: "Counting loop",
@@ -77,6 +84,7 @@ int main() {
         ["++", "i++", "Increment. Adds 1 to i."],
         ["[", "[i]", "Index into the array. The first item is [0]."],
       ],
+      out: `Total: 182 min`,
     },
     {
       t: "Vectors",
@@ -98,6 +106,7 @@ int main() {
         ["for", "for (int b : barrels)", "Range-based for: visits each element in order."],
         ["if", "if (…) one line", "An if with a single statement can skip the braces."],
       ],
+      out: `Best line: 455`,
     },
     {
       t: "Structs",
@@ -127,6 +136,7 @@ int main() {
         ["static_cast", "static_cast<double>", "Converts int to double so the division keeps decimals."],
         ["jointer", "Machine jointer{…}", "Creates an object and fills its fields in order."],
       ],
+      out: `Jointer 2: 0.94`,
     },
   ],
 });

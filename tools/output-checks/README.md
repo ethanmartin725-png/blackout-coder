@@ -1,14 +1,15 @@
 # Output checks
 
-The "What it produces" text in tracks 2–4 and 6 comes from running the lesson code, not from typing it by hand. These scripts reproduce those outputs on the sample data, with the database connection replaced by a stand-in.
+The "What it produces" text in tracks 2–4 and 6, and in the Python, C#, C++ and Java Foundations lanes, comes from running the lesson code, not from typing it by hand. These scripts reproduce those outputs on the sample data, with the database connection replaced by a stand-in.
 
-Requires Python 3 with pandas and openpyxl. Track 6 also needs the .NET 8 SDK.
+Requires Python 3 with pandas and openpyxl. Track 6 also needs the .NET 8 SDK. The Foundations runner needs Node plus whichever of python3, dotnet, g++ and javac you have; a missing one skips its lane.
 
 ```
 cd tools/output-checks/track2-db      && python gen.py && python run.py
 cd tools/output-checks/track3-oee     && python run3.py
 cd tools/output-checks/track4-handoff && python run4.py
 cd tools/output-checks/track6-mes     && python3 build6.py
+node tools/output-checks/foundations/run.mjs            # add --check to report stale outputs only
 ```
 
 `steps*.py` hold the lesson code exactly as it appears in `site/data/tracks/`. If you change a step's code, change it here too, re-run, and paste the new output into the lesson's `out` field.

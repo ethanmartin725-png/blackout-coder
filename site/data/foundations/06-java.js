@@ -19,6 +19,7 @@ BC.addLane({
         ["main", "public static void main(…)", "The entry point the JVM looks for."],
         ["println", "System.out.println", "Prints text and a newline."],
       ],
+      out: `Good morning, cooperage`,
     },
     {
       t: "Variables and printf",
@@ -39,6 +40,7 @@ BC.addLane({
         [null, "%%", "A literal percent sign."],
         [null, "%n", "A newline that works on any operating system."],
       ],
+      out: `OEE: 76.7%`,
     },
     {
       t: "Static method",
@@ -57,6 +59,7 @@ BC.addLane({
         ["static", "static double oee", "A class-level method that returns a double."],
         ["return", "return", "Hands the value back to the caller."],
       ],
+      out: `0.766948`,
     },
     {
       t: "If / else if",
@@ -79,6 +82,7 @@ BC.addLane({
         ["else", "else if / else", "Further checks, then a fallback."],
         [">=", ">=", "Greater than or equal to."],
       ],
+      out: `Typical`,
     },
     {
       t: "Arrays and loops",
@@ -99,6 +103,7 @@ BC.addLane({
         ["for", "for (int m : minutes)", "Enhanced for: read each element in turn."],
         ["+", "+", "With strings, + joins (concatenates) text."],
       ],
+      out: `Total: 182 min`,
     },
     {
       t: "HashMap",
@@ -124,6 +129,8 @@ public class Lines {
         ["put", ".put / .get", "Add a pair; read a value by key."],
         ["keySet", ".keySet()", "All the keys, for looping."],
       ],
+      out: `Line 2: 389
+Line 1: 412`,
     },
   ],
 });

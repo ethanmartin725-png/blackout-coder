@@ -42,6 +42,7 @@ if (!BC || !BCcore) { console.error("Registry or core failed to load."); console
 const pyFiles = [];
 const jsFiles = [];
 const csProjects = {};
+const nativeFiles = []; // C++ and Java: one compile per lesson, or per track file once finished
 let lessons = 0;
 const ids = new Set();
 const groups = [...BC.lanes.map((l) => ({ kind: "lane", g: l })), ...BC.tracks.map((t) => ({ kind: "track", g: t }))];
@@ -77,6 +78,7 @@ for (const { kind, g } of groups) {
     fileText[key] = (fileText[key] ? fileText[key] + "\n" : "") + l.code;
     if (ld.py) pyFiles.push({ where, code: fileText[key] });
     if (langId === "js") jsFiles.push({ where, code: fileText[key] });
+    if (langId === "cpp" || langId === "java") nativeFiles.push({ where, lang: langId, key, code: fileText[key] });
     if (langId === "csharp") {
       // One program per Foundations lesson; one project per track, built from each file's finished code
       const proj = kind === "track" ? g.id : `${g.id}-${i + 1}`;
@@ -152,7 +154,34 @@ else if (csNames.length) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds`;
+// 7. C++ and Java must compile (each skipped with a warning if its compiler is missing)
+// A track file is checked once, with all of its steps; a Foundations lesson on its own.
+const lastByKey = new Map();
+for (const f of nativeFiles) lastByKey.set(f.key, f);
+const natives = [...lastByKey.values()];
+const quiet = { ...process.env };
+delete quiet.JAVA_TOOL_OPTIONS; // otherwise the JVM prints a notice on stderr
+const compilers = {
+  cpp: { ok: spawnSync("g++", ["--version"]).status === 0, name: "g++",
+    run: (d, code) => { fs.writeFileSync(path.join(d, "main.cpp"), code + "\n"); return spawnSync("g++", ["-std=c++17", "-Wall", "-fsyntax-only", "main.cpp"], { cwd: d, encoding: "utf8" }); } },
+  java: { ok: spawnSync("javac", ["-version"], { env: quiet }).status === 0, name: "javac",
+    run: (d, code) => { const cls = (code.match(/public\s+class\s+(\w+)/) || [])[1] || "Main"; fs.writeFileSync(path.join(d, cls + ".java"), code + "\n"); return spawnSync("javac", ["-d", d, cls + ".java"], { cwd: d, encoding: "utf8", env: quiet }); } },
+};
+const nativeCount = { cpp: 0, java: 0 };
+for (const lang of ["cpp", "java"]) {
+  const list = natives.filter((f) => f.lang === lang);
+  if (!list.length) continue;
+  if (!compilers[lang].ok) { warns.push(`${compilers[lang].name} not found; skipped ${lang === "cpp" ? "C++" : "Java"} compile checks`); continue; }
+  for (const f of list) {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), `bc-${lang}-`));
+    const r = compilers[lang].run(d, f.code);
+    if (r.status !== 0) fail(`${f.where}: ${lang === "cpp" ? "C++" : "Java"} does not compile: ${(r.stderr || "").split("\n").filter((x) => /error/.test(x)).slice(0, 2).join(" | ")}`);
+    else nativeCount[lang]++;
+    fs.rmSync(d, { recursive: true, force: true });
+  }
+}
+
+const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds, ${nativeCount.cpp} C++ and ${nativeCount.java} Java compiles`;
 for (const w of warns) console.warn("warn  " + w);
 if (errors.length) { for (const e of errors) console.error("FAIL  " + e); console.error(`\n${errors.length} problem(s). ${summary}`); process.exit(1); }
 console.log(`All lessons pass. ${summary}`);

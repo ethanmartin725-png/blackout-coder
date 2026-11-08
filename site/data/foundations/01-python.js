@@ -16,6 +16,8 @@ print("Shift A is running")`,
         ["\"Good morning, cooperage\"", "\"…\" string", "Text wrapped in quotes. Single or double quotes both work; they must match."],
         [null, "( )", "Parentheses hold the inputs (arguments) you pass into a function."],
       ],
+      out: `Good morning, cooperage
+Shift A is running`,
     },
     {
       t: "Variables and math",
@@ -33,6 +35,7 @@ print(round(oee * 100, 1))`,
         ["round", "round(x, 1)", "Rounds a number. The second argument is how many decimal places to keep."],
         ["oee", "variable", "A name that holds a value so you can reuse it. Lowercase with underscores is the Python convention."],
       ],
+      out: `76.7`,
     },
     {
       t: "Write a function",
@@ -49,6 +52,7 @@ print(f"OEE is {score:.1%}")`,
         [null, "Indentation", "The 4 spaces under def mark which lines belong to the function. Python requires it."],
         ["f", "f\"…{x:.1%}\"", "An f-string. Anything in {braces} is evaluated and inserted. :.1% formats as a percent with 1 decimal."],
       ],
+      out: `OEE is 76.7%`,
     },
     {
       t: "Make decisions",
@@ -69,6 +73,7 @@ print(rate_oee(0.72))`,
         ["else", "else:", "Runs when nothing above matched. No condition needed."],
         [">=", ">=", "Greater than or equal to. Also: <=, ==, != (not equal), <, >."],
       ],
+      out: `Typical`,
     },
     {
       t: "Loop over a list",
@@ -87,6 +92,7 @@ print("Total downtime:", total, "min")`,
         ["+=", "+=", "Adds to the existing value. total += 5 means total = total + 5."],
         ["print", "print(a, b, c)", "Commas print several values separated by spaces."],
       ],
+      out: `Total downtime: 182 min`,
     },
     {
       t: "Dictionaries",
@@ -105,6 +111,10 @@ print("Top line:", best)`,
         ["max", "max(…, key=)", "Returns the largest item. key= says what to compare by."],
         ["get", ".get", "Dictionary method that returns the value for a key."],
       ],
+      out: `Line 1 412
+Line 2 389
+Line 3 455
+Top line: Line 3`,
     },
     {
       t: "Read a CSV file",
@@ -116,13 +126,14 @@ with open("shift_log.csv") as f:
     for row in reader:
         if int(row["good"]) > int(row["total"]):
             print("Bad row:", row)`,
-      about: "This is a data-quality check: a good count above the total count means the row was keyed wrong. DictReader uses the header row as keys, and int() converts the text values to numbers before comparing.",
+      about: "This is a data-quality check: a good count above the total count means the row was keyed wrong. DictReader uses the header row as keys, and int() converts the text values to numbers before comparing. The sample output comes from a three-row shift_log.csv (columns shift, machine, good, total) where Char Station 2 was keyed as 310 good out of 301.",
       terms: [
         ["import", "import", "Loads a library. csv ships with Python."],
         ["with", "with open() as f:", "Opens a file and closes it automatically when the block ends."],
         ["DictReader", "csv.DictReader", "Reads each row as a dictionary keyed by the header row."],
         ["int", "int()", "Converts text like \"940\" to the number 940. CSV values always arrive as text."],
       ],
+      out: `Bad row: {'shift': 'A', 'machine': 'Char Station 2', 'good': '310', 'total': '301'}`,
     },
   ],
 });

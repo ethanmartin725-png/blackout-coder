@@ -29,6 +29,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+      # g++ is preinstalled on ubuntu-latest; Java is pinned for the Java lesson compile check
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
       - name: Check every lesson
         run: node tools/verify.mjs
 

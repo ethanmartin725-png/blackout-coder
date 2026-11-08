@@ -17,6 +17,7 @@ Deployed from `site/` as plain static files: GitLab Pages via `.gitlab-ci.yml`, 
 - Check every lesson: `node tools/verify.mjs` (must pass before any commit; CI runs it before deploy)
 - Run locally: `python3 -m http.server 8000 -d site`, or open `site/index.html` directly
 - Regenerate track outputs: see `tools/output-checks/` (needs pandas and openpyxl; track 6 needs the .NET 8 SDK)
+- Foundations outputs: `node tools/output-checks/foundations/run.mjs` runs every Python, C#, C++ and Java Foundations lesson and writes its `out`; `--check` reports stale ones. Run it after editing any of those lessons.
 - MES Helper track: edit `tools/output-checks/track6-mes/lessons6.py`, then `python3 build6.py` there. It compiles and runs the C# and writes `site/data/tracks/06-mes.js`. Do not edit the JS file by hand.
 
 ## Architecture
@@ -43,7 +44,7 @@ Key engine behaviors:
 - **Structured Text**: Studio 5000 style (`:=`, `TONR` with FBD_TIMER, `END_IF;`).
 - **Ignition scripts**: Jython 2.7. No f-strings. `system.tag.readBlocking`, `system.db.runPrepUpdate` with `?` parameters.
 - **SQL**: T-SQL (SQL Server). Parameterized `?` placeholders when called from Python, named `@name` parameters from C#.
-- **C#**: .NET 8, top-level statements in `Program.cs`, nullable enabled, `Microsoft.Data.SqlClient` 7.1.1. Typed `SqlDbType` parameters, `using` on connections, writes inside a transaction. The verifier compiles every C# lesson.
+- **C#**: .NET 8, top-level statements in `Program.cs`, nullable enabled, `Microsoft.Data.SqlClient` 7.1.1. Typed `SqlDbType` parameters, `using` on connections, writes inside a transaction. The verifier compiles every C# lesson; C++ (g++, C++17) and Java lessons are compiled too.
 - **Python**: pandas + pyodbc + openpyxl. Never paste values into SQL text; pass parameters.
 - **Copy**: plain, direct sentences. Explain why, not just what. Call out assumptions a number depends on. No em-dash asides.
 - **Design**: dark navy with gold accents. Caladea display, Public Sans body, JetBrains Mono code, VT323 for the LCD stat readouts. Every color is a CSS token in `css/app.css`.

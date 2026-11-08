@@ -8,12 +8,12 @@ stages:
 
 verify:
   stage: verify
-  # .NET 8 SDK image (Debian); Node and Python are added below for the verifier.
+  # .NET 8 SDK image (Debian); Node, Python, g++ and a JDK are added below for the verifier.
   image: mcr.microsoft.com/dotnet/sdk:8.0
   before_script:
     - apt-get update -qq
-    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs python3 > /dev/null
-    - node --version && python3 --version && dotnet --version
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs python3 g++ default-jdk-headless > /dev/null
+    - node --version && python3 --version && dotnet --version && g++ --version | head -1 && javac -version
   script:
     - node tools/verify.mjs
   rules:
