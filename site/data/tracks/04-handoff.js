@@ -219,17 +219,21 @@ print(len(counts), "machines,", len(faults), "faults,", len(notes), "open notes"
       lang: "python",
       file: "handoff.py",
       t: "Shift performance",
-      goal: "Set SHIFT_HOURS to 7.5 (8 minus a break), add ideal and pct_of_ideal to counts, and map each machine's fault minutes into down_min.",
+      goal: "Set SHIFT_HOURS to 7.5 (8 minus a break), add ideal and pct_of_ideal to counts. Clip each fault to the shift window as shift_min, then map each machine's total into down_min.",
       code: `SHIFT_HOURS = 8 - 0.5
 
 counts["ideal"] = counts["ideal_rate_hr"] * SHIFT_HOURS
 counts["pct_of_ideal"] = counts["barrels"] / counts["ideal"]
-down = faults.groupby("machine")["minutes"].sum()
+in_start = faults["start_ts"].clip(lower=start)
+in_end = faults["end_ts"].fillna(end).clip(upper=end)
+faults["shift_min"] = (in_end - in_start).dt.total_seconds().clip(lower=0) / 60
+down = faults.groupby("machine")["shift_min"].sum()
 counts["down_min"] = counts["machine"].map(down).fillna(0)`,
-      about: "pct_of_ideal is a quick shift-level performance read, not full OEE. .map() looks each machine up in the fault totals; machines with no faults come back NaN, so fillna(0) turns that into 0 minutes.",
+      about: "pct_of_ideal is a quick shift-level performance read, not full OEE. Down minutes count only the part of each fault inside the shift: an open fault stops counting at the shift end, not at the time the script runs. The char flare has been down 23.75 minutes at 14:05, but only 18.75 of them belong to shift A; the rest go to shift B. .map() looks each machine up in the fault totals; machines with no faults come back NaN, so fillna(0) turns that into 0 minutes.",
       terms: [
         ["map", ".map(series)", "Looks each value up in another Series by its index."],
-        ["fillna", ".fillna(0)", "Replaces missing values."],
+        ["fillna", ".fillna(0)", "Replaces missing values. fillna(end) treats a still-open fault as running to the shift end."],
+        ["clip", ".clip(lower=…, upper=…)", "Limits values to a range. Here it trims each fault to the shift window."],
         ["SHIFT_HOURS", "SHIFT_HOURS", "Run hours available in one shift."],
       ],
     },
@@ -251,7 +255,7 @@ print(counts[["machine", "barrels", "pct_of_ideal", "down_min", "status"]].round
         [null, "Last write wins", "Assign the most important status last."],
       ],
       out: `          machine  barrels  pct_of_ideal  down_min  status
-0  Char Station 2      301          0.80     23.75    DOWN
+0  Char Station 2      301          0.80     18.75    DOWN
 1      Conveyor 3      352          0.78      4.62      OK
 2   Hoop Driver 1      274          0.66     41.00  BEHIND`,
     },
@@ -341,7 +345,7 @@ for _, n in notes.iterrows():
 <p>Sat Nov 07 06:00 to 14:00</p>
 <table>
 <tr><th>Machine</th><th>Barrels</th><th>% of ideal</th><th>Down min</th><th>Status</th></tr>
-<tr class='down'><td>Char Station 2</td><td>301</td><td>80%</td><td>24</td><td>DOWN</td></tr>
+<tr class='down'><td>Char Station 2</td><td>301</td><td>80%</td><td>19</td><td>DOWN</td></tr>
 <tr class='ok'><td>Conveyor 3</td><td>352</td><td>78%</td><td>5</td><td>OK</td></tr>
 <tr class='behind'><td>Hoop Driver 1</td><td>274</td><td>66%</td><td>41</td><td>BEHIND</td></tr>
 </table>
@@ -388,7 +392,7 @@ print("Saved", file_name)`,
 <p>Sat Nov 07 06:00 to 14:00</p>
 <table>
 <tr><th>Machine</th><th>Barrels</th><th>% of ideal</th><th>Down min</th><th>Status</th></tr>
-<tr class='down'><td>Char Station 2</td><td>301</td><td>80%</td><td>24</td><td>DOWN</td></tr>
+<tr class='down'><td>Char Station 2</td><td>301</td><td>80%</td><td>19</td><td>DOWN</td></tr>
 <tr class='ok'><td>Conveyor 3</td><td>352</td><td>78%</td><td>5</td><td>OK</td></tr>
 <tr class='behind'><td>Hoop Driver 1</td><td>274</td><td>66%</td><td>41</td><td>BEHIND</td></tr>
 </table>

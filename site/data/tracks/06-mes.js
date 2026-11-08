@@ -45,7 +45,7 @@ public record Fault(string Machine, string Name, DateTime Start, DateTime? End)
         return e > s ? (e - s).TotalMinutes : 0;
     }
 }`,
-      about: "A record is a small class built to hold data: one line declares the properties, a constructor, and equality by value. DateTime? (with the question mark) can hold null, which is how an open fault looks. MinutesIn clips the fault to a window, so a fault that runs past the end of the shift only counts the part inside it. The Python handoff did not clip: it counted the open char flare up to the 14:05 run time.",
+      about: "A record is a small class built to hold data: one line declares the properties, a constructor, and equality by value. DateTime? (with the question mark) can hold null, which is how an open fault looks. MinutesIn clips the fault to a window, so a fault that runs past the end of the shift only counts the part inside it. The Python handoff clips the same way, so both tools agree on down minutes.",
       terms: [
         ["namespace", "namespace MesHelper;", "Groups the project's types under one name. The semicolon form covers the whole file."],
         ["record", "record Fault(…)", "A data class in one line: properties, constructor and value equality."],
@@ -341,7 +341,7 @@ foreach (var (machine, min) in downMin.OrderBy(kv => kv.Key))
 {
     Console.WriteLine($"{machine,-16}{min,6:F2}");
 }`,
-      about: "LINQ chains small steps the way a SQL GROUP BY does: group by machine, then sum each group. Char Station 2 shows 18.75, not the 23.75 in the Python handoff: its flare is still open, and MinutesIn stops counting at the 14:00 shift end instead of the 14:05 run time. The extra 5 minutes belong to shift B.",
+      about: "LINQ chains small steps the way a SQL GROUP BY does: group by machine, then sum each group. Char Station 2 shows 18.75: its flare is still open, and MinutesIn stops counting at the 14:00 shift end, not the 14:05 run time. It has been down 23.75 minutes, but the last 5 belong to shift B. These match the Python handoff's down_min.",
       terms: [
         ["GroupBy", "GroupBy(f => f.Machine)", "Splits the list into groups that share a key."],
         ["=>", "f => …", "A lambda: a small inline function. Read it as \"f goes to\"."],

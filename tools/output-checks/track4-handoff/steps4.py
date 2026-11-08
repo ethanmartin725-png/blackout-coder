@@ -72,7 +72,10 @@ P8 = '''SHIFT_HOURS = 8 - 0.5
 
 counts["ideal"] = counts["ideal_rate_hr"] * SHIFT_HOURS
 counts["pct_of_ideal"] = counts["barrels"] / counts["ideal"]
-down = faults.groupby("machine")["minutes"].sum()
+in_start = faults["start_ts"].clip(lower=start)
+in_end = faults["end_ts"].fillna(end).clip(upper=end)
+faults["shift_min"] = (in_end - in_start).dt.total_seconds().clip(lower=0) / 60
+down = faults.groupby("machine")["shift_min"].sum()
 counts["down_min"] = counts["machine"].map(down).fillna(0)'''
 P9 = '''open_faults = faults[faults["end_ts"].isna()]
 
