@@ -16,7 +16,7 @@ BC.addLanguage("ladder", {
   "short": "LAD",
   "tab": 4,
   "note": "PLC Ladder: shown as Rockwell neutral text, the typed form of a ladder rung. Exports usually run instructions together; spaces are added here for readability. The drawing below the panels shows the same rung.",
-  "kw": "XIC XIO OTE OTL OTU TON TOF CTU CTD RES ONS BST NXB BND MOV ADD GRT LES EQU NEQ",
+  "kw": "XIC XIO OTE OTL OTU TON TOF RTO CTU CTD RES ONS BST NXB BND MOV ADD SUB MUL DIV CPT GRT GEQ LES LEQ EQU NEQ LIM",
   "py": false,
   "markup": null,
   "preview": false,

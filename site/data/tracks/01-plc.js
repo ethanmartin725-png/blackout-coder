@@ -62,12 +62,11 @@ Reset_PB with eye clear            →  Jam_Fault=0`,
       file: "Conveyor3 · MainRoutine",
       t: "Count barrels",
       goal: "Count each barrel once in Barrel_Count as it blocks the eye, and reset the count on Shift_Change.",
-      code: `XIC(Eye_Blocked) ONS(Eye_ONS) CTU(Barrel_Count,9999,0);
+      code: `XIC(Eye_Blocked) CTU(Barrel_Count,9999,0);
 XIC(Shift_Change) RES(Barrel_Count);`,
-      about: "The one-shot turns \"the eye is blocked\" into \"a barrel just arrived\", so a slow barrel still counts once. The preset is set high because this counter totals the shift rather than flagging a lot size. This count feeds the performance and quality math in later tracks.",
+      about: "CTU counts only when its rung goes from false to true, so a slow barrel that blocks the eye for many scans still counts once. No one-shot is needed in front of it. The preset is set high because this counter totals the shift rather than flagging a lot size. This count feeds the performance and quality math in later tracks.",
       terms: [
-        ["ONS", "ONS(bit)", "One Shot. True for a single scan on the rising edge. Needs its own storage bit."],
-        ["CTU", "CTU(counter,preset,accum)", "Count Up. Adds 1 each time the rung goes false to true."],
+        ["CTU", "CTU(counter,preset,accum)", "Count Up. Adds 1 each time the rung goes false to true. It remembers the last rung state in its .CU bit, which is how it sees the edge."],
         ["RES", "RES", "Reset. Zeroes the counter's accumulator and status bits."],
         ["Barrel_Count", ".ACC", "The counter's running total. This is the number Ignition will read."],
       ],

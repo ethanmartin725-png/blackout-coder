@@ -6,7 +6,7 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 
 ## What's inside
 
-**Foundations**: seven single-language lanes (Python, PLC ladder, SQL, C#, C++, Java, HTML), 44 lessons.
+**Foundations**: seven single-language lanes (Python, PLC ladder, SQL, C#, C++, Java, HTML), 52 lessons.
 
 **Projects**: six tracks, 98 steps, that build one connected system for a sample cooperage line:
 

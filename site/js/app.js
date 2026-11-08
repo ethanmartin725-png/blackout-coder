@@ -151,8 +151,21 @@ function renderStats(){
 function renderAll(a){lastA=a;renderHL(a);markTarget(a);renderStats();renderLiveViz();}
 
 /* ---------- ladder drawing ---------- */
-const LOPS=new Set(['XIC','XIO','OTE','OTL','OTU','ONS','TON','TOF','CTU','CTD','RES','MOV','ADD','GRT','LES','EQU','NEQ','BST','NXB','BND']);
-const LBOX=new Set(['TON','TOF','CTU','CTD','RES','MOV','ADD','GRT','LES','EQU','NEQ']);
+const LBOX=new Set(['TON','TOF','RTO','CTU','CTD','RES','MOV','ADD','SUB','MUL','DIV','CPT','GRT','GEQ','LES','LEQ','EQU','NEQ','LIM']);
+const LOPS=new Set(['XIC','XIO','OTE','OTL','OTU','ONS','BST','NXB','BND',...LBOX]);
+const LCMP=new Set(['GRT','GEQ','LES','LEQ','EQU','NEQ']),LMATH=new Set(['ADD','SUB','MUL','DIV']);
+// Text shown inside an instruction box, one entry per line
+function boxLines(it){
+  const a=i=>it.args[i]===undefined?'':it.args[i],op=it.op;
+  if(op==='MOV')return ['Src '+a(0),'Dest '+a(1)];
+  if(LCMP.has(op))return ['A '+a(0),'B '+a(1)];
+  if(op==='LIM')return ['Low '+a(0),'Test '+a(1),'High '+a(2)];
+  if(LMATH.has(op))return ['A '+a(0),'B '+a(1),'Dest '+a(2)];
+  if(op==='CPT')return ['Dest '+a(0),'Expr '+a(1)];
+  const l=[a(0)];if(it.args[1]!==undefined)l.push('Pre '+it.args[1]);return l;
+}
+const LCW=6.4; // approximate width of one 10.5px code character, so long labels widen their box
+let lowY=0; // lowest box edge drawn so far, so the drawing is tall enough for 3-line boxes
 const U=124,RH=72;
 function parseRung(s){
   const root={rows:[[]]},stack=[root];let row=root.rows[0];
@@ -167,7 +180,7 @@ function parseRung(s){
   }
   return root.rows[0];
 }
-const iw=it=>it.br?Math.max(0.5,...it.rows.map(sw)):(LBOX.has(it.op)?1.5:1);
+const iw=it=>it.br?Math.max(0.5,...it.rows.map(sw)):(LBOX.has(it.op)?Math.max(1.5,(Math.max(it.op.length,...boxLines(it).map(t=>t.length))*LCW+36)/U):1);
 const sw=seq=>seq.reduce((a,it)=>a+iw(it),0);
 const ih=it=>it.br?it.rows.reduce((a,r)=>a+sh(r),0):1;
 const sh=seq=>Math.max(1,...seq.map(ih));
@@ -187,11 +200,9 @@ function drawIns(it,x,y,w,out){
     if(op!=='OTE')out.push(TX(cx,y+4,op==='OTL'?'L':'U','op','middle'));
     out.push(TX(cx,y-22,tag,'tag'));
   }else{
-    const bx=x+10,bw=w-20;
-    out.push(L(x,y,bx,y),L(bx+bw,y,x2,y),`<rect class="box" x="${bx}" y="${y-26}" width="${bw}" height="52" rx="3"/>`,TX(bx+8,y-11,op,'op'));
-    let lines;
-    if(op==='MOV')lines=['Src '+(it.args[0]||''),'Dest '+(it.args[1]||'')];
-    else{lines=[tag];if(it.args[1]!==undefined)lines.push('Pre '+it.args[1]);}
+    const bx=x+10,bw=w-20,lines=boxLines(it),bh=lines.length>2?66:52;
+    lowY=Math.max(lowY,y-26+bh);
+    out.push(L(x,y,bx,y),L(bx+bw,y,x2,y),`<rect class="box" x="${bx}" y="${y-26}" width="${bw}" height="${bh}" rx="3"/>`,TX(bx+8,y-11,op,'op'));
     lines.forEach((t,i)=>out.push(TX(bx+8,y+4+i*14,t,'arg')));
   }
 }
@@ -201,9 +212,9 @@ function svgLadder(code){
   const rungs=code.split('\n').map(s=>s.trim()).filter(Boolean).map(parseRung).filter(r=>r.length);
   if(!rungs.length)return '<p class="viz-empty">Type a rung and it draws here.</p>';
   const maxW=Math.max(4,...rungs.map(sw)),X0=34,RR=X0+12+maxW*U+16,W=RR+12;
-  const out=[];let y=42;
+  const out=[];let y=42;lowY=0;
   rungs.forEach((r,i)=>{out.push(TX(16,y+4,String(i),'num'),L(X0,y,X0+12,y));const ex=drawSeq(r,X0+12,y,out);out.push(L(ex,y,RR,y));y+=sh(r)*RH;});
-  const H=y-RH+40;
+  const H=Math.max(y-RH+40,lowY+14);
   out.unshift(L(X0,10,X0,H-8,'rail'),L(RR,10,RR,H-8,'rail'));
   return `<div class="scroll"><svg class="lad" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Ladder rung diagram">${out.join('')}</svg></div>`;
 }
