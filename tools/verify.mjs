@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import os from "node:os";
-import { spawnSync } from "node:child_process";
+import { spawnSync, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -41,6 +41,7 @@ if (!BC || !BCcore) { console.error("Registry or core failed to load."); console
 // 3. Lesson checks
 const pyFiles = [];
 const jsFiles = [];
+const csProjects = {};
 let lessons = 0;
 const ids = new Set();
 const groups = [...BC.lanes.map((l) => ({ kind: "lane", g: l })), ...BC.tracks.map((t) => ({ kind: "track", g: t }))];
@@ -76,6 +77,15 @@ for (const { kind, g } of groups) {
     fileText[key] = (fileText[key] ? fileText[key] + "\n" : "") + l.code;
     if (ld.py) pyFiles.push({ where, code: fileText[key] });
     if (langId === "js") jsFiles.push({ where, code: fileText[key] });
+    if (langId === "csharp") {
+      // One program per Foundations lesson; one project per track, built from each file's finished code
+      const proj = kind === "track" ? g.id : `${g.id}-${i + 1}`;
+      const p = (csProjects[proj] = csProjects[proj] || { files: {} });
+      const f = (p.files[kind === "track" ? l.file : "Program.cs"] = p.files[kind === "track" ? l.file : "Program.cs"] || { text: "", steps: [] });
+      const first = f.text ? f.text.split("\n").length + 1 : 1;
+      f.text = f.text ? f.text + "\n" + l.code : l.code;
+      f.steps.push({ where, first, last: f.text.split("\n").length });
+    }
   });
 }
 
@@ -99,7 +109,50 @@ else {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks`;
+// 6. C# must compile (skipped with a warning if the .NET SDK is missing)
+const csNames = Object.keys(csProjects);
+let csBuilt = 0;
+if (csNames.length && spawnSync("dotnet", ["--version"]).status !== 0) warns.push("dotnet not found; skipped C# compile checks");
+else if (csNames.length) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "bc-cs-"));
+  const env = { ...process.env, DOTNET_CLI_TELEMETRY_OPTOUT: "1", DOTNET_NOLOGO: "1" };
+  const jobs = csNames.map((name) => {
+    const p = csProjects[name];
+    const d = path.join(dir, name);
+    fs.mkdirSync(d);
+    const sql = Object.values(p.files).some((f) => f.text.includes("Microsoft.Data.SqlClient"));
+    fs.writeFileSync(path.join(d, "Check.csproj"), `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>${sql ? '<ItemGroup><PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.1" /></ItemGroup>' : ""}</Project>`);
+    for (const [fname, f] of Object.entries(p.files)) fs.writeFileSync(path.join(d, fname), f.text + "\n");
+    return () => new Promise((resolve) => {
+      const build = (extra, done) => execFile("dotnet", ["build", "-nologo", "-v", "q", "-clp:NoSummary;ErrorsOnly", ...extra], { cwd: d, env, maxBuffer: 1 << 24 }, (err, stdout) => done(!err, stdout || String(err)));
+      build([], (ok, out) => {
+        // A lesson that only defines a class has no entry point (CS5001). Check it as a library instead.
+        const errs = out.split("\n").filter((x) => /error [A-Z]+\d+/.test(x));
+        if (!ok && errs.length && errs.every((x) => x.includes("CS5001"))) build(["-p:OutputType=Library"], (ok2, out2) => resolve({ name, p, ok: ok2, out: out2 }));
+        else resolve({ name, p, ok, out });
+      });
+    });
+  });
+  // Build a few at a time: each build is a separate process
+  const results = [];
+  for (let i = 0; i < jobs.length; i += 4) results.push(...(await Promise.all(jobs.slice(i, i + 4).map((run) => run()))));
+  for (const r of results) {
+    if (r.ok) { csBuilt++; continue; }
+    const msgs = [...new Set(r.out.split("\n").filter((x) => /error [A-Z]+\d+/.test(x)))];
+    if (!msgs.length) { fail(`${r.name}: C# build failed: ${r.out.trim().split("\n").slice(-3).join(" ")}`); continue; }
+    for (const m of msgs) {
+      const hit = m.match(/([\w.]+\.cs)\((\d+),\d+\): error (\w+): (.*?)(?: \[.*)?$/);
+      if (!hit) { fail(`${r.name}: ${m.trim()}`); continue; }
+      const [, fname, line, codeId, text] = hit;
+      const f = r.p.files[fname];
+      const step = f && f.steps.find((s) => +line >= s.first && +line <= s.last);
+      fail(`${step ? step.where : r.name} (${fname} line ${line}): C# ${codeId}: ${text}`);
+    }
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds`;
 for (const w of warns) console.warn("warn  " + w);
 if (errors.length) { for (const e of errors) console.error("FAIL  " + e); console.error(`\n${errors.length} problem(s). ${summary}`); process.exit(1); }
 console.log(`All lessons pass. ${summary}`);
