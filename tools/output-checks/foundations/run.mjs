@@ -5,8 +5,10 @@
 //   node tools/output-checks/foundations/run.mjs --check   report lessons whose stored output is stale
 //
 // Toolchains: python3, dotnet (.NET 8), g++ (C++17), javac/java. A missing toolchain skips its lane.
-// Not run here: SQL (needs the sample database; see docs/ROADMAP.md), ladder (drawn as a diagram),
-// HTML (rendered as a preview). A lesson with no entry point (a class on its own) gets no output.
+// SQL runs on a real SQL Server through sql_exec.py, against a fresh copy of the canonical sample database
+// (see that file for the server setup; without a reachable server the SQL lane is skipped).
+// Not run: ladder (drawn as a diagram), HTML (rendered as a preview). A lesson that prints nothing,
+// such as a class with no entry point or a CREATE TABLE, gets no output.
 // Fixture: Python "Read a CSV file" runs next to shift_log.csv from this folder.
 import fs from "node:fs";
 import os from "node:os";
@@ -25,7 +27,12 @@ const env = { ...process.env, DOTNET_CLI_TELEMETRY_OPTOUT: "1", DOTNET_NOLOGO: "
 delete env.JAVA_TOOL_OPTIONS; // keeps the JVM from printing "Picked up JAVA_TOOL_OPTIONS" on stderr
 
 const has = (cmd, arg = "--version") => spawnSync(cmd, [arg], { env }).status === 0;
-const tools = { python: has("python3"), csharp: has("dotnet"), cpp: has("g++"), java: has("javac", "-version") };
+const sqlReady = () => {
+  const r = spawnSync("python3", [path.join(HERE, "sql_exec.py")], { env, input: "SELECT 1 AS ok;", encoding: "utf8", timeout: 120000 });
+  if (r.status !== 0) console.warn(`SQL Server not available: ${(r.stderr || "").trim()}`);
+  return r.status === 0;
+};
+const tools = { python: has("python3"), csharp: has("dotnet"), cpp: has("g++"), java: has("javac", "-version"), sql: sqlReady() };
 
 function sh(cmd, args, cwd) {
   const r = spawnSync(cmd, args, { cwd, env, encoding: "utf8", timeout: 120000 });
@@ -60,6 +67,11 @@ const runners = {
     const r = sh("./main", [], d);
     if (!r.ok || r.err) throw new Error(r.err || "exit code not 0");
     return { out: r.out };
+  },
+  sql(code) {
+    const r = spawnSync("python3", [path.join(HERE, "sql_exec.py")], { env, input: code, encoding: "utf8", timeout: 120000 });
+    if (r.status !== 0) throw new Error((r.stderr || "").trim() || "sql_exec failed");
+    return { out: (r.stdout || "").replace(/\s+$/, "") };
   },
   java(code, d) {
     const cls = (code.match(/public\s+class\s+(\w+)/) || [])[1];
@@ -117,8 +129,9 @@ for (const lane of ctx.lanes) {
     let res;
     try { res = run(l.code, d); }
     catch (e) { failed++; console.error(`FAIL  ${where}: ${e.message}`); return; }
-    const out = res.skip ? null : res.out;
+    const out = res.skip || !res.out ? null : res.out;
     if (res.skip) console.log(`none  ${where}: ${res.skip}`);
+    else if (out === null) console.log(`none  ${where}: prints nothing`);
     else { ran++; console.log(`ok    ${where}\n${out.replace(/^/gm, "        ")}`); }
     if ((l.out ?? null) !== out) {
       changed++;

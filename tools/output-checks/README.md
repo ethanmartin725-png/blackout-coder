@@ -1,8 +1,8 @@
 # Output checks
 
-The "What it produces" text in tracks 2–4 and 6, and in the Python, C#, C++ and Java Foundations lanes, comes from running the lesson code, not from typing it by hand. These scripts reproduce those outputs on the sample data, with the database connection replaced by a stand-in.
+The "What it produces" text in tracks 2–4 and 6, and in the Python, C#, C++, Java and SQL Foundations lanes, comes from running the lesson code, not from typing it by hand. These scripts reproduce those outputs on the sample data, with the database connection replaced by a stand-in.
 
-Requires Python 3 with pandas and openpyxl. Track 6 also needs the .NET 8 SDK. The Foundations runner needs Node plus whichever of python3, dotnet, g++ and javac you have; a missing one skips its lane.
+Requires Python 3 with pandas and openpyxl. Track 6 also needs the .NET 8 SDK. The Foundations runner needs Node plus whichever of python3, dotnet, g++ and javac you have; a missing one skips its lane. SQL lessons run on a real SQL Server 2022 through `foundations/sql_exec.py` (start one with Docker, set `BC_SQL_PASSWORD`, `pip install pymssql`); each lesson gets a fresh copy of the sample database built from the tracks' own CREATE TABLE steps and the DB track's seeded faults.
 
 ```
 cd tools/output-checks/track2-db      && python gen.py && python run.py

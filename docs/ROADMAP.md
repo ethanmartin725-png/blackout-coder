@@ -13,10 +13,10 @@
 - [x] C# project track: MES Helper (`t-mes`), 17 steps.
 - [ ] C++ and Java project tracks. Candidates: C++ for an embedded sensor counter, Java for a back-office integration.
 - [x] Real outputs for the Python, C#, C++ and Java Foundations lessons (`tools/output-checks/foundations/run.mjs`).
-- [ ] Foundations SQL outputs. The SQL lane uses its own tables (`fact_downtime`, `fact_oee_daily`, and a `dim_machine` keyed by `machine_id`) that conflict with the tracks' `dim_machine`. Move it onto the canonical tables first, then generate outputs from the seeded data.
-- [ ] Move the Foundations examples onto the canonical machines (they use Line 1/2/3 and Jointer 2).
+- [x] SQL lane moved onto the canonical tables and extended to 13 lessons (NULLs, date math, LEFT JOIN, INSERT/UPDATE, CTE, LAG). Outputs come from SQL Server 2022 running each lesson on the seeded sample data.
+- [ ] Move the remaining Foundations examples onto the canonical machines (Python, C#, C++ and Java use Line 1/2/3 and Jointer 2; SQL and Ladder are done).
 - [x] Ladder Foundations gap: 8 lessons added (TOF, RTO hour meter, LES with debounce, LIM, MOV/EQU, ONS with ADD, CPT rate, CTU/CTD WIP with an output branch). The diagram draws RTO, LIM, CPT, GEQ/LEQ and SUB/MUL/DIV.
-- [ ] Close the remaining Foundations gaps before the tracks: SQL (NULLs, LEFT JOIN, dates, INSERT/UPDATE, CTE, window functions), Python (f-strings, comprehensions, try/except, datetime, defaults, pandas), and new JavaScript and Structured Text lanes.
+- [ ] Close the remaining Foundations gaps before the tracks: Python (f-strings, comprehensions, try/except, datetime, defaults, pandas), and new JavaScript and Structured Text lanes.
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
 - [ ] HMI design principles as their own steps: ISA-101 alarm colors, layout hierarchy, operator-first faceplates.
 - [ ] More Structured Text: CASE state machines, arrays, user-defined types.
@@ -32,6 +32,7 @@
 ## Known limitations
 
 - The trainer checks typed code against the reference; it does not execute Python, SQL, C#, C++ or Java in the browser. The verifier compiles Python, JavaScript, C#, C++ and Java.
+- DB Pulls & Analytics steps 9 and 10 (count_log with LAG) have hand-written outputs: no count_log sample data is seeded. Seed hourly readings, including a counter reset, so `sql_exec.py` can run them. The track's other SQL outputs match SQL Server (rounded for display).
 - PLC & HMI track outputs (ladder, Structured Text, Ignition) are hand-written scenario traces, because nothing here runs PLC logic. A ladder interpreter in `js/core.js` would let the verifier generate them, and is the first piece of the ladder simulation.
 - The page preview cannot trigger the phone-layout media query in Plant Board step 7, because media queries follow the browser window, not the preview box.
 - The learner's own JavaScript runs only when the step is finished or Check is pressed.

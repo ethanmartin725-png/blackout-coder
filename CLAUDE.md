@@ -17,7 +17,7 @@ Deployed from `site/` as plain static files: GitLab Pages via `.gitlab-ci.yml`, 
 - Check every lesson: `node tools/verify.mjs` (must pass before any commit; CI runs it before deploy)
 - Run locally: `python3 -m http.server 8000 -d site`, or open `site/index.html` directly
 - Regenerate track outputs: see `tools/output-checks/` (needs pandas and openpyxl; track 6 needs the .NET 8 SDK)
-- Foundations outputs: `node tools/output-checks/foundations/run.mjs` runs every Python, C#, C++ and Java Foundations lesson and writes its `out`; `--check` reports stale ones. Run it after editing any of those lessons.
+- Foundations outputs: `node tools/output-checks/foundations/run.mjs` runs every Python, C#, C++, Java and SQL Foundations lesson and writes its `out`; `--check` reports stale ones. Run it after editing any of those lessons. SQL runs on a real SQL Server 2022 (Docker container; set `BC_SQL_PASSWORD`, needs `pip install pymssql`) against a fresh copy of the canonical sample database each time; see `sql_exec.py`.
 - MES Helper track: edit `tools/output-checks/track6-mes/lessons6.py`, then `python3 build6.py` there. It compiles and runs the C# and writes `site/data/tracks/06-mes.js`. Do not edit the JS file by hand.
 
 ## Architecture

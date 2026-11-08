@@ -205,10 +205,10 @@ ORDER BY lost_dollars DESC;`,
       ],
       out: `area       machine         down_hr  lost_dollars
 Assembly   Hoop Driver 1   1.90     4448.39
-Assembly   Conveyor 3      1.66     4222.38
+Assembly   Conveyor 3      1.66     4222.37
 Finishing  Char Station 2  1.45     3083.02
 
-Rounded for display. Sample week total: $11,753.79`,
+Rounded for display. The rows add to $11,753.78; the exact total, rounded once, is $11,753.79.`,
     },
     {
       lang: "sql",
