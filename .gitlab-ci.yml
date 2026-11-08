@@ -1,0 +1,34 @@
+# GitLab CI: check every lesson, then publish site/ to GitLab Pages.
+# Same job as .github/workflows/pages.yml: verify on every merge request and on main;
+# deploy only from the default branch, and only if verify passed.
+
+stages:
+  - verify
+  - deploy
+
+verify:
+  stage: verify
+  # .NET 8 SDK image (Debian); Node and Python are added below for the verifier.
+  image: mcr.microsoft.com/dotnet/sdk:8.0
+  before_script:
+    - apt-get update -qq
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs python3 > /dev/null
+    - node --version && python3 --version && dotnet --version
+  script:
+    - node tools/verify.mjs
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+pages:
+  stage: deploy
+  image: alpine:3.20
+  script:
+    # GitLab Pages serves the "public" folder
+    - rm -rf public
+    - cp -r site public
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

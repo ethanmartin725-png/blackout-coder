@@ -4,7 +4,7 @@
 
 A static web app that teaches coding the way 90s typing tutors and math drills did. The learner copies reference code; as they rank up, more of it blacks out until they write it from the goal alone. The owner (Ethan) is an operations excellence lead in manufacturing building this to learn to code himself and to share with friends. Content is grounded in real plant work: PLC/HMI, SQL pulls, OEE loss reporting, shift handoffs, plant boards.
 
-Deployed with GitHub Pages from `site/`. No framework, no build step, no dependencies. Keep it that way unless there is a clear reason.
+Deployed from `site/` as plain static files: GitLab Pages via `.gitlab-ci.yml`, or GitHub Pages via `.github/workflows/pages.yml`. Both run `node tools/verify.mjs` before deploying. No framework, no build step, no dependencies. Keep it that way unless there is a clear reason.
 
 ## How Ethan works
 

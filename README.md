@@ -36,6 +36,16 @@ No build step and no install. Either:
 
 On a free GitHub account, Pages requires the repository to be public.
 
+## Publish on GitLab Pages
+
+1. Create a project on GitLab and push this folder to the `main` branch.
+2. `.gitlab-ci.yml` runs the same lesson check on every merge request and on `main`, then publishes `site/` from `main`. No settings change is needed.
+3. The site appears at `https://<your-username>.gitlab.io/<project-name>/`. The exact address is under **Deploy → Pages** in the project.
+
+## Publish anywhere else
+
+`site/` is plain static files with relative paths. Run `node tools/verify.mjs`, then upload the `site` folder to any static host (for example Netlify Drop or Cloudflare Pages direct upload).
+
 ## Add or change a lesson
 
 1. Edit the lane or track file in `site/data/`. The format is in `docs/LESSON_FORMAT.md`.
