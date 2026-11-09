@@ -22,6 +22,7 @@ Deployed from `site/` as plain static files: GitLab Pages via `.gitlab-ci.yml`, 
 - MES Helper track: edit `tools/output-checks/track6-mes/lessons6.py`, then `python3 build6.py` there. It compiles and runs the C# and writes `site/data/tracks/06-mes.js`. Do not edit the JS file by hand.
 - Eye Counter track (C++): `node tools/output-checks/track9-eye/run.mjs` compiles each step with all earlier steps and that step's test `main` (kept in the script), runs it and writes its `out`; `--check` reports stale ones.
 - ERP Export track (Java): `node tools/output-checks/track10-erp/run.mjs`, the same approach as Eye Counter: each step compiled with the earlier steps, its test `main` and a closing brace.
+- Ignition outputs: `bash tools/output-checks/ignition/fetch.sh` once, then `node tools/output-checks/ignition/run.mjs` (`--check`, `--only=<title>`). Runs every Ignition script and expression lesson in real Jython 2.7 with a teaching model of `system.*`; database lessons need `BC_SQL_PASSWORD` and the SQL Server container. Scenarios are in `scenarios.mjs`. Semantics and limits: `docs/IGNITION_SIM.md`.
 - Downtime Entry track: `node tools/output-checks/track7-downtime/run.mjs` builds each JavaScript step's page in Chromium (Playwright), drives it with the scenarios in that file and writes its `out`; `--check` reports stale ones.
 
 ## Architecture
@@ -48,7 +49,7 @@ Key engine behaviors:
 
 - **PLC ladder**: Rockwell neutral text with spaces between instructions, e.g. `XIC(A) XIO(B) OTE(C);`. Branches use `BST … NXB … BND`.
 - **Structured Text**: Studio 5000 style (`:=`, `TONR` with FBD_TIMER, `END_IF;`).
-- **Ignition scripts**: Jython 2.7. No f-strings. `system.tag.readBlocking`, `system.db.runPrepUpdate` with `?` parameters.
+- **Ignition scripts**: Jython 2.7. No f-strings, and `print(...)` takes one argument (in 2.7, `print("a", b)` prints a tuple); the verifier refuses both. Whole-number `/` drops the remainder. `system.tag.readBlocking`, `system.db.runPrepUpdate` with `?` parameters, timestamps passed from `system.date.now()`.
 - **SQL**: T-SQL (SQL Server). Parameterized `?` placeholders when called from Python, named `@name` parameters from C#.
 - **C#**: .NET 8, top-level statements in `Program.cs`, nullable enabled, `Microsoft.Data.SqlClient` 7.1.1. Typed `SqlDbType` parameters, `using` on connections, writes inside a transaction. The verifier compiles every C# lesson; C++ (g++, C++17) and Java lessons are compiled too.
 - **Python**: pandas + pyodbc + openpyxl. Never paste values into SQL text; pass parameters.
@@ -78,6 +79,7 @@ Rates and margin are illustrative, not real plant figures.
 - **AM Checklist**: Hoop Driver 1's daily AM sheet. Only the 85 to 110 psi air band, the area and the 55/hr rate are canonical; every other standard, tag number and revision is illustrative, and the page says so.
 - **Eye Counter**: Conveyor 3's eye sampled every 10 ms (illustrative), 200 ms debounce (illustrative), jam after 4 s (the PLC track's rule). Test cycles are the ST history lesson's 61.2 / 59.8 / 64.0 / 60.4 / 60.6 s, giving about 58.7 barrels/hr against the ideal 60.
 - **ERP Export**: shift A's rows from `shift_log.csv` (Conveyor 3 347/352, Hoop Driver 1 271/274, Char Station 2 310/301, the known bad row) plus one deliberately broken line. Exported: Conveyor 3 98 short, $4,165.00; Hoop Driver 1 138.5 short, $5,886.25; trailer total $10,051.25; 2 rows held back. Lost margin counts output shortfall only, at $42.50, rounded HALF_UP. Work-center codes, the 43-character layout and batch ids are illustrative.
+- **Ignition**: tags at the handoff run time (2026-11-07 14:05) with shift A's values: counts 301 / 352 / 274, State 2 / 1 / 1 (Char Station 2's flare still open), Hoop Driver 1 air 92 psi, Conveyor 3 Speed_SP 60. Folder names (Conveyor3, HoopDriver1, CharStation2) are illustrative. The PLC track's jam is shift A's 09:08:52 to 09:13:29; its hourly snapshot logs 47 then 94 barrels (illustrative, at shift A's 46.9/hr). Database lessons use the canonical PlantDB, whose "now" is 10:15.
 - **Downtime Entry**: manual stops the PLC cannot see, for shift A (06:00–14:00). The three logged in the outputs are illustrative and not in `fault_log`: Conveyor 3 changeover 07:30–07:45 (15 min), Hoop Driver 1 material 11:05–11:17 (12), Char Station 2 quality check 12:40–12:52 (12); 39 min in all. A stop crossing 14:00 is refused, matching the Shift Handoff clipping rule.
 
 Known simplification worth keeping visible to learners: `fault_log` holds only PLC-detected jams, so availability runs about 99% and nearly all loss lands in performance. The lessons say so.

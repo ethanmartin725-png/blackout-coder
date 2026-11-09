@@ -90,7 +90,9 @@ def table(cur):
     return "\n".join([line(cols)] + [line(r) for r in rows])
 
 
-lesson = sys.stdin.read()
+# --reset: only build the fresh sample database, for tools that connect to it themselves (Ignition).
+RESET_ONLY = "--reset" in sys.argv
+lesson = "" if RESET_ONLY else sys.stdin.read()
 creates_table = re.match(r"\s*CREATE\s+TABLE", lesson, re.I) is not None
 
 # Fresh database for every lesson
@@ -110,6 +112,10 @@ if not creates_table:
         "INSERT INTO handoff_note (shift_date, shift, machine, author, note, created_ts) VALUES (%s, %s, %s, %s, %s, %s)",
         [(datetime.date(2026, 11, 6), "C", "Char Station 2", "T. Nguyen", "Burner B igniter sparking weak on Char Station 2. Maintenance work order opened.", datetime.datetime(2026, 11, 7, 5, 52)),
          (datetime.date(2026, 11, 6), "C", None, "T. Nguyen", 'Hoop stock for 26" heads running low; 2 pallets left.', datetime.datetime(2026, 11, 7, 5, 55))])
+if RESET_ONLY:
+    conn.close()
+    print("PlantDB reset")
+    sys.exit(0)
 
 # Run the lesson. GO on its own line separates batches, as in SSMS and sqlcmd. A batch that
 # declares variables, uses TRY/CATCH or creates a procedure, function, view or trigger runs whole,

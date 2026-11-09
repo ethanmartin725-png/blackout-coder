@@ -181,9 +181,9 @@ Eye cleared, then Reset_PB  →  Jam_Fault=0  →  Conv_State=3`,
     if initialChange:
         return
     if currentValue.value:
-        query = "INSERT INTO fault_log (machine, fault) VALUES (?, ?)"
-        system.db.runPrepUpdate(query, ["Conveyor 3", "Jam"], "PlantDB")`,
-      about: "Ignition runs this every time the Jam_Fault tag changes. initialChange is true when the tag first loads, which is not a real event, so the script exits. The ? marks are parameters that Ignition fills safely from the list. The fault_log table fills start_ts itself with a default of the current time.",
+        query = "INSERT INTO fault_log (machine, fault, start_ts) VALUES (?, ?, ?)"
+        system.db.runPrepUpdate(query, ["Conveyor 3", "Jam", system.date.now()], "PlantDB")`,
+      about: "Ignition runs this every time the Jam_Fault tag changes. initialChange is true when the tag first loads, which is not a real event, so the script exits. The ? marks are parameters that Ignition fills safely from the list. start_ts comes from system.date.now(), the gateway's clock, so every timestamp the gateway writes is on one clock; the column's default of the database time is only a fallback.",
       terms: [
         ["valueChanged", "def valueChanged(…)", "The tag event Ignition calls on every value change. Ignition supplies this line; the body is yours."],
         ["initialChange", "initialChange", "True on startup or tag reload. Skipping it avoids fake fault rows."],
@@ -191,9 +191,9 @@ Eye cleared, then Reset_PB  →  Jam_Fault=0  →  Conv_State=3`,
         ["runPrepUpdate", "system.db.runPrepUpdate", "Runs an INSERT/UPDATE with ? parameters against a named database connection."],
         ["?", "?", "A parameter placeholder. Never paste values into SQL text; pass them in the list."],
       ],
-      out: `fault_log after a jam starts:
+      out: `fault_log after the jam starts:
 machine     fault  start_ts             end_ts
-Conveyor 3  Jam    2026-11-07 06:42:10  NULL`,
+Conveyor 3  Jam    2026-11-07 09:08:52  NULL`,
     },
     {
       lang: "ignition",
@@ -202,11 +202,11 @@ Conveyor 3  Jam    2026-11-07 06:42:10  NULL`,
       goal: "When the fault clears, stamp end_ts on the open Conveyor 3 row.",
       code: `    else:
         query = (
-            "UPDATE fault_log SET end_ts = CURRENT_TIMESTAMP "
+            "UPDATE fault_log SET end_ts = ? "
             "WHERE machine = ? AND end_ts IS NULL"
         )
-        system.db.runPrepUpdate(query, ["Conveyor 3"], "PlantDB")`,
-      about: "This else pairs with if currentValue.value, so it runs when the fault goes off. Two strings side by side inside parentheses join into one, which keeps long SQL readable. end_ts IS NULL targets only the open fault. Now every jam has a start and an end, which is what a downtime report needs.",
+        system.db.runPrepUpdate(query, [system.date.now(), "Conveyor 3"], "PlantDB")`,
+      about: "This else pairs with if currentValue.value, so it runs when the fault goes off. Two strings side by side inside parentheses join into one, which keeps long SQL readable. end_ts IS NULL targets only the open fault, and end_ts comes from the same gateway clock as start_ts. Now every jam has a start and an end, which is what a downtime report needs: this is shift A's 09:08:52 Conveyor 3 jam, 4.62 minutes on the Shift Handoff report.",
       terms: [
         ["else", "else:", "Runs when the if above it was false. Its indent must match that if."],
         ["(", "( \"…\" \"…\" )", "Adjacent strings inside parentheses join into one string."],
@@ -214,9 +214,9 @@ Conveyor 3  Jam    2026-11-07 06:42:10  NULL`,
         ["NULL", "IS NULL", "Matches empty values. = NULL never matches anything in SQL."],
       ],
       out: `machine     fault  start_ts             end_ts
-Conveyor 3  Jam    2026-11-07 06:42:10  2026-11-07 06:44:55
+Conveyor 3  Jam    2026-11-07 09:08:52  2026-11-07 09:13:29
 
-Downtime for this event: 2 min 45 s`,
+Downtime for this event: 4 min 37 s (4.62 min)`,
     },
     {
       lang: "ignition",
@@ -231,9 +231,9 @@ values = system.tag.readBlocking(paths)
 count = values[0].value
 state = values[1].value
 
-query = "INSERT INTO count_log (machine, barrels, state) VALUES (?, ?, ?)"
-system.db.runPrepUpdate(query, ["Conveyor 3", count, state], "PlantDB")`,
-      about: "A gateway timer script runs on the server on a fixed delay you set, here 3,600,000 ms. readBlocking reads several tags in one trip and returns values in the same order as the paths. .value pulls the number out of each result.",
+query = "INSERT INTO count_log (machine, barrels, state, ts) VALUES (?, ?, ?, ?)"
+system.db.runPrepUpdate(query, ["Conveyor 3", count, state, system.date.now()], "PlantDB")`,
+      about: "A gateway timer script runs on the server on a fixed delay you set, here 3,600,000 ms. readBlocking reads several tags in one trip and returns values in the same order as the paths. .value pulls the number out of each result. barrels is the counter's running total, about 47 more each hour at shift A's 46.9 per hour, so one row subtracted from the next gives that hour's output.",
       terms: [
         ["readBlocking", "system.tag.readBlocking", "Reads a list of tag paths and waits for the results."],
         ["default", "[default]", "The tag provider name. Most gateways use default."],
@@ -242,8 +242,8 @@ system.db.runPrepUpdate(query, ["Conveyor 3", count, state], "PlantDB")`,
       ],
       out: `count_log, one row per hour:
 machine     barrels  state  ts
-Conveyor 3  412      1      2026-11-07 07:00:00
-Conveyor 3  398      1      2026-11-07 08:00:00`,
+Conveyor 3  47       1      2026-11-07 07:00:00
+Conveyor 3  94       1      2026-11-07 08:00:00`,
     },
     {
       lang: "ignexpr",
@@ -331,8 +331,8 @@ Conv_State = 0  →  UNKNOWN`,
         ["\"state alarm\"", "Class list", "Space-separated class names. Both apply at once."],
         [null, "style.classes", "The Perspective property that holds a component's style classes."],
       ],
-      out: `Jam_Fault = 0  →  classes: state         (gray banner)
-Jam_Fault = 1  →  classes: state alarm   (red banner)`,
+      out: `Jam_Fault = 0  →  state
+Jam_Fault = 1  →  state alarm`,
     },
   ],
 });

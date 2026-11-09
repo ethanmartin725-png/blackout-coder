@@ -15,3 +15,7 @@ tools/output-checks/**/handoff_*.html
 tools/output-checks/**/build/
 bin/
 obj/
+
+# Ignition output tool: downloaded jars (tools/output-checks/ignition/fetch.sh)
+tools/output-checks/ignition/vendor/
+*$py.class

@@ -48,6 +48,29 @@ const nativeFiles = []; // C++ and Java: one compile per lesson, or per track fi
 // A term key that starts or ends with a letter must not be part of a longer word ("int" inside "println")
 const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const wholeToken = (k, code) => new RegExp((/^\w/.test(k) ? "(?<!\\w)" : "") + reEsc(k) + (/\w$/.test(k) ? "(?!\\w)" : "")).test(code);
+function jythonProblems(code) {
+  const out = [];
+  // Blank out strings first, so text inside them is never mistaken for code
+  const s = code
+    .replace(/"""[\s\S]*?"""|'''[\s\S]*?'''/g, '""')
+    .replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g, (m, i, all) => (/(^|[^\w])([rR]?[fF]|[fF][rR])$/.test(all.slice(Math.max(0, i - 3), i)) ? "F" : '""'))
+    .replace(/#[^\n]*/g, "");
+  if (/(^|[^\w.])([rR]?[fF]|[fF][rR])F/.test(s)) out.push("f-strings do not exist in Jython 2.7; use % or .format()");
+  if (/\bnonlocal\b/.test(s)) out.push("nonlocal does not exist in Jython 2.7");
+  if (/:=/.test(s)) out.push(":= does not exist in Jython 2.7");
+  if (/^\s*print\s+[^(\s]/m.test(s)) out.push("print statement: write print(...) with one argument, which works in both Python 2 and 3");
+  // print("a", b) prints a tuple in Python 2.7, so print(...) may take a single argument only
+  for (const m of s.matchAll(/\bprint\s*\(/g)) {
+    let depth = 1;
+    for (let i = m.index + m[0].length; i < s.length && depth; i++) {
+      const c = s[i];
+      if ("([{".includes(c)) depth++;
+      else if (")]}".includes(c)) depth--;
+      else if (c === "," && depth === 1) { out.push("print(a, b) prints a tuple in Jython 2.7; build one string with % instead"); break; }
+    }
+  }
+  return [...new Set(out)];
+}
 let lessons = 0;
 const ids = new Set();
 const groups = [...BC.lanes.map((l) => ({ kind: "lane", g: l })), ...BC.tracks.map((t) => ({ kind: "track", g: t }))];
@@ -84,6 +107,9 @@ for (const { kind, g } of groups) {
       else if (t[0] !== null && !wholeToken(t[0], l.code)) warns.push(`${where}: term key "${t[0]}" only appears inside a longer word, so clicking it outlines the wrong text`);
     });
     if (/\t/.test(l.code)) fail(`${where}: code contains a tab character; use spaces`);
+    // Ignition runs Jython 2.7. Scripts are compiled below as Python 3, so also refuse code that
+    // compiles there but fails, or means something else, in Python 2.7.
+    if (langId === "ignition") for (const m of jythonProblems(l.code)) fail(`${where}: ${m}`);
     // The lesson must be completable by typing its own code
     const T = BCcore.targetLines(l.code);
     const a = BCcore.analyzeText(l.code, T, ld.py);
