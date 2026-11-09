@@ -265,5 +265,226 @@ print(shift.loc[shift["pct"] < 0.70, "machine"].tolist())`,
 2   Hoop Driver 1      274       55  0.664
 ['Hoop Driver 1']`,
     },
+    {
+      t: "Sort with a key",
+      goal: "Sort the fault Pareto minutes largest first. For each fault print its minutes, the running percent of the total, and \"vital\" if the running total before it was under 80%.",
+      code: `pareto = {"Jam": 65.7, "Low air": 87.4, "E-stop": 10.8, "Char flare": 70.0, "Hoop misfeed": 66.6}
+total = sum(pareto.values())
+
+running = 0
+for fault, minutes in sorted(pareto.items(), key=lambda item: item[1], reverse=True):
+    vital = running / total < 0.80
+    running += minutes
+    line = f"{fault:<13}{minutes:>6.1f}{running / total:>7.1%}"
+    if vital:
+        line += "  vital"
+    print(line)`,
+      about: "sorted() takes a key: a small function that says what to sort by. Here each item is a (fault, minutes) pair and the key picks the minutes. The minutes are the DB Pulls track's Pareto across all 47 faults, 300.5 in total. A fault counts as vital when the line stood under 80% before it, the same rule and the same four faults as that track's pandas step.",
+      terms: [
+        ["sorted", "sorted(…, key=…)", "Returns a new sorted list. key says what to compare."],
+        ["lambda", "lambda item: item[1]", "A one-line function with no name. Here it returns the minutes."],
+        ["reverse=True", "reverse=True", "Largest first."],
+        ["running", "Running total", "Minutes so far, used for the cumulative percent."],
+      ],
+      out: `Low air        87.4  29.1%  vital
+Char flare     70.0  52.4%  vital
+Hoop misfeed   66.6  74.5%  vital
+Jam            65.7  96.4%  vital
+E-stop         10.8 100.0%`,
+    },
+    {
+      t: "zip and enumerate",
+      goal: "Pair each machine with its shift A barrels and target, compute the share of target, then print the machines ranked best first as \"1. <machine> <pct>\".",
+      code: `machines = ["Char Station 2", "Conveyor 3", "Hoop Driver 1"]
+barrels = [301, 352, 274]
+targets = [375, 450, 412.5]
+
+shares = [b / t for b, t in zip(barrels, targets)]
+ranked = sorted(zip(machines, shares), key=lambda pair: pair[1], reverse=True)
+
+for rank, (machine, share) in enumerate(ranked, start=1):
+    print(f"{rank}. {machine:<15}{share:.1%}")`,
+      about: "zip walks several lists side by side, one item from each at a time, so the barrels and targets stay lined up. Each target is the ideal rate times 7.5 paid hours: 50, 60 and 55 per hour. enumerate numbers the items as you loop; start=1 makes the ranks read 1, 2, 3 instead of starting at 0.",
+      terms: [
+        ["zip", "zip(a, b)", "Pairs items from each list by position."],
+        ["enumerate", "enumerate(…, start=1)", "Gives a count with each item, starting from 1 here."],
+        ["(machine, share)", "Unpacking", "Splits each (machine, share) pair into two names."],
+      ],
+      out: `1. Char Station 2 80.3%
+2. Conveyor 3     78.2%
+3. Hoop Driver 1  66.4%`,
+    },
+    {
+      t: "Group and total with pandas",
+      goal: "Put shift A's five faults in a DataFrame. Group by machine to get the number of faults and total minutes, largest first, then print the total for Hoop Driver 1.",
+      code: `import pandas as pd
+
+faults = pd.DataFrame({
+    "machine": ["Conveyor 3", "Hoop Driver 1", "Hoop Driver 1", "Hoop Driver 1", "Char Station 2"],
+    "fault": ["Jam", "Hoop misfeed", "Low air", "Low air", "Char flare"],
+    "minutes": [4.62, 7.5, 18.5, 15.0, 18.75],
+})
+
+by_machine = faults.groupby("machine")["minutes"].agg(["count", "sum"])
+by_machine = by_machine.sort_values("sum", ascending=False)
+print(by_machine)
+print(by_machine.loc["Hoop Driver 1", "sum"])`,
+      about: "groupby splits the rows by machine, agg runs count and sum on each group, and the result has one row per machine. These are the Shift Handoff track's down minutes: 41.00, 18.75 and 4.62, with the open char flare clipped at the 14:00 shift end. The DB Pulls track's fault-by-shift pivot is the same idea with two keys.",
+      terms: [
+        ["groupby", "groupby(\"machine\")", "Splits the rows into one group per machine."],
+        ["agg", "agg([\"count\", \"sum\"])", "Runs each summary on every group."],
+        ["sort_values", "sort_values(\"sum\", …)", "Orders the rows by a column."],
+        ["loc", "loc[row, column]", "Looks up one value by its row label and column."],
+      ],
+      out: `                count    sum
+machine                     
+Hoop Driver 1       3  41.00
+Char Station 2      1  18.75
+Conveyor 3          1   4.62
+41.0`,
+    },
+    {
+      t: "Split a text line",
+      goal: "Split the line \" Conveyor 3 | JAM | 2026-11-07 09:08:52 | 4.62 \" on \"|\", strip the spaces, and print the machine, the fault code in title case, the time of day, and the minutes plus 1.",
+      code: `line = " Conveyor 3 | JAM | 2026-11-07 09:08:52 | 4.62 "
+
+parts = [p.strip() for p in line.split("|")]
+machine, code, start, minutes = parts
+minutes = float(minutes)
+
+print(parts)
+print(machine, code.title(), start[11:], minutes + 1)`,
+      about: "Text from a scanner, a log file or a serial device arrives as one string. split cuts it into a list at each separator, strip trims the spaces around each piece, and unpacking names the four pieces at once. Everything is still text until float() converts it: \"4.62\" + 1 is an error, 4.62 + 1 is 5.62. start[11:] slices from the 12th character, the time.",
+      terms: [
+        ["split", "split(\"|\")", "Cuts a string into a list at each separator."],
+        ["strip", "strip()", "Removes spaces and line breaks from both ends."],
+        ["float", "float()", "Turns text such as \"4.62\" into a number."],
+        ["start[11:]", "Slice", "Characters from position 11 to the end."],
+      ],
+      out: `['Conveyor 3', 'JAM', '2026-11-07 09:08:52', '4.62']
+Conveyor 3 Jam 09:08:52 5.62`,
+    },
+    {
+      t: "Write a CSV file",
+      goal: "Write shift A's machine, barrels and target to shift_summary.csv with a header row, then read the file back and print it.",
+      code: `import csv
+
+rows = [
+    {"machine": "Char Station 2", "barrels": 301, "target": 375},
+    {"machine": "Conveyor 3", "barrels": 352, "target": 450},
+    {"machine": "Hoop Driver 1", "barrels": 274, "target": 412.5},
+]
+
+with open("shift_summary.csv", "w", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=["machine", "barrels", "target"])
+    writer.writeheader()
+    writer.writerows(rows)
+
+with open("shift_summary.csv") as f:
+    print(f.read())`,
+      about: "DictWriter writes one line per dictionary, in the column order given by fieldnames, and adds quotes only where a value needs them. Open the file with newline=\"\": without it, Windows gets a blank line between rows. The with block closes the file when it ends, so the read below sees everything written.",
+      terms: [
+        ["DictWriter", "csv.DictWriter", "Writes dictionaries as CSV rows."],
+        ["fieldnames", "fieldnames=[…]", "The columns and their order."],
+        ["writeheader", "writeheader()", "Writes the header row."],
+        ["newline=\"\"", "newline=\"\"", "Lets the csv module control line endings."],
+      ],
+      out: `machine,barrels,target
+Char Station 2,301,375
+Conveyor 3,352,450
+Hoop Driver 1,274,412.5`,
+    },
+    {
+      t: "JSON in and out",
+      goal: "Build the shift A status as a dictionary, turn it into JSON text and print it. Then read it back and print Char Station 2's status and whether a fault is open.",
+      code: `import json
+
+status = {
+    "shift": "A",
+    "machines": {"Char Station 2": "DOWN", "Conveyor 3": "OK", "Hoop Driver 1": "BEHIND"},
+    "open_fault": True,
+    "note": None,
+}
+
+text = json.dumps(status)
+print(text)
+
+back = json.loads(text)
+print(back["machines"]["Char Station 2"], back["open_fault"])`,
+      about: "JSON is the text format web APIs, MES systems and Ignition's web endpoints exchange. dumps turns Python data into JSON text and loads turns it back. Look at the printed text: True became true and None became null, JSON's spellings. The statuses are the Shift Handoff track's: the char flare is still open at 14:05.",
+      terms: [
+        ["dumps", "json.dumps", "Python data to JSON text."],
+        ["loads", "json.loads", "JSON text back to Python data."],
+        ["None", "None → null", "Python's None is written null in JSON; True is written true."],
+      ],
+      out: `{"shift": "A", "machines": {"Char Station 2": "DOWN", "Conveyor 3": "OK", "Hoop Driver 1": "BEHIND"}, "open_fault": true, "note": null}
+DOWN True`,
+    },
+    {
+      t: "A class for a machine",
+      goal: "Define a Machine dataclass with name and rate_hr, and methods target(hours=7.5) and share(barrels). Print each machine's target and shift A share.",
+      code: `from dataclasses import dataclass
+
+@dataclass
+class Machine:
+    name: str
+    rate_hr: float
+
+    def target(self, hours=7.5):
+        return self.rate_hr * hours
+
+    def share(self, barrels):
+        return barrels / self.target()
+
+plant = [Machine("Conveyor 3", 60), Machine("Hoop Driver 1", 55), Machine("Char Station 2", 50)]
+barrels = {"Conveyor 3": 352, "Hoop Driver 1": 274, "Char Station 2": 301}
+
+for m in plant:
+    print(f"{m.name:<15}{m.target():>6}{m.share(barrels[m.name]):>7.1%}")
+print(plant[0])`,
+      about: "A class bundles data with the functions that use it. @dataclass writes the setup code for you: Machine(\"Conveyor 3\", 60) stores the name and rate, and printing one shows its fields. self is the machine the method was called on. The rates are the canonical ideal rates, so the targets are 450, 412.5 and 375 barrels. The type hints are notes, not checks: rate_hr=60 stays a whole number, as the last line shows.",
+      terms: [
+        ["@dataclass", "@dataclass", "Generates the code that stores the fields."],
+        ["self", "self", "The object the method was called on."],
+        ["class", "class Machine:", "Defines a new type of object."],
+        ["rate_hr: float", "Field", "A value every Machine holds, with its type."],
+      ],
+      out: `Conveyor 3      450.0  78.2%
+Hoop Driver 1   412.5  66.4%
+Char Station 2  375.0  80.3%
+Machine(name='Conveyor 3', rate_hr=60)`,
+    },
+    {
+      t: "Query with parameters",
+      goal: "In an in-memory SQLite database, create fault_log, insert shift A's five faults with ? parameters, then select Hoop Driver 1's faults longest first.",
+      code: `import sqlite3
+
+con = sqlite3.connect(":memory:")
+con.execute("CREATE TABLE fault_log (machine TEXT, fault TEXT, minutes REAL)")
+
+faults = [
+    ("Conveyor 3", "Jam", 4.62),
+    ("Hoop Driver 1", "Hoop misfeed", 7.5),
+    ("Hoop Driver 1", "Low air", 18.5),
+    ("Hoop Driver 1", "Low air", 15.0),
+    ("Char Station 2", "Char flare", 18.75),
+]
+con.executemany("INSERT INTO fault_log VALUES (?, ?, ?)", faults)
+
+query = "SELECT fault, minutes FROM fault_log WHERE machine = ? ORDER BY minutes DESC"
+for row in con.execute(query, ("Hoop Driver 1",)):
+    print(row)
+con.close()`,
+      about: "Each ? is a placeholder; the values travel separately from the SQL text, so a value can never change the query. Paste a value into the text instead and a machine name with an apostrophe breaks it, or a crafted one rewrites it. SQLite is built into Python, so this runs anywhere; the plant code uses pyodbc against SQL Server with the same ? style, and only the connect line changes.",
+      terms: [
+        ["?", "? placeholder", "Where a value goes. The value is passed separately."],
+        ["executemany", "executemany", "Runs one statement once for each row in a list."],
+        ["(\"Hoop Driver 1\",)", "One-item tuple", "The trailing comma makes it a tuple, which execute expects."],
+        ["connect", "sqlite3.connect", "Opens a database. \":memory:\" is a throwaway one."],
+      ],
+      out: `('Low air', 18.5)
+('Low air', 15.0)
+('Hoop misfeed', 7.5)`,
+    },
   ],
 });
