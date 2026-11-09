@@ -203,6 +203,65 @@ export function runPlcTests(P) {
     const p = st("X := 7;\nY := X / 2;");
     try { p.scan(); return "no error"; } catch (e) { return e instanceof P.NotModeled ? "" : `wrong error: ${e.message}`; }
   });
+
+  // ---------- ST stage 2: arrays, loops, ABS ----------
+  const throwsWith = (fn, text) => { try { fn(); return "no error"; } catch (e) { return e.message.includes(text) ? "" : `wrong error: ${e.message}`; } };
+  t("ST array element read and write by a tag index", () => {
+    const p = st("Rate[0] := 60; Rate[1] := 55; Rate[2] := 50;\nIdeal := Rate[Machine];", { types: { Rate: "DINT[3]" } });
+    p.write("Machine", 1); p.scan(); return all(eq(p, "Ideal", 55), eq(p, "Rate[2]", 50));
+  });
+  t("ST array index out of range stops (major fault on a controller)", () => {
+    const p = st("X := A[I];", { types: { A: "DINT[3]" } }); p.write("I", 3);
+    return throwsWith(() => p.scan(), "major fault");
+  });
+  t("ST array used without an index is an error", () => throwsWith(() => st("X := A;", { types: { A: "DINT[3]" } }).scan(), "array"));
+  t("ST array without a declared type is an error", () => throwsWith(() => st("X := A[0];"), "declared type"));
+  t("ST FOR sums with inclusive bounds", () => {
+    const p = st("Total := 0;\nFOR i := 0 TO 2 DO\n  Total := Total + B[i];\nEND_FOR;", { types: { B: "DINT[3]" } });
+    p.write("B[0]", 352); p.write("B[1]", 274); p.write("B[2]", 301); p.scan();
+    return all(eq(p, "Total", 927), eq(p, "i", 3));
+  });
+  t("ST FOR BY -1 counts down", () => {
+    const p = st("N := 0;\nFOR i := 4 TO 0 BY -1 DO\n  N := N * 10 + i;\nEND_FOR;"); p.scan(); return eq(p, "N", 43210);
+  });
+  t("ST FOR does not run when the start is past the end", () => {
+    const p = st("N := 0;\nFOR i := 3 TO 2 DO\n  N := N + 1;\nEND_FOR;"); p.scan(); return eq(p, "N", 0);
+  });
+  t("ST FOR bounds are fixed before the first pass", () => {
+    const p = st("Last := 2; N := 0;\nFOR i := 0 TO Last DO\n  Last := 10; N := N + 1;\nEND_FOR;"); p.scan(); return eq(p, "N", 3);
+  });
+  t("ST EXIT leaves only the innermost loop", () => {
+    const p = st("N := 0;\nFOR i := 1 TO 3 DO\n  FOR j := 1 TO 3 DO\n    IF j = 2 THEN EXIT; END_IF;\n    N := N + 1;\n  END_FOR;\nEND_FOR;");
+    p.scan(); return eq(p, "N", 3);
+  });
+  t("ST EXIT outside a loop is a parse error", () => (P.parseST("EXIT;").errors.length ? "" : "no error"));
+  t("ST WHILE checks before the body", () => {
+    const p = st("N := 0;\nWHILE N < 0 DO\n  N := N + 1;\nEND_WHILE;"); p.scan(); return eq(p, "N", 0);
+  });
+  t("ST REPEAT runs the body at least once", () => {
+    const p = st("N := 0;\nREPEAT\n  N := N + 1;\nUNTIL N > 0\nEND_REPEAT;"); p.scan(); return eq(p, "N", 1);
+  });
+  t("ST EXIT leaves a REPEAT before UNTIL is checked", () => {
+    const p = st("N := 0;\nREPEAT\n  N := N + 1;\n  IF N = 2 THEN EXIT; END_IF;\nUNTIL N > 5\nEND_REPEAT;"); p.scan(); return eq(p, "N", 2);
+  });
+  t("ST EXIT leaves a WHILE", () => {
+    const p = st("N := 0;\nWHILE N < 9 DO\n  N := N + 1;\n  IF N = 4 THEN EXIT; END_IF;\nEND_WHILE;"); p.scan(); return eq(p, "N", 4);
+  });
+  t("ST a loop that never ends stops with a watchdog message", () => {
+    const p = st("N := 0;\nWHILE N >= 0 DO\n  N := 1;\nEND_WHILE;"); return throwsWith(() => p.scan(), "watchdog");
+  });
+  t("ST BOOL array in a WHILE search", () => {
+    const p = st("i := 0;\nWHILE i < 4 AND Full[i] DO\n  i := i + 1;\nEND_WHILE;", { types: { Full: "BOOL[5]" } });
+    p.write("Full[0]", 1); p.write("Full[1]", 1); p.scan(); return eq(p, "i", 2);
+  });
+  t("ST ABS on REAL and DINT", () => {
+    const p = st("E := SP - PV;\nBig := ABS(E) > 2.0;\nD := ABS(0 - K);", { types: { SP: "REAL", PV: "REAL" } });
+    p.write("SP", 60); p.write("PV", 57.5); p.write("K", 7); p.scan();
+    return all(eq(p, "Big", 1), eq(p, "D", 7), p.typeOf("D") === "DINT" ? "" : `D is ${p.typeOf("D")}`);
+  });
+  t("ST REAL array keeps 32-bit values", () => {
+    const p = st("H[0] := 61.2;", { types: { H: "REAL[2]" } }); p.scan(); return eq(p, "H[0]", Math.fround(61.2));
+  });
   return fails;
 }
 const seal = {

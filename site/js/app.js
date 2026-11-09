@@ -365,7 +365,7 @@ const SCENES={
       o.push(`<rect class="sc-eye" x="${S.EYE-7}" y="22" width="14" height="18" rx="2"/><line class="sc-beam${S.blocked?' blocked':''}" x1="${S.EYE}" y1="40" x2="${S.EYE}" y2="110"/><text class="sc-label" x="${S.EYE+12}" y="34">Eye_Blocked ${S.blocked?1:0}</text>`);
       o.push(`<rect class="sc-motor${run?' on':''}" x="6" y="130" width="46" height="30" rx="4"/><text class="sc-label dark" x="29" y="149" text-anchor="middle">M</text><text class="sc-label" x="60" y="150">Conv_Run ${run?1:0}</text>`);
       o.push('<rect class="sc-pole" x="609" y="12" width="6" height="98"/>',lamp('r',612,22,jam),lamp('a',612,44,!run&&!jam),lamp('g',612,66,run));
-      if(plc.has('Barrel_Count'))o.push(`<text class="sc-lcd" x="8" y="24">BARRELS ${String(plc.read('Barrel_Count.ACC')).padStart(4,'0')}</text>`);
+      if(plc.has('Barrel_Count'))o.push(`<text class="sc-lcd" x="8" y="24">BARRELS ${String(plc.read(plc.typeOf('Barrel_Count')==='COUNTER'?'Barrel_Count.ACC':'Barrel_Count')).padStart(4,'0')}</text>`);
       if(plc.has('Conv_State')){const v=plc.read('Conv_State');o.push(`<text class="sc-lcd" x="8" y="48">STATE ${v} ${STATE_NAMES[v]||''}</text>`);}
       return `<svg viewBox="0 0 640 170" role="img" aria-label="Conveyor 3: barrels on the belt, photo eye, motor and stack light">${o.join('')}</svg>`;
     };

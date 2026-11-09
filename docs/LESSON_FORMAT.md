@@ -58,10 +58,10 @@ sim: {
 
 - `set` holds its values from the start of the step; `pulse` holds them for `pulseMs` (default 300) and then restores the old values, like a pushbutton.
 - `runMs` is how long the step runs (default 1000); `repeat` runs it several times, for example once per barrel.
-- `types` declares tags the code alone cannot type, such as a REAL analog input (`{ Hoop1_Air_PSI: "REAL" }`) or a counter that is only read. `scanMs` sets the simulated scan time (default 10).
+- `types` declares tags the code alone cannot type, such as a REAL analog input (`{ Hoop1_Air_PSI: "REAL" }`), a counter that is only read, or a Structured Text array with its size (`{ History: "REAL[5]" }`, `BOOL`, `DINT` or `REAL`). Array elements are set and watched by name, such as `"History[0]"`. `scanMs` sets the simulated scan time (default 10).
 - A track step runs together with the earlier steps in the same routine (same `file` and language).
 - `scene` shows a machine in the simulator. Scenes live in `SCENES` in `app.js`; each declares the tags it drives, which are then not offered as manual inputs.
-  - `"conveyor3"`: Conveyor 3 jam cell. Barrels drive `Eye_Blocked`; reads `Conv_Run`, `Jam_Fault`, `Barrel_Count`, `Conv_State`. Buttons: jam a barrel, clear the jam.
+  - `"conveyor3"`: Conveyor 3 jam cell. Barrels drive `Eye_Blocked`; reads `Conv_Run`, `Jam_Fault`, `Barrel_Count` (a COUNTER's `.ACC` or a plain DINT), `Conv_State`. Buttons: jam a barrel, clear the jam.
   - `"air1"`: Hoop Driver 1 air header. Drives `Hoop1_Air_PSI` (cylinder dips every 2.5 s while running); reads `Hoop1_Air_OK`, `Hoop1_Low_Air`, `Hoop1_Run`. Buttons: compressor trips, regulator sticks high, back to normal.
   - `"char2"`: Char Station 2 burner and fan. Reads `Char2_Burner_On`, `Char2_Exhaust_Fan` and the timers `Purge_Timer`, `Post_Purge`, `Exhaust_Timer`; shows smoke building without the fan.
 - The simulator's "Compare with the reference" button runs the scenario on the learner's code and on the lesson's code and shows the first step where they differ, so logic written differently still passes if it behaves the same.

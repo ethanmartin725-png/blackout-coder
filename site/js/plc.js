@@ -117,7 +117,8 @@ const exprHasRealLiteral = (e) => e.num !== undefined ? e.real : e.neg ? exprHas
 // timer blocks TONR, TOFR, RTOR on FBD_TIMER tags. Expressions: OR, XOR, AND (&), NOT, = <> < >
 // <= >=, + - * / MOD, unary minus, parentheses. Comments: (* *), /* */ and //.
 // Keywords are case-insensitive, as in Logix; tag names are kept as written.
-const ST_KW = new Set(["IF", "THEN", "ELSIF", "ELSE", "END_IF", "CASE", "OF", "END_CASE", "AND", "OR", "XOR", "NOT", "MOD"]);
+const ST_KW = new Set(["IF", "THEN", "ELSIF", "ELSE", "END_IF", "CASE", "OF", "END_CASE", "AND", "OR", "XOR", "NOT", "MOD",
+  "FOR", "TO", "BY", "DO", "END_FOR", "WHILE", "END_WHILE", "REPEAT", "UNTIL", "END_REPEAT", "EXIT"]);
 const ST_FB = { TONR: "FBD_TIMER", TOFR: "FBD_TIMER", RTOR: "FBD_TIMER" };
 
 function tokenizeST(src) {
@@ -145,7 +146,7 @@ function tokenizeST(src) {
     const two = s.slice(i, i + 2);
     if ([":=", "<=", ">=", "<>", "..", "**"].includes(two)) { toks.push({ k: "op", v: two, line }); i += 2; continue; }
     if (c === "&") { toks.push({ k: "kw", v: "AND", line }); i++; continue; }
-    if ("+-*/()=<>;:,.".includes(c)) { toks.push({ k: "op", v: c, line }); i++; continue; }
+    if ("+-*/()=<>;:,.[]".includes(c)) { toks.push({ k: "op", v: c, line }); i++; continue; }
     errors.push({ line, msg: `unexpected "${c}"` }); i++;
   }
   return { toks, errors };
@@ -163,12 +164,19 @@ function parseST(src) {
   const expectOp = (v) => { if (!isOp(v)) fail(`expected "${v}"${where()}`); p++; };
   const expectKw = (v) => { if (!isKw(v)) fail(`expected ${v}${where()}`); p++; };
 
+  // A tag: Name, Name.Member, or an array element Name[index] (index is an expression).
+  // Plain paths stay strings; an indexed one is { base, index, member }.
   function path() {
     if (!at("id")) fail(`expected a tag name${where()}`);
-    let name = toks[p++].v;
-    if (isOp(".")) { p++; if (!at("id")) fail("expected a member name after ."); name += "." + toks[p++].v; }
-    return name;
+    let name = toks[p++].v, index = null;
+    if (isOp("[")) { p++; index = binary(0); expectOp("]"); }
+    let member = null;
+    if (isOp(".")) { p++; if (!at("id")) fail("expected a member name after ."); member = toks[p++].v; }
+    if (index) return { base: name, index, member };
+    return member ? `${name}.${member}` : name;
   }
+  const tagNode = (pth) => (typeof pth === "string" ? { tag: pth } : { itag: pth });
+  let loopDepth = 0;
   const LEVELS = [["OR"], ["XOR"], ["AND"], ["=", "<>"], ["<", ">", "<=", ">="], ["+", "-"], ["*", "/", "MOD"]];
   function binary(level) {
     if (level === LEVELS.length) return unary();
@@ -193,8 +201,14 @@ function parseST(src) {
     if (t.k === "num") { p++; return { num: Number(t.v), real: t.v.includes(".") }; }
     if (isOp("(")) { p++; const e = binary(0); expectOp(")"); return e; }
     if (t.k === "id") {
-      if (toks[p + 1] && toks[p + 1].v === "(") fail(`function ${t.v}() is not supported in expressions`);
-      return { tag: path() };
+      if (toks[p + 1] && toks[p + 1].v === "(") {
+        if (t.v.toUpperCase() !== "ABS") fail(`function ${t.v}() is not supported; the interpreter knows ABS()`);
+        p += 2;
+        const arg = binary(0);
+        expectOp(")");
+        return { fn: "ABS", arg };
+      }
+      return tagNode(path());
     }
     fail(`unexpected "${t.v}" in an expression`);
   }
@@ -209,6 +223,40 @@ function parseST(src) {
   function statement() {
     const t = toks[p];
     if (isOp(";")) { p++; return { empty: 1 }; }
+    if (isKw("FOR")) {
+      p++;
+      if (!at("id")) fail(`expected the loop variable after FOR${where()}`);
+      const forVar = toks[p++].v;
+      expectOp(":=");
+      const from = binary(0); expectKw("TO");
+      const to = binary(0);
+      let by = null;
+      if (isKw("BY")) { p++; by = binary(0); }
+      expectKw("DO");
+      loopDepth++; const body = block(() => isKw("END_FOR")); loopDepth--;
+      expectKw("END_FOR"); expectOp(";");
+      return { forVar, from, to, by, loopBody: body, line: t.line };
+    }
+    if (isKw("WHILE")) {
+      p++;
+      const cond = binary(0); expectKw("DO");
+      loopDepth++; const body = block(() => isKw("END_WHILE")); loopDepth--;
+      expectKw("END_WHILE"); expectOp(";");
+      return { whileCond: cond, loopBody: body, line: t.line };
+    }
+    if (isKw("REPEAT")) {
+      p++;
+      loopDepth++; const body = block(() => isKw("UNTIL")); loopDepth--;
+      expectKw("UNTIL");
+      const until = binary(0);
+      expectKw("END_REPEAT"); expectOp(";");
+      return { until, loopBody: body, line: t.line };
+    }
+    if (isKw("EXIT")) {
+      if (!loopDepth) fail("EXIT is only allowed inside FOR, WHILE or REPEAT");
+      p++; expectOp(";");
+      return { exit: 1, line: t.line };
+    }
     if (isKw("IF")) {
       p++;
       const arms = [], endArm = () => isKw("ELSIF") || isKw("ELSE") || isKw("END_IF");
@@ -251,7 +299,7 @@ function parseST(src) {
     if (t.k === "id") {
       const target = path(); expectOp(":=");
       const value = binary(0); expectOp(";");
-      return { set: target, value, line: t.line };
+      return typeof target === "string" ? { set: target, value, line: t.line } : { iset: target, value, line: t.line };
     }
     fail(`unexpected "${t.v}"`);
   }
@@ -283,8 +331,15 @@ function createPLC(opts = {}) {
   const listeners = [];
 
   function declare(name, type) {
+    const arr = /^(BOOL|DINT|REAL)\[(\d+)\]$/.exec(type);
+    if (arr) {
+      if (tags[name]) throw new Error(`tag ${name} is declared as an array but is also used another way`);
+      tags[name] = { type: arr[1], dims: Number(arr[2]), v: new Array(Number(arr[2])).fill(0) };
+      return;
+    }
     const t = tags[name];
     if (!t) { tags[name] = { type, v: STRUCT[type] ? STRUCT[type]() : 0 }; return; }
+    if (t.dims) throw new Error(`array ${name} is used without an index`);
     if (t.type === type) return;
     if (t.type === "DINT" && type === "REAL") { t.type = "REAL"; return; } // widen
     if (t.type === "REAL" && type === "DINT") return;
@@ -292,15 +347,27 @@ function createPLC(opts = {}) {
   }
   function notify(path, value) { for (const f of listeners) f(path, value); }
 
+  // "Name", "Name.Member", "Name[3]" or "Name[3].Member" -> [name, member, index]
   function split(path) {
-    const k = String(path).trim().indexOf(".");
-    return k < 0 ? [String(path).trim(), null] : [String(path).trim().slice(0, k), String(path).trim().slice(k + 1)];
+    const s = String(path).trim(), m = /^([A-Za-z_]\w*)(?:\[(-?\d+)\])?(?:\.(\w+))?$/.exec(s);
+    if (m) return [m[1], m[3] || null, m[2] === undefined ? undefined : Number(m[2])];
+    const k = s.indexOf(".");
+    return k < 0 ? [s, null, undefined] : [s.slice(0, k), s.slice(k + 1), undefined];
+  }
+  // Array element access, with the range check a controller makes.
+  function element(t, n, i) {
+    if (!t.dims) { if (i !== undefined) throw new Error(`${n} is not an array`); return null; }
+    if (i === undefined) throw new Error(`${n} is an array; use an element such as ${n}[0]`);
+    if (!Number.isInteger(i) || i < 0 || i >= t.dims) throw new Error(`${n}[${i}] is out of range 0 to ${t.dims - 1}: a Logix controller would stop with a major fault`);
+    return i;
   }
   function read(x) {
     if (isNum(x)) return Number(x);
-    const [n, m] = split(x);
+    const [n, m, i] = split(x);
     const t = tags[n];
     if (!t) throw new Error(`tag ${n} was never given a type`);
+    const e = element(t, n, i);
+    if (e !== null) { if (m) throw new Error(`${n} holds ${t.type} values, which have no members`); return t.v[e]; }
     if (m) {
       if (!STRUCT[t.type] || !(m in t.v)) throw new Error(`${n} (${t.type}) has no member .${m}`);
       return t.v[m];
@@ -317,9 +384,15 @@ function createPLC(opts = {}) {
     return val;
   }
   function write(path, val) {
-    const [n, m] = split(path);
+    const [n, m, i] = split(path);
     const t = tags[n];
     if (!t) throw new Error(`tag ${n} was never given a type`);
+    const e = element(t, n, i);
+    if (e !== null) {
+      const v = coerce(t.type, val, `${n}[${e}]`);
+      if (t.v[e] !== v) { t.v[e] = v; notify(`${n}[${e}]`, v); }
+      return;
+    }
     if (m) {
       if (!STRUCT[t.type] || !(m in t.v)) throw new Error(`${n} (${t.type}) has no member .${m}`);
       const v = NUMERIC_MEMBERS.has(m) ? coerce("DINT", val, path) : (val ? 1 : 0);
@@ -507,12 +580,14 @@ function createPLC(opts = {}) {
       f(s);
       if (s.ifArms) { s.ifArms.forEach((a) => walkST(a.body, f)); walkST(s.otherwise, f); }
       if (s.arms) { s.arms.forEach((a) => walkST(a.body, f)); walkST(s.otherwise, f); }
+      if (s.loopBody) walkST(s.loopBody, f);
     }
   };
   const BOOL_OPS = ["AND", "OR", "XOR", "=", "<>", "<", ">", "<=", ">="];
   function memberKind(path) {
-    const [n, m] = split(path), t = tags[n];
+    const [n, m, i] = split(path), t = tags[n];
     if (!t) return null;
+    if (t.dims) return i === undefined ? null : t.type === "BOOL" ? "bool" : t.type === "REAL" ? "real" : "int";
     if (m) return NUMERIC_MEMBERS.has(m) ? "int" : "bool";
     return t.type === "BOOL" ? "bool" : t.type === "REAL" ? "real" : STRUCT[t.type] ? null : "int";
   }
@@ -522,21 +597,34 @@ function createPLC(opts = {}) {
   function typeST(stmts) {
     for (const [n, ty] of Object.entries(opts.types || {})) declare(n, ty);
     walkST(stmts, (s) => { if (s.fb) declare(s.tag, ST_FB[s.fb]); });
+    const elemPath = (ip) => `${ip.base}[0]${ip.member ? "." + ip.member : ""}`;
     const mark = (e, ctx) => {
       if (!e || e.num !== undefined) return;
+      if (e.itag) { if (!tags[e.itag.base]) throw new Error(`array ${e.itag.base} needs a declared type, such as "REAL[5]"`); return mark(e.itag.index, "num"); }
+      if (e.fn) return mark(e.arg, "num");
       if (e.tag) { if (!e.tag.includes(".") && !tags[e.tag] && ctx) declare(e.tag, ctx === "bool" ? "BOOL" : "DINT"); return; }
       if (e.not) return mark(e.not, "bool");
       if (e.neg) return mark(e.neg, "num");
       const logical = ["AND", "OR", "XOR"].includes(e.op);
       mark(e.a, logical ? "bool" : "num"); mark(e.b, logical ? "bool" : "num");
     };
-    const isBoolExpr = (e) => !!e.not || BOOL_OPS.includes(e.op) || (!!e.tag && memberKind(e.tag) === "bool");
-    const isRealExpr = (e) => e.num !== undefined ? e.real : e.tag ? memberKind(e.tag) === "real"
+    const kindOf = (e) => (e.tag ? memberKind(e.tag) : e.itag ? memberKind(elemPath(e.itag)) : null);
+    const isBoolExpr = (e) => !!e.not || BOOL_OPS.includes(e.op) || kindOf(e) === "bool";
+    const isRealExpr = (e) => e.num !== undefined ? e.real : e.tag || e.itag ? kindOf(e) === "real" : e.fn ? isRealExpr(e.arg)
       : e.neg ? isRealExpr(e.neg) : e.op && !isBoolExpr(e) ? isRealExpr(e.a) || isRealExpr(e.b) : false;
     for (let pass = 0; pass < 3; pass++) {
       walkST(stmts, (s) => {
         if (s.ifArms) s.ifArms.forEach((a) => mark(a.cond, "bool"));
         if (s.arms) mark(s.caseOf, "num");
+        if (s.forVar) { declare(s.forVar, "DINT"); [s.from, s.to, s.by].forEach((x) => mark(x, "num")); }
+        if (s.whileCond) mark(s.whileCond, "bool");
+        if (s.until) mark(s.until, "bool");
+        if (s.iset) {
+          if (!tags[s.iset.base]) throw new Error(`array ${s.iset.base} needs a declared type, such as "REAL[5]"`);
+          mark(s.iset.index, "num");
+          const tk = memberKind(elemPath(s.iset));
+          mark(s.value, tk === "bool" ? "bool" : "num");
+        }
         if (s.set) {
           // The value takes its context from the target: a bit member or BOOL makes it a
           // BOOL, a numeric member or number makes it a number. Untyped targets give none.
@@ -554,11 +642,23 @@ function createPLC(opts = {}) {
 
   // Evaluate to [value, kind], kind "bool" | "int" | "real". Cases whose Logix rules are not
   // confirmed raise NotModeled instead of guessing.
+  // An indexed path, with its index worked out: { base, index, member } -> "Name[3].Member"
+  function resolve(ip, line) {
+    const [i, k] = evalST(ip.index);
+    if (k !== "int") throw new NotModeled(`line ${line || "?"}: an array index must be a whole number`);
+    return `${ip.base}[${i}]${ip.member ? "." + ip.member : ""}`;
+  }
   function evalST(e) {
     if (e.num !== undefined) return [e.num, e.real ? "real" : "int"];
+    if (e.itag) { const pth = resolve(e.itag); return [read(pth), memberKind(pth)]; }
+    if (e.fn) {
+      const [v, k] = evalST(e.arg);
+      if (k === "bool") throw new NotModeled("ABS of a BOOL is not modeled");
+      return [Math.abs(v), k];
+    }
     if (e.tag) {
       const k = memberKind(e.tag);
-      if (!k) throw new Error(`${e.tag}: read a member such as ${e.tag}.DN`);
+      if (!k) { const t = tags[split(e.tag)[0]]; throw new Error(t && t.dims ? `${e.tag} is an array; use an element such as ${e.tag}[0]` : `${e.tag}: read a member such as ${e.tag}.DN`); }
       return [read(e.tag), k];
     }
     if (e.not) {
@@ -624,18 +724,40 @@ function createPLC(opts = {}) {
     } else if (kind === "TONR") { W("EN", 0); W("TT", 0); W("DN", 0); W("ACC", 0); }
     else { W("EN", 0); W("TT", 0); } // RTOR keeps ACC and DN
   }
+  // Loops run inside one scan, as in Logix. A loop that never ends would trip the task
+  // watchdog on a controller; here it stops with an explanation instead of hanging the page.
+  const LOOP_MAX = 100000, EXIT = Symbol("EXIT");
+  const cond = (e, line, what) => { const [v, k] = evalST(e); if (k !== "bool") throw new NotModeled(`line ${line}: ${what} must be true or false`); return v; };
+  const guard = (n, line) => { if (n > LOOP_MAX) throw new Error(`line ${line}: a loop ran ${LOOP_MAX.toLocaleString("en-US")} times in one scan; a controller's watchdog would fault`); };
   function execST(list) {
     for (const s of list) {
+      if (s.exit) return EXIT;
       if (s.set) assign(s.set, evalST(s.value), s.line);
+      else if (s.iset) assign(resolve(s.iset, s.line), evalST(s.value), s.line);
       else if (s.fb) fbTimer(s.fb, s.tag);
       else if (s.ifArms) {
-        const arm = s.ifArms.find((a) => { const [v, k] = evalST(a.cond); if (k !== "bool") throw new NotModeled(`line ${s.line}: an IF condition must be true or false`); return v; });
-        execST(arm ? arm.body : s.otherwise);
+        const arm = s.ifArms.find((a) => cond(a.cond, s.line, "an IF condition"));
+        if (execST(arm ? arm.body : s.otherwise) === EXIT) return EXIT;
       } else if (s.arms) {
         const [v, k] = evalST(s.caseOf);
         if (k !== "int") throw new NotModeled(`line ${s.line}: CASE needs a whole-number selector`);
         const arm = s.arms.find((a) => a.labels.some(([lo, hi]) => v >= lo && v <= hi));
-        execST(arm ? arm.body : s.otherwise);
+        if (execST(arm ? arm.body : s.otherwise) === EXIT) return EXIT;
+      } else if (s.forVar) {
+        // Bounds and step are worked out once, before the first pass.
+        const num = (e) => { const [v, k] = evalST(e); if (k !== "int") throw new NotModeled(`line ${s.line}: FOR bounds must be whole numbers`); return v; };
+        const to = num(s.to), by = s.by ? num(s.by) : 1;
+        if (by === 0) throw new Error(`line ${s.line}: FOR … BY 0 would never end`);
+        write(s.forVar, num(s.from));
+        for (let n = 1; by > 0 ? read(s.forVar) <= to : read(s.forVar) >= to; n++) {
+          guard(n, s.line);
+          if (execST(s.loopBody) === EXIT) break;
+          write(s.forVar, read(s.forVar) + by);
+        }
+      } else if (s.whileCond) {
+        for (let n = 1; cond(s.whileCond, s.line, "a WHILE condition"); n++) { guard(n, s.line); if (execST(s.loopBody) === EXIT) break; }
+      } else if (s.until) {
+        for (let n = 1; ; n++) { guard(n, s.line); if (execST(s.loopBody) === EXIT) break; if (cond(s.until, s.line, "an UNTIL condition")) break; }
       }
     }
   }

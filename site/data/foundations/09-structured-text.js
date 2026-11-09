@@ -732,5 +732,214 @@ Jog_PB released          →  Motor=0
 Auto with a request      →  Motor=1
 Fault                    →  Motor=0`,
     },
+    {
+      t: "Arrays",
+      goal: "Fill Ideal_Rate with 60, 55 and 50 barrels per hour for machines 0, 1 and 2, then set Ideal to the rate of machine Machine_No.",
+      code: `Ideal_Rate[0] := 60;
+Ideal_Rate[1] := 55;
+Ideal_Rate[2] := 50;
+Ideal := Ideal_Rate[Machine_No];`,
+      about: "An array is one tag holding several values of the same type, numbered from 0. Here the numbers are the canonical ideal rates: 0 is Conveyor 3, 1 is Hoop Driver 1, 2 is Char Station 2. In Studio 5000 the array is declared with its size, DINT[3]. An index outside 0 to 2 is not ignored: the controller stops with a major fault, which is why later lessons check the index first.",
+      terms: [
+        ["Ideal_Rate", "DINT[3]", "One tag with three whole-number elements, Ideal_Rate[0] to Ideal_Rate[2]."],
+        ["[", "[ index ]", "Picks one element. The index can be a number or a tag."],
+        ["Machine_No", "Index tag", "0 Conveyor 3, 1 Hoop Driver 1, 2 Char Station 2."],
+      ],
+      sim: {"types":{"Ideal_Rate":"DINT[3]","Machine_No":"DINT"},"watch":["Ideal"],"steps":[{"label":"Machine_No = 1","set":{"Machine_No":1}},{"label":"Machine_No = 2","set":{"Machine_No":2}},{"label":"Machine_No = 0","set":{"Machine_No":0}}]},
+      out: `Machine_No = 1  →  Ideal=55
+Machine_No = 2  →  Ideal=50
+Machine_No = 0  →  Ideal=60`,
+    },
+    {
+      t: "Total with a FOR loop",
+      goal: "Add up the three shift counts in Barrels into Total.",
+      code: `Total := 0;
+FOR i := 0 TO 2 DO
+    Total := Total + Barrels[i];
+END_FOR;`,
+      about: "FOR runs its body once for each value of i, from 0 to 2 inclusive, all inside one scan. The counts are shift A's: Conveyor 3 352, Hoop Driver 1 274, Char Station 2 301, which total 927. Total is set to 0 first on every scan; leave that line out and the total grows by 927 every scan.",
+      terms: [
+        ["FOR", "FOR … TO … DO", "Repeats the body once for each value of the loop variable, ends included."],
+        ["END_FOR", "END_FOR;", "Closes the loop."],
+        ["Total := 0;", "Start from zero", "Without it the sum keeps growing scan after scan."],
+      ],
+      sim: {"types":{"Barrels":"DINT[3]"},"watch":["Total"],"steps":[{"label":"Shift A counts arrive","set":{"Barrels[0]":352,"Barrels[1]":274,"Barrels[2]":301}},{"label":"Hoop Driver 1 makes 2 more","set":{"Barrels[1]":276}}]},
+      out: `Shift A counts arrive       →  Total=927
+Hoop Driver 1 makes 2 more  →  Total=929`,
+    },
+    {
+      t: "Find the slowest machine",
+      goal: "Set Slowest to the index of the lowest value in Pct, each machine's share of its shift target.",
+      code: `Slowest := 0;
+FOR i := 1 TO 2 DO
+    IF Pct[i] < Pct[Slowest] THEN
+        Slowest := i;
+    END_IF;
+END_FOR;`,
+      about: "Assume the first element is the lowest, then let the loop replace it whenever it finds a lower one. The values are shift A counts over each target (ideal rate × 7.5 paid hours): Conveyor 3 352/450 = 0.782, Hoop Driver 1 274/412.5 = 0.664, Char Station 2 301/375 = 0.803. Hoop Driver 1 is furthest behind, matching BEHIND on the shift handoff.",
+      terms: [
+        ["Slowest := 0;", "Start with the first", "Machine 0 is the lowest until the loop finds lower."],
+        ["Pct[Slowest]", "Lowest so far", "Each element is compared with the lowest found so far."],
+      ],
+      sim: {"types":{"Pct":"REAL[3]"},"watch":["Slowest"],"steps":[{"label":"Shift A shares arrive","set":{"Pct[0]":0.782,"Pct[1]":0.664,"Pct[2]":0.803}},{"label":"Hoop Driver 1 catches up to 0.85","set":{"Pct[1]":0.85}}]},
+      out: `Shift A shares arrive             →  Slowest=1
+Hoop Driver 1 catches up to 0.85  →  Slowest=0`,
+    },
+    {
+      t: "Keep a history",
+      goal: "Each time Barrel_Done turns on, move History[0] to [3] down one place and put Cycle_Time in History[0].",
+      code: `IF Barrel_Done AND NOT Done_Last THEN
+    FOR i := 4 TO 1 BY -1 DO
+        History[i] := History[i - 1];
+    END_FOR;
+    History[0] := Cycle_Time;
+END_IF;
+Done_Last := Barrel_Done;`,
+      about: "This keeps the last five cycle times, newest first. The loop counts down with BY -1 on purpose: copy upward instead and History[0] is copied into every element before anything moves. Done_Last makes it happen once per barrel, not once per scan. Cycle times are seconds per barrel; Conveyor 3's ideal of 60 per hour is 60 s.",
+      terms: [
+        ["BY", "BY -1", "Counts down. The step can be any whole number except 0."],
+        ["History[i - 1]", "Shift down", "Each element takes the value from the one before it."],
+        ["Done_Last", "Edge", "Last scan's value, so the shift happens once per barrel."],
+      ],
+      sim: {"types":{"History":"REAL[5]","Cycle_Time":"REAL","Barrel_Done":"BOOL"},"watch":["History[0]","History[1]","History[2]"],"steps":[{"label":"Barrel at 61.2 s","set":{"Cycle_Time":61.2},"pulse":{"Barrel_Done":1}},{"label":"Barrel at 59.8 s","set":{"Cycle_Time":59.8},"pulse":{"Barrel_Done":1}},{"label":"Barrel at 64.0 s","set":{"Cycle_Time":64},"pulse":{"Barrel_Done":1}}]},
+      out: `Barrel at 61.2 s  →  History[0]=61.2
+Barrel at 59.8 s  →  History[1]=61.2  →  History[0]=59.8
+Barrel at 64.0 s  →  History[2]=61.2  →  History[1]=59.8  →  History[0]=64`,
+    },
+    {
+      t: "Moving average",
+      goal: "Keep the last five cycle times in History as before, then set Avg_Cycle to their average and Slow_Flag when it is over 63.0 s.",
+      code: `IF Barrel_Done AND NOT Done_Last THEN
+    FOR i := 4 TO 1 BY -1 DO
+        History[i] := History[i - 1];
+    END_FOR;
+    History[0] := Cycle_Time;
+END_IF;
+Done_Last := Barrel_Done;
+Sum := 0.0;
+FOR i := 0 TO 4 DO
+    Sum := Sum + History[i];
+END_FOR;
+Avg_Cycle := Sum / 5.0;
+Slow_Flag := Avg_Cycle > 63.0;`,
+      about: "One slow barrel should not raise a flag, but a slow trend should. Averaging the last five smooths single barrels out. The threshold, 63.0 s, is 5% over Conveyor 3's ideal 60 s and is illustrative. Watch the cost: the 76.0 s barrel holds the average, and the flag, up until five more barrels have pushed it out.",
+      terms: [
+        ["Sum := 0.0;", "Fresh sum", "Started at 0.0 every scan, so it is a REAL and does not grow."],
+        ["/ 5.0", "Average", "The sum over the five values in the history."],
+        ["Slow_Flag", "Trend flag", "On while the five-barrel average is over 63 s."],
+      ],
+      sim: {"types":{"History":"REAL[5]","Cycle_Time":"REAL","Barrel_Done":"BOOL"},"start":{"History[0]":61.2,"History[1]":59.8,"History[2]":64,"History[3]":60.4,"History[4]":60.6},"watch":["Avg_Cycle","Slow_Flag"],"steps":[{"label":"Slow barrel at 76.0 s","set":{"Cycle_Time":76},"pulse":{"Barrel_Done":1}},{"label":"Four barrels at 60.0 s","set":{"Cycle_Time":60},"pulse":{"Barrel_Done":1},"repeat":4},{"label":"One more at 60.0 s","pulse":{"Barrel_Done":1}}]},
+      out: `Slow barrel at 76.0 s   →  Avg_Cycle=64.28  →  Slow_Flag=1
+Four barrels at 60.0 s  →  Avg_Cycle=63.2
+One more at 60.0 s      →  Avg_Cycle=60  →  Slow_Flag=0`,
+    },
+    {
+      t: "Search with WHILE and EXIT",
+      goal: "Set Next_Slot to the first empty slot in the ten-slot Rack_Full, or to -1 when every slot is full.",
+      code: `Next_Slot := -1;
+i := 0;
+WHILE i <= 9 DO
+    IF NOT Rack_Full[i] THEN
+        Next_Slot := i;
+        EXIT;
+    END_IF;
+    i := i + 1;
+END_WHILE;`,
+      about: "WHILE repeats as long as its condition is true, and EXIT leaves the loop at once, so the search stops at the first empty slot. -1 is a value no real slot can have, so it means \"none\". The bound check stays in the loop condition and the array read stays inside the body, so the code never reads Rack_Full[10], which would fault the controller.",
+      terms: [
+        ["WHILE", "WHILE … DO", "Repeats while the condition is true. Checked before every pass."],
+        ["EXIT", "EXIT;", "Leaves the innermost loop immediately."],
+        ["-1", "Not found", "A value no slot can have."],
+        ["END_WHILE", "END_WHILE;", "Closes the loop."],
+      ],
+      sim: {"types":{"Rack_Full":"BOOL[10]"},"start":{"Rack_Full[0]":1,"Rack_Full[1]":1,"Rack_Full[2]":1},"watch":["Next_Slot"],"steps":[{"label":"Slot 3 filled","set":{"Rack_Full[3]":1}},{"label":"Slot 1 emptied","set":{"Rack_Full[1]":0}},{"label":"Every slot filled","set":{"Rack_Full[1]":1,"Rack_Full[4]":1,"Rack_Full[5]":1,"Rack_Full[6]":1,"Rack_Full[7]":1,"Rack_Full[8]":1,"Rack_Full[9]":1}}]},
+      out: `Slot 3 filled      →  Next_Slot=4
+Slot 1 emptied     →  Next_Slot=1
+Every slot filled  →  Next_Slot=-1`,
+    },
+    {
+      t: "REPEAT … UNTIL",
+      goal: "Count the trailer Loads needed for Barrels_Waiting at 48 barrels per trailer, by taking 48 off until nothing is left.",
+      code: `Loads := 0;
+Left := Barrels_Waiting;
+REPEAT
+    Loads := Loads + 1;
+    Left := Left - 48;
+UNTIL Left <= 0
+END_REPEAT;`,
+      about: "REPEAT checks its condition after the body, so the body always runs at least once. That is right for 130 barrels (3 loads) and 96 (2), but with 0 barrels waiting it still books 1 load. Run the last step and see. When zero passes is possible, use WHILE, which checks first. 48 barrels per trailer is illustrative.",
+      terms: [
+        ["REPEAT", "REPEAT … UNTIL", "Runs the body, then stops when the UNTIL condition is true."],
+        ["UNTIL", "UNTIL Left <= 0", "Checked after each pass, so there is always at least one."],
+        ["END_REPEAT", "END_REPEAT;", "Closes the loop. UNTIL itself has no semicolon."],
+      ],
+      sim: {"types":{"Barrels_Waiting":"DINT"},"start":{"Barrels_Waiting":48},"watch":["Loads"],"steps":[{"label":"130 barrels waiting","set":{"Barrels_Waiting":130}},{"label":"96 barrels waiting","set":{"Barrels_Waiting":96}},{"label":"0 barrels waiting","set":{"Barrels_Waiting":0}}]},
+      out: `130 barrels waiting  →  Loads=3
+96 barrels waiting   →  Loads=2
+0 barrels waiting    →  Loads=1`,
+    },
+    {
+      t: "ABS for a deadband",
+      goal: "Set Speed_Error to Speed_SP minus Speed_PV, and Speed_Alarm when the error is more than 2.0 barrels per hour either way.",
+      code: `Speed_Error := Speed_SP - Speed_PV;
+Speed_Alarm := ABS(Speed_Error) > 2.0;`,
+      about: "ABS drops the sign, so one comparison covers too slow and too fast. Without it you need two: error > 2.0 OR error < -2.0. The setpoint is Conveyor 3's ideal 60 barrels per hour; the 2.0 band is illustrative. Speed_Error keeps its sign, so the HMI can still say which way the conveyor is off.",
+      terms: [
+        ["ABS", "ABS( )", "Absolute value: the number without its sign."],
+        ["Speed_Error", "Signed error", "Positive when slow, negative when fast."],
+      ],
+      sim: {"types":{"Speed_SP":"REAL","Speed_PV":"REAL"},"start":{"Speed_SP":60,"Speed_PV":60},"watch":["Speed_Error","Speed_Alarm"],"steps":[{"label":"Runs at 58.5","set":{"Speed_PV":58.5}},{"label":"Slows to 57.5","set":{"Speed_PV":57.5}},{"label":"Overspeeds to 62.5","set":{"Speed_PV":62.5}},{"label":"Settles at 61.0","set":{"Speed_PV":61}}]},
+      out: `Runs at 58.5        →  Speed_Error=1.5
+Slows to 57.5       →  Speed_Error=2.5  →  Speed_Alarm=1
+Overspeeds to 62.5  →  Speed_Error=-2.5
+Settles at 61.0     →  Speed_Error=-1  →  Speed_Alarm=0`,
+    },
+    {
+      t: "Conveyor 3 in Structured Text",
+      goal: "Write all of Conveyor 3 in Structured Text: permissive, seal-in, 4 s jam fault with a reset interlock, a barrel count on the eye's leading edge cleared by Shift_Change, and Conv_State 2 jammed, 1 running, 3 idle.",
+      code: `(* Permissive and seal-in *)
+Run_Permissive := Auto_Mode AND Estop_OK AND NOT Jam_Fault;
+Conv_Run := (Start_PB OR Conv_Run) AND Stop_PB AND Run_Permissive;
+
+(* Jam: eye blocked 4 s while running *)
+Jam_Timer.PRE := 4000;
+Jam_Timer.TimerEnable := Conv_Run AND Eye_Blocked;
+TONR(Jam_Timer);
+IF Jam_Timer.DN THEN
+    Jam_Fault := 1;
+END_IF;
+IF Reset_PB AND NOT Eye_Blocked THEN
+    Jam_Fault := 0;
+END_IF;
+
+(* Count each barrel once *)
+IF Eye_Blocked AND NOT Eye_Last THEN
+    Barrel_Count := Barrel_Count + 1;
+END_IF;
+Eye_Last := Eye_Blocked;
+IF Shift_Change THEN
+    Barrel_Count := 0;
+END_IF;
+
+(* State for the HMI *)
+IF Jam_Fault THEN
+    Conv_State := 2;
+ELSIF Conv_Run THEN
+    Conv_State := 1;
+ELSE
+    Conv_State := 3;
+END_IF;`,
+      about: "The whole PLC track routine in one Structured Text routine, in the same order as the rungs. Its trace matches the ladder track step for step. One real difference: the count is a plain DINT with an edge check instead of a CTU, so an Ignition tag path ends in Barrel_Count, not Barrel_Count/ACC. Run it in the simulator, pass barrels, jam one, and reset.",
+      terms: [
+        ["Run_Permissive", "Permissive", "Auto, e-stop healthy and no jam."],
+        ["TONR", "Jam timer", "4 s of a blocked eye while running."],
+        ["Eye_Last", "Edge", "Counts each barrel once, on the leading edge."],
+        ["Conv_State", "State", "2 jammed, 1 running, 3 idle, for the HMI and the hourly log."],
+      ],
+      sim: {"start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Conv_Run","Jam_Fault","Conv_State"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Eye blocked 4 s","set":{"Eye_Blocked":1},"runMs":4100},{"label":"Eye cleared, then Reset_PB","set":{"Eye_Blocked":0},"pulse":{"Reset_PB":1}}],"scene":"conveyor3","sameAs":"t-plc/Machine state codes"},
+      out: `Press and release Start_PB  →  Conv_Run=1  →  Conv_State=1
+Eye blocked 4 s             →  Jam_Fault=1  →  Conv_State=2  →  Conv_Run=0
+Eye cleared, then Reset_PB  →  Jam_Fault=0  →  Conv_State=3`,
+    },
   ],
 });
