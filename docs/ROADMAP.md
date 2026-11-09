@@ -36,7 +36,7 @@
   - [x] Ignition 50
   - [ ] Structured Text 48 (stage 3 waits on 1756-RM003)
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
-- [ ] HMI design principles as their own steps: ISA-101 alarm colors, layout hierarchy, operator-first faceplates.
+- [x] HMI design principles as their own steps: the High-Performance HMI track (18 steps). ISA-101 display hierarchy, grey for normal with color reserved for alarms (high-performance HMI practice; ISA-101 itself sets no colors), analog indicators with a normal band, ISA-18.2 alarm priority, acknowledge and return-to-normal.
 - [ ] More Structured Text: user-defined types.
 
 ## Engine
