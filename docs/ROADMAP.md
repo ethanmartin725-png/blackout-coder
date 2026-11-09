@@ -34,7 +34,8 @@
 - [ ] Track completion summary page: accuracy and WPM trend per step.
 - [x] PLC interpreter phase 1: ladder runtime (`site/js/plc.js`), 35 instruction tests, verifier checks, generated outputs for all 19 ladder lessons. Design in `docs/PLC_INTERPRETER.md`.
 - [x] PLC interpreter phase 2: Structured Text (assignments, IF/ELSIF, CASE, logic and math, TONR/TOFR/RTOR). The 3 ST track steps have generated outputs identical to their ladder twins.
-- [ ] PLC interpreter phase 3: browser simulator. Phase 4: more scenes. CTUD once its Logix semantics are confirmed.
+- [x] PLC interpreter phase 3: browser simulator. The learner's own ladder or Structured Text runs after the step is finished or checked; Conveyor 3 jam-cell scene on the track's jam-cell steps.
+- [ ] PLC interpreter phase 4: more scenes (Hoop Driver 1 air header, Char Station 2 burner and fan) and "make the machine do X" lessons. CTUD once its Logix semantics are confirmed. On a phone the conveyor scene scrolls sideways inside its box; a narrower layout would keep the eye and stack light in view.
 - [ ] Ladder simulation: animate a small piece of equipment (e.g. the conveyor jam cell) driven by the learner's own typed ladder logic, so a rung change makes a visible difference. Needs a scan-cycle interpreter for the ladder subset the lessons use (XIC, XIO, OTE, OTL/OTU, TON, CTU, branches), simulated inputs the learner can toggle, and an equipment view bound to the tags.
 
 ## Known limitations

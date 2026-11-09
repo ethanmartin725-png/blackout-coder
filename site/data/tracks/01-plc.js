@@ -35,7 +35,7 @@ Jam_Fault=1                           →  Run_Permissive=0`,
         ["Conv_Run", "Seal-in", "The output's own bit in the branch holds the rung after Start is released."],
         ["Stop_PB", "Normally closed stop", "The stop button reads 1 at rest. Pressing it, or a broken wire, reads 0 and stops the motor. That is the fail-safe choice."],
       ],
-      sim: {"start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Run_Permissive","Conv_Run"],"steps":[{"label":"Press Start_PB","set":{"Start_PB":1}},{"label":"Release Start_PB","set":{"Start_PB":0}},{"label":"Press and release Stop_PB","pulse":{"Stop_PB":0}},{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"E-stop pressed","set":{"Estop_OK":0}}]},
+      sim: {"start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Run_Permissive","Conv_Run"],"steps":[{"label":"Press Start_PB","set":{"Start_PB":1}},{"label":"Release Start_PB","set":{"Start_PB":0}},{"label":"Press and release Stop_PB","pulse":{"Stop_PB":0}},{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"E-stop pressed","set":{"Estop_OK":0}}],"scene":"conveyor3"},
       out: `Press Start_PB              →  Conv_Run=1
 Release Start_PB            →  no change
 Press and release Stop_PB   →  Conv_Run=0
@@ -57,7 +57,7 @@ XIC(Reset_PB) XIO(Eye_Blocked) OTU(Jam_Fault);`,
         ["OTL", "OTL / OTU", "Latch and unlatch. The bit stays set until the unlatch rung clears it."],
         ["Eye_Blocked", "Reset interlock", "XIO(Eye_Blocked) on the reset rung blocks a reset until the jam is physically cleared."],
       ],
-      sim: {"start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Jam_Timer.DN","Jam_Fault","Run_Permissive","Conv_Run"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Eye blocked 4 s while running","set":{"Eye_Blocked":1},"runMs":4100},{"label":"Reset_PB while eye still blocked","pulse":{"Reset_PB":1}},{"label":"Eye cleared, then Reset_PB","set":{"Eye_Blocked":0},"pulse":{"Reset_PB":1}}]},
+      sim: {"start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Jam_Timer.DN","Jam_Fault","Run_Permissive","Conv_Run"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Eye blocked 4 s while running","set":{"Eye_Blocked":1},"runMs":4100},{"label":"Reset_PB while eye still blocked","pulse":{"Reset_PB":1}},{"label":"Eye cleared, then Reset_PB","set":{"Eye_Blocked":0},"pulse":{"Reset_PB":1}}],"scene":"conveyor3"},
       out: `Press and release Start_PB        →  Conv_Run=1
 Eye blocked 4 s while running     →  Jam_Timer.DN=1  →  Jam_Fault=1  →  Run_Permissive=0  →  Conv_Run=0  →  Jam_Timer.DN=0
 Reset_PB while eye still blocked  →  no change
@@ -76,7 +76,7 @@ XIC(Shift_Change) RES(Barrel_Count);`,
         ["RES", "RES", "Reset. Zeroes the counter's accumulator and status bits."],
         ["Barrel_Count", ".ACC", "The counter's running total. This is the number Ignition will read."],
       ],
-      sim: {"start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Barrel_Count.ACC"],"steps":[{"label":"3 barrels pass the eye","pulse":{"Eye_Blocked":1},"pulseMs":500,"runMs":1500,"repeat":3},{"label":"Shift_Change pulse","pulse":{"Shift_Change":1}}]},
+      sim: {"start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Barrel_Count.ACC"],"steps":[{"label":"3 barrels pass the eye","pulse":{"Eye_Blocked":1},"pulseMs":500,"runMs":1500,"repeat":3},{"label":"Shift_Change pulse","pulse":{"Shift_Change":1}}],"scene":"conveyor3"},
       out: `3 barrels pass the eye  →  Barrel_Count.ACC=3
 Shift_Change pulse      →  Barrel_Count.ACC=0`,
     },
@@ -94,7 +94,7 @@ XIO(Conv_Run) XIO(Jam_Fault) MOV(3,Conv_State);`,
         ["Conv_State", "State code", "An INT tag. 1 Running, 2 Faulted, 3 Idle. These codes become your downtime categories."],
         [null, "Scan order", "Later rungs overwrite earlier ones in the same scan. Order rungs so the highest-priority state is last."],
       ],
-      sim: {"start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Conv_Run","Jam_Fault","Conv_State"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Eye blocked 4 s","set":{"Eye_Blocked":1},"runMs":4100},{"label":"Eye cleared, then Reset_PB","set":{"Eye_Blocked":0},"pulse":{"Reset_PB":1}}]},
+      sim: {"start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Conv_Run","Jam_Fault","Conv_State"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Eye blocked 4 s","set":{"Eye_Blocked":1},"runMs":4100},{"label":"Eye cleared, then Reset_PB","set":{"Eye_Blocked":0},"pulse":{"Reset_PB":1}}],"scene":"conveyor3"},
       out: `Press and release Start_PB  →  Conv_Run=1  →  Conv_State=1
 Eye blocked 4 s             →  Jam_Fault=1  →  Conv_State=2  →  Conv_Run=0
 Eye cleared, then Reset_PB  →  Jam_Fault=0  →  Conv_State=3`,
@@ -113,7 +113,7 @@ Conv_Run := (Start_PB OR Conv_Run) AND Stop_PB AND Run_Permissive;`,
         ["OR", "OR", "A parallel branch. Either side may be true."],
         ["NOT", "NOT", "Inverts a bit. NOT Jam_Fault works like XIO(Jam_Fault)."],
       ],
-      sim: {"sameAs":"Start/stop seal-in","start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Run_Permissive","Conv_Run"],"steps":[{"label":"Press Start_PB","set":{"Start_PB":1}},{"label":"Release Start_PB","set":{"Start_PB":0}},{"label":"Press and release Stop_PB","pulse":{"Stop_PB":0}},{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"E-stop pressed","set":{"Estop_OK":0}}]},
+      sim: {"sameAs":"Start/stop seal-in","start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Run_Permissive","Conv_Run"],"steps":[{"label":"Press Start_PB","set":{"Start_PB":1}},{"label":"Release Start_PB","set":{"Start_PB":0}},{"label":"Press and release Stop_PB","pulse":{"Stop_PB":0}},{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"E-stop pressed","set":{"Estop_OK":0}}],"scene":"conveyor3"},
       out: `Press Start_PB              →  Conv_Run=1
 Release Start_PB            →  no change
 Press and release Stop_PB   →  Conv_Run=0
@@ -143,7 +143,7 @@ END_IF;`,
         ["IF", "IF … THEN … END_IF;", "Runs the statements inside only when the condition is true."],
         ["Jam_Fault", "Latch by IF", "Setting a bit inside an IF, and clearing it only in another IF, holds it like OTL/OTU."],
       ],
-      sim: {"sameAs":"Jam detection","start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Jam_Timer.DN","Jam_Fault","Run_Permissive","Conv_Run"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Eye blocked 4 s while running","set":{"Eye_Blocked":1},"runMs":4100},{"label":"Reset_PB while eye still blocked","pulse":{"Reset_PB":1}},{"label":"Eye cleared, then Reset_PB","set":{"Eye_Blocked":0},"pulse":{"Reset_PB":1}}]},
+      sim: {"sameAs":"Jam detection","start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Jam_Timer.DN","Jam_Fault","Run_Permissive","Conv_Run"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Eye blocked 4 s while running","set":{"Eye_Blocked":1},"runMs":4100},{"label":"Reset_PB while eye still blocked","pulse":{"Reset_PB":1}},{"label":"Eye cleared, then Reset_PB","set":{"Eye_Blocked":0},"pulse":{"Reset_PB":1}}],"scene":"conveyor3"},
       out: `Press and release Start_PB        →  Conv_Run=1
 Eye blocked 4 s while running     →  Jam_Timer.DN=1  →  Jam_Fault=1  →  Run_Permissive=0  →  Conv_Run=0  →  Jam_Timer.DN=0
 Reset_PB while eye still blocked  →  no change
@@ -167,7 +167,7 @@ END_IF;`,
         ["ELSE", "ELSE", "Runs when nothing above matched."],
         ["END_IF", "END_IF;", "Closes the IF block. Note the semicolon."],
       ],
-      sim: {"sameAs":"Machine state codes","start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Conv_Run","Jam_Fault","Conv_State"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Eye blocked 4 s","set":{"Eye_Blocked":1},"runMs":4100},{"label":"Eye cleared, then Reset_PB","set":{"Eye_Blocked":0},"pulse":{"Reset_PB":1}}]},
+      sim: {"sameAs":"Machine state codes","start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Conv_Run","Jam_Fault","Conv_State"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Eye blocked 4 s","set":{"Eye_Blocked":1},"runMs":4100},{"label":"Eye cleared, then Reset_PB","set":{"Eye_Blocked":0},"pulse":{"Reset_PB":1}}],"scene":"conveyor3"},
       out: `Press and release Start_PB  →  Conv_Run=1  →  Conv_State=1
 Eye blocked 4 s             →  Jam_Fault=1  →  Conv_State=2  →  Conv_Run=0
 Eye cleared, then Reset_PB  →  Jam_Fault=0  →  Conv_State=3`,

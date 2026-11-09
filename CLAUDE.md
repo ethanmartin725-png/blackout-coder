@@ -38,6 +38,7 @@ Key engine behaviors:
 - **Track context**: earlier steps with the same `file` value show as locked, dimmed code above both panels; the learner types only the new lines.
 - **Previews**: `preview: true` languages render in a shadow-DOM preview. In a track, all earlier HTML/CSS/JS steps are concatenated so the page builds up step by step. The learner's own JavaScript runs only on completion or Check, never while typing. `fetch` is blocked in the preview and intervals are clamped to at least 1 s.
 - **Ladder**: `diagram: true` draws the typed rungs as an SVG ladder diagram, using `BCplc.parseRung`. Ladder outputs come from `sim` scenarios run in the interpreter, never typed by hand.
+- **Simulator**: every ladder or Structured Text lesson with a `sim` gets a Simulate panel (`/* PLC simulator */` in `app.js`). It runs the learner's own code only after the step is finished or Check is pressed, with inputs from the scenario. `sim.scene: "conveyor3"` adds the jam-cell machine. Energized paths use the `power` map from `BCplc`.
 - **Progress**: `localStorage` key `blackout-coder-v1`, per lane/track id. Best scores are keyed by lesson **title**, so titles must be unique within a lane or track.
 
 ## Content conventions

@@ -483,9 +483,16 @@ function createPLC(opts = {}) {
     }
     throw new Error(`instruction ${it.op} has no behavior`);
   }
+  // power: rung condition in and out of every instruction and branch on the last scan,
+  // for the simulator's energized-path drawing. Keyed by the parsed item.
+  const power = new Map();
   function seq(items, rin) {
     let r = rin;
-    for (const it of items) r = it.br ? branch(it, r) : exec(it, r);
+    for (const it of items) {
+      const out = it.br ? branch(it, r) : exec(it, r);
+      power.set(it, [r, out]);
+      r = out;
+    }
     return r;
   }
   function branch(b, rin) {
@@ -656,6 +663,9 @@ function createPLC(opts = {}) {
     },
     run(ms) { const n = Math.round(ms / scanMs); for (let k = 0; k < n; k++) this.scan(); },
     read, write,
+    // The parsed rungs this controller runs (ladder only) and their power flow on the last scan.
+    get rungs() { return rungs; },
+    get power() { return power; },
     has: (name) => !!tags[split(name)[0]],
     typeOf: (name) => (tags[split(name)[0]] || {}).type,
     get time() { return now; },

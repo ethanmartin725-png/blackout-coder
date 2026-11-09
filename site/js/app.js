@@ -175,38 +175,49 @@ const ih=it=>it.br?it.rows.reduce((a,r)=>a+sh(r),0):1;
 const sh=seq=>Math.max(1,...seq.map(ih));
 const L=(x1,y1,x2,y2,c='w')=>`<line class="${c}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
 const TX=(x,y,s,c,anchor)=>`<text class="${c}" x="${x}" y="${y}"${anchor?` text-anchor="${anchor}"`:''}>${esc(s)}</text>`;
-function drawIns(it,x,y,w,out){
-  const x2=x+w,cx=(x+x2)/2,op=it.op,tag=it.args[0]||'';
+// pw: optional power map from the simulator (BCplc controller .power), item -> [rung in, rung out].
+// Energized wires and true instructions get class "on". Without pw the drawing is unchanged.
+const wc=on=>on?'w on':'w';
+function drawIns(it,x,y,w,out,pw){
+  const x2=x+w,cx=(x+x2)/2,op=it.op,tag=it.args[0]||'',st=pw&&pw.get(it),ri=!!(st&&st[0]),ro=!!(st&&st[1]);
   if(op==='XIC'||op==='XIO'){
-    out.push(L(x,y,cx-11,y),L(cx+11,y,x2,y),L(cx-11,y-14,cx-11,y+14),L(cx+11,y-14,cx+11,y+14));
-    if(op==='XIO')out.push(L(cx-11,y+14,cx+11,y-14));
+    out.push(L(x,y,cx-11,y,wc(ri)),L(cx+11,y,x2,y,wc(ro)),L(cx-11,y-14,cx-11,y+14,wc(ro)),L(cx+11,y-14,cx+11,y+14,wc(ro)));
+    if(op==='XIO')out.push(L(cx-11,y+14,cx+11,y-14,wc(ro)));
     out.push(TX(cx,y-22,tag,'tag'));
   }else if(op==='ONS'){
-    out.push(L(x,y,cx-20,y),L(cx+20,y,x2,y),`<rect class="box" x="${cx-20}" y="${y-12}" width="40" height="24" rx="2"/>`,TX(cx,y+4,'ONS','op','middle'),TX(cx,y-22,tag,'tag'));
+    out.push(L(x,y,cx-20,y,wc(ri)),L(cx+20,y,x2,y,wc(ro)),`<rect class="box${ro?' on':''}" x="${cx-20}" y="${y-12}" width="40" height="24" rx="2"/>`,TX(cx,y+4,'ONS','op','middle'),TX(cx,y-22,tag,'tag'));
   }else if(op==='OTE'||op==='OTL'||op==='OTU'){
-    out.push(L(x,y,cx-14,y),L(cx+14,y,x2,y));
-    out.push(`<path class="w" d="M${cx-8} ${y-14} A16 16 0 0 0 ${cx-8} ${y+14}"/>`,`<path class="w" d="M${cx+8} ${y-14} A16 16 0 0 1 ${cx+8} ${y+14}"/>`);
+    out.push(L(x,y,cx-14,y,wc(ri)),L(cx+14,y,x2,y,wc(ro)));
+    out.push(`<path class="${wc(ri)}" d="M${cx-8} ${y-14} A16 16 0 0 0 ${cx-8} ${y+14}"/>`,`<path class="${wc(ri)}" d="M${cx+8} ${y-14} A16 16 0 0 1 ${cx+8} ${y+14}"/>`);
     if(op!=='OTE')out.push(TX(cx,y+4,op==='OTL'?'L':'U','op','middle'));
     out.push(TX(cx,y-22,tag,'tag'));
   }else{
     const bx=x+10,bw=w-20,lines=boxLines(it),bh=lines.length>2?66:52;
     lowY=Math.max(lowY,y-26+bh);
-    out.push(L(x,y,bx,y),L(bx+bw,y,x2,y),`<rect class="box" x="${bx}" y="${y-26}" width="${bw}" height="${bh}" rx="3"/>`,TX(bx+8,y-11,op,'op'));
+    out.push(L(x,y,bx,y,wc(ri)),L(bx+bw,y,x2,y,wc(ro)),`<rect class="box${ro?' on':''}" x="${bx}" y="${y-26}" width="${bw}" height="${bh}" rx="3"/>`,TX(bx+8,y-11,op,'op'));
     lines.forEach((t,i)=>out.push(TX(bx+8,y+4+i*14,t,'arg')));
   }
 }
-function drawSeq(seq,x,y,out){for(const it of seq){const w=iw(it)*U;if(it.br)drawBr(it,x,y,w,out);else drawIns(it,x,y,w,out);x+=w;}return x;}
-function drawBr(b,x,y,w,out){let yy=y,last=y;b.rows.forEach(r=>{const ex=drawSeq(r,x,yy,out);if(ex<x+w)out.push(L(ex,yy,x+w,yy));last=yy;yy+=sh(r)*RH;});out.push(L(x,y,x,last),L(x+w,y,x+w,last));}
-function svgLadder(code){
-  const rungs=code.split('\n').map(s=>s.trim()).filter(Boolean).map(parseRung).filter(r=>r.length);
+function drawSeq(seq,x,y,out,pw){for(const it of seq){const w=iw(it)*U;if(it.br)drawBr(it,x,y,w,out,pw);else drawIns(it,x,y,w,out,pw);x+=w;}return x;}
+const legOut=(r,rin,pw)=>r.length?!!((pw.get(r[r.length-1])||[])[1]):rin;
+function drawBr(b,x,y,w,out,pw){
+  const st=pw&&pw.get(b),ri=!!(st&&st[0]),ro=!!(st&&st[1]);
+  let yy=y,last=y;
+  b.rows.forEach(r=>{const ex=drawSeq(r,x,yy,out,pw);if(ex<x+w)out.push(L(ex,yy,x+w,yy,wc(pw&&legOut(r,ri,pw))));last=yy;yy+=sh(r)*RH;});
+  out.push(L(x,y,x,last,wc(ri)),L(x+w,y,x+w,last,wc(ro)));
+}
+// rungs: parsed rung item lists. pw: optional power map (see drawIns).
+function svgLadderFrom(rungs,pw){
+  rungs=rungs.filter(r=>r.length);
   if(!rungs.length)return '<p class="viz-empty">Type a rung and it draws here.</p>';
   const maxW=Math.max(4,...rungs.map(sw)),X0=34,RR=X0+12+maxW*U+16,W=RR+12;
   const out=[];let y=42;lowY=0;
-  rungs.forEach((r,i)=>{out.push(TX(16,y+4,String(i),'num'),L(X0,y,X0+12,y));const ex=drawSeq(r,X0+12,y,out);out.push(L(ex,y,RR,y));y+=sh(r)*RH;});
+  rungs.forEach((r,i)=>{out.push(TX(16,y+4,String(i),'num'),L(X0,y,X0+12,y,wc(!!pw)));const ex=drawSeq(r,X0+12,y,out,pw);out.push(L(ex,y,RR,y,wc(pw&&legOut(r,true,pw))));y+=sh(r)*RH;});
   const H=Math.max(y-RH+40,lowY+14);
   out.unshift(L(X0,10,X0,H-8,'rail'),L(RR,10,RR,H-8,'rail'));
   return `<div class="scroll"><svg class="lad" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Ladder rung diagram">${out.join('')}</svg></div>`;
 }
+const svgLadder=code=>svgLadderFrom(code.split('\n').map(s=>s.trim()).filter(Boolean).map(parseRung),null);
 const joinPre=t=>pre?(pre+'\n'+t):t;
 
 /* ---------- html / css preview ---------- */
@@ -268,8 +279,10 @@ function renderRef(){
   }else{viz.hidden=true;viz.innerHTML='';}
   $('outWrap').hidden=!lesson.out;
   $('out').textContent=lesson.out||'';
+  renderSimPanel();
 }
 function renderLiveViz(){
+  renderSimLock();
   if(ld.diagram){const v=$('vizU');if(v)v.innerHTML=svgLadder(joinPre(ta.value));}
   else if(ld.preview){const v=$('prevU');if(v)preview(v,docs(ta.value,complete||checked).u);}
 }
@@ -284,6 +297,172 @@ $('terms').addEventListener('click',e=>{
   let n=0;tgt.querySelectorAll('[data-t]').forEach(sp=>{if(sp.dataset.t===t[0]){sp.classList.add('hit');n++;}});
   if(!n)flash('Not in this step\'s code. It may be in the earlier steps above.');
 });
+
+/* ---------- PLC simulator ---------- */
+// Runs the learner's own ladder or Structured Text in BCplc (js/plc.js), with inputs taken from
+// the lesson's scenario, a live tag table, energized paths on the ladder, and for the Conveyor 3
+// steps (sim.scene "conveyor3") a small machine. A teaching model, not a PLC: docs/PLC_INTERPRETER.md.
+// Like the Plant Board's JavaScript, it only runs once the step is finished or Check is pressed.
+let sim=null;
+const isPlcLang=()=>ld&&(ld.id==='ladder'||ld.id==='st');
+const simCode=()=>joinPre(ta.value);
+const STATE_NAMES={1:'RUNNING',2:'FAULTED',3:'IDLE'};
+// Inputs the scenario drives. A pushbutton (pulsed, or named *_PB) is held while pressed and
+// springs back to its rest value: 1 for a normally closed Stop_PB, else 0. Anything else toggles.
+function simInputs(s){
+  const m=new Map();
+  const get=k=>{if(!m.has(k))m.set(k,{tag:k,rest:0,press:1,pulsed:false});return m.get(k);};
+  for(const [k,v] of Object.entries(s.start||{}))get(k).rest=v;
+  for(const st of s.steps||[]){
+    for(const k of Object.keys(st.set||{}))get(k);
+    for(const [k,v] of Object.entries(st.pulse||{})){const e=get(k);e.pulsed=true;e.press=v;}
+  }
+  for(const e of m.values())if(!e.pulsed&&/_PB$/.test(e.tag))e.press=e.rest?0:1;
+  return [...m.values()].map(e=>({...e,momentary:e.pulsed||/_PB$/.test(e.tag)}));
+}
+// Conveyor 3 jam cell: barrels ride the belt while Conv_Run is on, and the photo eye drives
+// Eye_Blocked from where they are. "Jam a barrel" sticks the next barrel at the eye.
+function conveyorScene(plc){
+  const S={barrels:[],gap:999,jamNext:false,stuck:null,EYE:430,W:44,LEN:640,SPEED:120,blocked:false};
+  const on=t=>plc.has(t)&&!!plc.read(t);
+  S.step=dt=>{
+    if(on('Conv_Run')){
+      const d=S.SPEED*dt/1000;
+      S.gap+=d;
+      if(S.gap>=130){S.barrels.push({x:-S.W});S.gap=0;}
+      S.barrels.sort((a,b)=>b.x-a.x);
+      let limit=Infinity;
+      for(const b of S.barrels){
+        if(b!==S.stuck){
+          let nx=b.x+d;
+          if(S.jamNext&&!S.stuck&&b.x+S.W/2<S.EYE&&nx+S.W/2>=S.EYE){nx=S.EYE-S.W/2;S.stuck=b;S.jamNext=false;}
+          if(nx+S.W>limit)nx=limit-S.W;
+          b.x=Math.max(b.x,nx);
+        }
+        limit=b.x-4;
+      }
+      S.barrels=S.barrels.filter(b=>b.x<S.LEN);
+    }
+    S.blocked=S.barrels.some(b=>b.x<=S.EYE&&b.x+S.W>=S.EYE);
+    if(plc.has('Eye_Blocked'))plc.write('Eye_Blocked',S.blocked?1:0);
+  };
+  S.clear=()=>{if(S.stuck)S.barrels=S.barrels.filter(b=>b!==S.stuck);S.stuck=null;S.jamNext=false;};
+  S.svg=()=>{
+    const run=on('Conv_Run'),jam=on('Jam_Fault'),o=[];
+    o.push('<rect class="sc-belt" x="0" y="110" width="640" height="14" rx="3"/>');
+    for(let x=20;x<640;x+=80)o.push(`<circle class="sc-roller" cx="${x}" cy="117" r="5"/>`);
+    for(const b of S.barrels){
+      o.push(`<g class="sc-barrel${b===S.stuck?' jam':''}"><rect x="${b.x.toFixed(1)}" y="66" width="${S.W}" height="44" rx="7"/><line x1="${b.x.toFixed(1)}" y1="78" x2="${(b.x+S.W).toFixed(1)}" y2="78"/><line x1="${b.x.toFixed(1)}" y1="98" x2="${(b.x+S.W).toFixed(1)}" y2="98"/></g>`);
+    }
+    o.push(`<rect class="sc-eye" x="${S.EYE-7}" y="22" width="14" height="18" rx="2"/><line class="sc-beam${S.blocked?' blocked':''}" x1="${S.EYE}" y1="40" x2="${S.EYE}" y2="110"/><text class="sc-label" x="${S.EYE+12}" y="34">Eye_Blocked ${S.blocked?1:0}</text>`);
+    o.push(`<rect class="sc-motor${run?' on':''}" x="6" y="130" width="46" height="30" rx="4"/><text class="sc-label dark" x="29" y="149" text-anchor="middle">M</text><text class="sc-label" x="60" y="150">Conv_Run ${run?1:0}</text>`);
+    const lamp=(c,y,lit)=>`<circle class="sc-lamp ${c}${lit?' on':''}" cx="612" cy="${y}" r="9"/>`;
+    o.push('<rect class="sc-pole" x="609" y="12" width="6" height="98"/>',lamp('r',22,jam),lamp('a',44,!run&&!jam),lamp('g',66,run));
+    if(plc.has('Barrel_Count'))o.push(`<text class="sc-lcd" x="8" y="24">BARRELS ${String(plc.read('Barrel_Count.ACC')).padStart(4,'0')}</text>`);
+    if(plc.has('Conv_State')){const v=plc.read('Conv_State');o.push(`<text class="sc-lcd" x="8" y="48">STATE ${v} ${STATE_NAMES[v]||''}</text>`);}
+    return `<svg viewBox="0 0 640 170" role="img" aria-label="Conveyor 3: barrels on the belt, photo eye, motor and stack light">${o.join('')}</svg>`;
+  };
+  return S;
+}
+function stopSim(){if(sim&&sim.raf)cancelAnimationFrame(sim.raf);sim=null;}
+function simMsg(text,err){const m=$('simMsg');if(m){m.textContent=text;m.classList.toggle('err',!!err);}}
+// Build the panel for this lesson (or hide it). Called from renderRef.
+function renderSimPanel(){
+  stopSim();
+  const box=$('sim');
+  if(!isPlcLang()||!lesson.sim){box.hidden=true;box.innerHTML='';return;}
+  box.hidden=false;
+  box.innerHTML=`<div class="sim-head"><div><b>Simulator</b><span class="sim-note">Runs your code with simulated ${lesson.sim.scanMs||10} ms scans. A teaching model, not a PLC.</span></div>
+<div class="sim-ctl"><button class="btn gold" id="simRun">Run your code</button><button class="btn" id="simStep" title="Run one scan">Step</button><select id="simSpeed" aria-label="Speed"><option value="1">1×</option><option value="5">5×</option><option value="20">20×</option></select><button class="btn" id="simReset">Reset</button><span class="sim-clock" id="simClock">t 0.0 s</span></div></div>
+<p class="sim-msg" id="simMsg"></p><div class="sim-scene" id="simScene" hidden></div>
+<div class="sim-body"><div class="sim-inputs" id="simInputs"></div><table class="sim-watch" id="simWatch"></table></div><div class="sim-lad" id="simLad"></div>`;
+  $('simRun').addEventListener('click',()=>{if(!sim&&!simBuild())return;sim.running?simPause():simPlay();});
+  $('simStep').addEventListener('click',()=>{if(!sim&&!simBuild())return;simPause();try{simScan();}catch(e){simFail(e);}simDraw();});
+  $('simReset').addEventListener('click',()=>{stopSim();simBuild();});
+  $('simSpeed').addEventListener('change',e=>{if(sim)sim.speed=+e.target.value;});
+  renderSimLock();
+}
+// Locked until the step is finished or checked, like the Plant Board's JavaScript.
+function renderSimLock(){
+  if(!$('simRun')||!isPlcLang()||!lesson.sim)return;
+  const ok=complete||checked;
+  ['simRun','simStep','simReset','simSpeed'].forEach(id=>$(id).disabled=!ok);
+  if(!ok){if(sim)stopSim();simMsg('Finish the step or press Check, then run your code here.');}
+  else if(!sim)simMsg('Press Run, then use the inputs to drive your logic.');
+}
+function simBuild(){
+  const s=lesson.sim;
+  try{
+    const plc=BCplc.createPLC({scanMs:s.scanMs||10,types:s.types});
+    plc.load(simCode(),ld.id);
+    for(const [k,v] of Object.entries(s.start||{}))if(plc.has(k))plc.write(k,v);
+    const scene=s.scene==='conveyor3'&&plc.has('Conv_Run')?conveyorScene(plc):null;
+    sim={plc,scene,running:false,raf:0,acc:0,last:null,speed:+$('simSpeed').value,sig:'',prev:{}};
+  }catch(e){sim=null;simMsg(`Your code does not run yet: ${e.message}`,true);return false;}
+  const inputs=simInputs(s).filter(i=>sim.plc.has(i.tag)&&!(sim.scene&&i.tag==='Eye_Blocked'));
+  $('simInputs').innerHTML=inputs.map(i=>{
+    const t=sim.plc.typeOf(i.tag),num=i.tag.includes('.')||t==='DINT'||t==='REAL';
+    if(num)return `<label class="sim-num">${esc(i.tag)}<input type="number" step="any" data-tag="${esc(i.tag)}" value="${sim.plc.read(i.tag)}"></label>`;
+    return `<button class="sim-in" data-tag="${esc(i.tag)}" data-mode="${i.momentary?'hold':'toggle'}" data-rest="${i.rest}" data-press="${i.press}" aria-pressed="false">${esc(i.tag)}<small>${i.momentary?'hold to press':'switch'}</small></button>`;
+  }).join('')+(sim.scene?'<button class="btn" id="simJam">Jam a barrel at the eye</button><button class="btn" id="simClear">Clear the jam</button>':'');
+  wireSimInputs();
+  $('simWatch').innerHTML=`<caption>Tags</caption>`+s.watch.map(w=>`<tr><th scope="row">${esc(w)}</th><td data-w="${esc(w)}"></td></tr>`).join('');
+  $('simScene').hidden=!sim.scene;
+  if(ld.id==='st')$('simLad').innerHTML='<p class="viz-empty">Structured Text has no rung drawing; watch the tags.</p>';
+  simMsg(sim.scene?'Press Start_PB to run the conveyor, then jam a barrel and watch your logic respond.':'Use the inputs to drive your logic. Energized paths light up green.');
+  simDraw(); // show the starting state at once, not on the first animation frame
+  return true;
+}
+function wireSimInputs(){
+  const box=$('simInputs');
+  const hold=(b,down)=>{if(!sim)return;sim.plc.write(b.dataset.tag,+(down?b.dataset.press:b.dataset.rest));simDraw();};
+  box.querySelectorAll('.sim-in[data-mode="hold"]').forEach(b=>{
+    b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);hold(b,true);});
+    ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>b.addEventListener(ev,()=>hold(b,false)));
+    b.addEventListener('keydown',e=>{if((e.key===' '||e.key==='Enter')&&!e.repeat){e.preventDefault();hold(b,true);}});
+    b.addEventListener('keyup',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();hold(b,false);}});
+  });
+  box.querySelectorAll('.sim-in[data-mode="toggle"]').forEach(b=>b.addEventListener('click',()=>{if(!sim)return;sim.plc.write(b.dataset.tag,sim.plc.read(b.dataset.tag)?0:1);simDraw();}));
+  box.querySelectorAll('.sim-num input').forEach(inp=>inp.addEventListener('change',()=>{
+    if(!sim)return;const v=Number(inp.value);
+    try{sim.plc.write(inp.dataset.tag,v);}catch(e){simMsg(e.message,true);inp.value=sim.plc.read(inp.dataset.tag);}
+    simDraw();
+  }));
+  if($('simJam'))$('simJam').addEventListener('click',()=>{if(sim&&sim.scene){sim.scene.jamNext=true;simMsg('The next barrel will stick at the eye.');}});
+  if($('simClear'))$('simClear').addEventListener('click',()=>{if(sim&&sim.scene){sim.scene.clear();sim.stuckNoted=false;simDraw();simMsg('Jam cleared from the belt. The fault stays latched until Reset_PB.');}});
+}
+function simScan(){if(sim.scene)sim.scene.step(sim.plc.scanMs);sim.plc.scan();}
+function simFail(e){simPause();simMsg(`Stopped: ${e.message}`,true);}
+function simPlay(){if(!sim)return;sim.running=true;sim.last=null;$('simRun').textContent='Pause';sim.raf=requestAnimationFrame(simFrame);}
+function simPause(){if(!sim)return;sim.running=false;if(sim.raf)cancelAnimationFrame(sim.raf);sim.raf=0;if($('simRun'))$('simRun').textContent='Run';}
+function simFrame(ts){
+  if(!sim||!sim.running)return;
+  const dt=sim.last===null?0:Math.min(250,ts-sim.last);
+  sim.last=ts;sim.acc+=dt*sim.speed;
+  try{let n=0;while(sim.acc>=sim.plc.scanMs&&n<5000){simScan();sim.acc-=sim.plc.scanMs;n++;}}
+  catch(e){simFail(e);simDraw();return;}
+  simDraw();
+  sim.raf=requestAnimationFrame(simFrame);
+}
+function simDraw(){
+  if(!sim)return;
+  const p=sim.plc;
+  $('simClock').textContent=`t ${(p.time/1000).toFixed(1)} s`;
+  document.querySelectorAll('#simWatch td[data-w]').forEach(td=>{
+    const w=td.dataset.w,ty=w.includes('.')?(/(ACC|PRE)$/.test(w)?'DINT':'BOOL'):p.typeOf(w),v=BCplc.formatValue(p.read(w),ty);
+    if(sim.prev[w]!==undefined&&sim.prev[w]!==v){td.classList.add('chg');clearTimeout(td._t);td._t=setTimeout(()=>td.classList.remove('chg'),600);}
+    sim.prev[w]=v;td.textContent=v;
+  });
+  document.querySelectorAll('#simInputs .sim-in').forEach(b=>b.setAttribute('aria-pressed',String(+p.read(b.dataset.tag)!==(b.dataset.mode==='hold'?+b.dataset.rest:0))));
+  if(sim.scene){
+    $('simScene').innerHTML=sim.scene.svg();
+    if(sim.scene.stuck&&!sim.stuckNoted){sim.stuckNoted=true;simMsg('A barrel is stuck at the eye. Watch whether your logic catches the jam.');}
+  }
+  if(ld.id==='ladder'){
+    let sig='';for(const v of p.power.values())sig+=(v[0]?1:0)+''+(v[1]?1:0);
+    if(sig!==sim.sig||!$('simLad').firstChild){sim.sig=sig;$('simLad').innerHTML=svgLadderFrom(p.rungs.map(r=>r.items),p.scans?p.power:null);}
+  }
+}
 
 /* ---------- top chrome ---------- */
 function renderNav(){

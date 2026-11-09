@@ -1,6 +1,6 @@
 # PLC interpreter: design
 
-Status: phases 1 (ladder) and 2 (Structured Text) built: `site/js/plc.js`, `tools/plc-tests.mjs` (50 tests), `tools/output-checks/plc/`. All 19 ladder lessons and all 3 Structured Text steps have scenarios and generated outputs; each ST step's trace is identical to the ladder step it rewrites, and the verifier holds them to that. Not built yet: `CTUD` (see open questions), phases 3 and 4.
+Status: phases 1 (ladder) and 2 (Structured Text) built: `site/js/plc.js`, `tools/plc-tests.mjs` (50 tests), `tools/output-checks/plc/`. All 19 ladder lessons and all 3 Structured Text steps have scenarios and generated outputs; each ST step's trace is identical to the ladder step it rewrites, and the verifier holds them to that. Phase 3 (browser simulator) built: a Simulate panel on every PLC lesson with a scenario runs the learner's own code, with inputs from the scenario, a live tag table, energized paths drawn green, and the Conveyor 3 jam-cell scene on the track steps that build that cell. Not built yet: `CTUD` (see open questions), phase 4.
 
 ## Why
 
