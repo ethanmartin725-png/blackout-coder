@@ -52,16 +52,36 @@ function readProgressFile(text,groups,need,maxRank){
     if(!int(p.earned,0,maxRank)||!int(p.rank,0,p.earned)||!int(p.prog,0,need-1)||!int(p.lesson,0,1e6))return {ok:false,error:bad};
     if(typeof p.best!=='object'||p.best===null||Array.isArray(p.best))return {ok:false,error:bad};
     const titles=new Set(g.lessons.map(l=>l.t)),best={};
+    const score=b=>b&&typeof b==='object'&&int(b.acc,0,100)&&typeof b.wpm==='number'&&b.wpm>=0&&(b.rank===undefined||int(b.rank,0,maxRank));
     for(const [t,b] of Object.entries(p.best)){
-      if(!b||!int(b.acc,0,100)||typeof b.wpm!=='number'||!(b.wpm>=0))return {ok:false,error:bad};
-      if(titles.has(t))best[t]={acc:b.acc,wpm:b.wpm};
+      if(!score(b)||(b.first!==undefined&&!score(b.first)))return {ok:false,error:bad};
+      if(titles.has(t))best[t]=copyScore(b);
     }
     per[id]={lesson:Math.min(p.lesson,g.lessons.length-1),earned:p.earned,rank:p.rank,prog:p.prog,best};
   }
   return {ok:true,per,skipped};
 }
+// A score as stored: acc and wpm, plus the rank it was typed at and the step's first run when
+// known. Progress saved before those were recorded has neither, and none is invented.
+function copyScore(b){
+  const o={acc:b.acc,wpm:b.wpm};if(b.rank!==undefined)o.rank=b.rank;
+  if(b.first){o.first={acc:b.first.acc,wpm:b.first.wpm};if(b.first.rank!==undefined)o.first.rank=b.first.rank;}
+  return o;
+}
+// The one rule for "a better run", used by the app and by the merge: higher accuracy wins, then higher WPM.
+function betterRun(a,b){return !b||a.acc>b.acc||(a.acc===b.acc&&a.wpm>b.wpm);}
+// Record a finished run in best (title -> score). The first run ever recorded for a step stays
+// beside its best. Returns true when the run is the step's new best.
+function recordRun(best,title,run){
+  const r={acc:run.acc,wpm:run.wpm,rank:run.rank},b=best[title];
+  if(!b){best[title]={...r,first:{...r}};return true;}
+  if(!betterRun(r,b))return false;
+  best[title]=b.first?{...r,first:b.first}:r;
+  return true;
+}
 // Merge loaded progress into the current one without losing anything: the higher rank wins
 // (with its progress toward the next), and each lesson keeps its better score (accuracy, then speed).
+// A step's first run is this browser's when it has one, otherwise the file's.
 // The current lesson position stays, unless this browser has nothing for that lane or track yet.
 function mergeProgress(cur,inc){
   const out=JSON.parse(JSON.stringify(cur||{}));
@@ -72,11 +92,31 @@ function mergeProgress(cur,inc){
     if(b.earned>a.earned){a.earned=b.earned;a.rank=b.rank;a.prog=b.prog;}
     else if(b.earned===a.earned)a.prog=Math.max(a.prog,b.prog);
     for(const [t,s] of Object.entries(b.best)){
-      const x=a.best[t];
-      if(!x||s.acc>x.acc||(s.acc===x.acc&&s.wpm>x.wpm))a.best[t]={acc:s.acc,wpm:s.wpm};
+      const x=a.best[t],first=(x&&x.first)||s.first;
+      if(betterRun(s,x)){a.best[t]=copyScore({...s,first});}
+      else if(!x.first&&first)a.best[t]=copyScore({...x,first});
     }
   }
   return out;
 }
-g.BCcore={TOK,tokenize,hash,rng,sig,analyzeText,isCompleteFor,targetLines,progressFile,readProgressFile,mergeProgress};
+/* ---------- track summary ----------
+   Everything the summary page shows, from a track's lessons and its best scores. No DOM.
+   Averages are plain means over the steps done: accuracy to 0.1 points, WPM to a whole number.
+   WPM is only comparable within one language, so averages are also given per language. */
+function trackSummary(lessons,best){
+  const mean=(xs,d)=>{if(!xs.length)return null;const f=10**d;return Math.round(xs.reduce((a,b)=>a+b,0)/xs.length*f)/f;};
+  const steps=lessons.map((l,i)=>{const b=best[l.t];return {i,t:l.t,lang:l.lang,done:!!b,acc:b?b.acc:null,wpm:b?b.wpm:null,rank:b&&b.rank!==undefined?b.rank:null,first:b&&b.first?b.first:null};});
+  const done=steps.filter(s=>s.done),groups=[],byLang=[];
+  steps.forEach(s=>{const g=groups[groups.length-1];if(g&&g.lang===s.lang)g.to=s.i;else groups.push({lang:s.lang,from:s.i,to:s.i});});
+  for(const s of steps)if(!byLang.some(x=>x.lang===s.lang)){
+    const d=done.filter(x=>x.lang===s.lang);
+    byLang.push({lang:s.lang,steps:steps.filter(x=>x.lang===s.lang).length,done:d.length,acc:mean(d.map(x=>x.acc),1),wpm:mean(d.map(x=>x.wpm),0)});
+  }
+  const gains=done.filter(s=>s.first).map(s=>({i:s.i,t:s.t,first:s.first,acc:s.acc,wpm:s.wpm,dAcc:s.acc-s.first.acc,dWpm:s.wpm-s.first.wpm}));
+  const revisit=done.filter(s=>s.acc<100).sort((a,b)=>a.acc-b.acc||a.wpm-b.wpm||a.i-b.i).slice(0,3);
+  return {total:steps.length,done:done.length,steps,groups,byLang,
+    overall:{acc:mean(done.map(x=>x.acc),1),wpm:mean(done.map(x=>x.wpm),0)},
+    gains,noFirst:done.length-gains.length,revisit};
+}
+g.BCcore={TOK,tokenize,hash,rng,sig,analyzeText,isCompleteFor,targetLines,progressFile,readProgressFile,mergeProgress,betterRun,recordRun,trackSummary};
 })(globalThis);

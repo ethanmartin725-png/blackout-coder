@@ -627,6 +627,7 @@ function loadLesson(){
 function finish(){
   complete=true;endT=performance.now();ta.readOnly=true;clearInterval(timer);ta.scrollLeft=0;hl.scrollLeft=0;
   const p=P(),acc=typed?Math.max(0,Math.round(100*(typed-errors)/typed)):100,ms=endT-(startT||endT),min=ms/60000,wpm=min>0.03?Math.round((typed/5)/min):0;
+  const runRank=p.rank; // the rank this run was typed at, before any promotion below
   let msg;
   if(p.rank===p.earned&&p.earned<6){
     if(acc>=PASS&&peeks===0){
@@ -636,13 +637,76 @@ function finish(){
     }else msg=peeks?`You peeked ${peeks}×. Clean runs need zero peeks.`:`Accuracy under ${PASS}%. This run doesn't count toward ${RANKS[p.earned+1].name}.`;
   }else if(p.earned>=6)msg='Master rank. Every lesson is written from the goal.';
   else msg=`Practice run. Switch back to ${RANKS[p.earned].name} to earn progress.`;
-  const b=p.best[lesson.t];if(!b||acc>b.acc)p.best[lesson.t]={acc,wpm};
+  BCcore.recordRun(p.best,lesson.t,{acc,wpm,rank:runRank});
   save();
   $('dWpm').textContent=wpm;$('dAcc').textContent=acc;$('dTime').textContent=fmtTime(ms);$('dPeek').textContent=peeks;$('dMsg').textContent=msg;
   $('doneNext').textContent=inTrack()?'Next step':'Next lesson';
+  $('doneSum').hidden=!(inTrack()&&idx===lane.lessons.length-1);
   $('done').hidden=false;$('doneNext').focus();
   renderStats();markTarget(lastA);renderRanks();renderGoal();renderMap();renderLiveViz();
 }
+/* ---------- track summary ----------
+   Numbers come from BCcore.trackSummary (tested in tools/progress-tests.mjs); this only draws them.
+   Accuracy and WPM are two charts, one axis each. Bars are one color; language is shown by the
+   labelled brackets under the axis and in the tables, never by color alone. */
+let sumOpener=null;
+function sumChart(sm,key,label,max,ref){
+  const host=$('sumBody'),W=Math.max(280,Math.min(760,host.clientWidth||600)),H=176,L=34,R=8,T=14,B=46,pw=W-L-R,ph=H-T-B,n=sm.steps.length,band=pw/n,bw=Math.min(28,band*0.68);
+  const y=v=>T+ph-(v/max)*ph,o=[];
+  const ticks=key==='acc'?[0,50,100]:[0,max/2,max];
+  for(const v of ticks)o.push(`<line class="sm-grid" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}"/><text class="sm-tick" x="${L-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`);
+  if(ref!==undefined)o.push(`<line class="sm-ref" x1="${L}" x2="${W-R}" y1="${y(ref)}" y2="${y(ref)}"/>`);
+  const every=band>=18?1:5;
+  sm.steps.forEach(s=>{
+    const cx=L+band*s.i+band/2,x=cx-bw/2;
+    if(s.done&&s[key]>0){const top=y(Math.min(s[key],max)),h=T+ph-top,r=Math.min(4,bw/2,h);
+      o.push(`<path class="sm-bar" d="M${x} ${T+ph}V${top+r}Q${x} ${top} ${x+r} ${top}H${x+bw-r}Q${x+bw} ${top} ${x+bw} ${top+r}V${T+ph}Z"/>`);}
+    else if(!s.done)o.push(`<line class="sm-none" x1="${x}" x2="${x+bw}" y1="${T+ph-1}" y2="${T+ph-1}"/>`);
+    if(s.i===0||(s.i+1)%every===0)o.push(`<text class="sm-tick" x="${cx}" y="${T+ph+15}" text-anchor="middle">${s.i+1}</text>`);
+    o.push(`<rect class="sm-hit" x="${L+band*s.i}" y="${T}" width="${band}" height="${ph+18}" data-i="${s.i}"/>`);
+  });
+  o.push(`<line class="sm-axis" x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}"/>`);
+  for(const g of sm.groups){
+    const x1=L+band*g.from+2,x2=L+band*(g.to+1)-2,yb=T+ph+24,name=LD[g.lang].short;
+    o.push(`<path class="sm-bracket" d="M${x1} ${yb-4}V${yb}H${x2}V${yb-4}"/>`);
+    if(x2-x1>=name.length*7+4)o.push(`<text class="sm-lang" x="${(x1+x2)/2}" y="${yb+13}" text-anchor="middle">${esc(name)}</text>`);
+  }
+  return `<figure class="sm-fig"><figcaption>${label}${ref!==undefined?` <span class="sm-key">· dashed line: ${ref}%, a clean run</span>`:''}</figcaption><svg class="sm-chart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)} for each step. The table below lists every value.">${o.join('')}</svg></figure>`;
+}
+function renderSummary(){
+  const sm=BCcore.trackSummary(lane.lessons,P().best),p=P(),pct=v=>v===null?'–':v.toFixed(1)+'%',num=v=>v===null?'–':String(v);
+  $('sumTitle').textContent=lane.name;
+  $('sumSub').textContent=`${sm.done} of ${sm.total} steps done · Rank ${RANKS[p.earned].name}`;
+  const body=$('sumBody');
+  if(!sm.done){body.innerHTML='<p class="sm-empty">Finish a step and it shows up here: its best accuracy and speed, and how far it came from the first run.</p>';return;}
+  const wmax=Math.max(10,Math.ceil(Math.max(...sm.steps.filter(s=>s.done).map(s=>s.wpm))/10)*10);
+  const multi=sm.byLang.length>1;
+  const langRows=sm.byLang.map(b=>`<tr><td>${esc(LD[b.lang].name)}</td><td>${b.done} of ${b.steps}</td><td>${pct(b.acc)}</td><td>${num(b.wpm)}</td></tr>`).join('');
+  const gainRows=sm.gains.map(g=>{const sg=v=>(v>0?'+':'')+v;return `<tr><td>${g.i+1}. ${esc(g.t)}</td><td>${g.first.acc}% · ${g.first.wpm}</td><td>${g.acc}% · ${g.wpm}</td><td>${sg(g.dAcc)} pts · ${sg(g.dWpm)} WPM</td></tr>`;}).join('');
+  const rev=sm.revisit.map(s=>`<button class="btn sm-rev" data-i="${s.i}" type="button">Step ${s.i+1} · ${esc(s.t)} · ${s.acc}%</button>`).join('');
+  const all=sm.steps.map(s=>`<tr${s.done?'':' class="sm-todo"'}><td>${s.i+1}</td><td>${esc(s.t)}</td><td>${esc(LD[s.lang].short)}</td><td>${s.done?s.acc+'%':'not done'}</td><td>${s.done?s.wpm:''}</td><td>${s.rank!==null?esc(RANKS[s.rank].name):''}</td></tr>`).join('');
+  body.innerHTML=`<div class="sm-tiles">
+<div><span>${sm.done}/${sm.total}</span><small>Steps done</small></div>
+<div><span>${pct(sm.overall.acc)}</span><small>Avg accuracy</small></div>
+<div><span>${num(sm.overall.wpm)}</span><small>Avg WPM${multi?', all languages':''}</small></div></div>
+${sumChart(sm,'acc','Best accuracy by step (%)',100,PASS)}
+${sumChart(sm,'wpm','Best speed by step (WPM)',wmax)}
+<p class="sm-note">Scores are each step's best run. Averages are plain means over the steps done.${multi?' Speed depends on the language (symbols are slower to type than words), so compare WPM within a language.':''}</p>
+${multi?`<h3>By language</h3><div class="sm-scroll"><table class="sm-table"><thead><tr><th>Language</th><th>Steps done</th><th>Avg accuracy</th><th>Avg WPM</th></tr></thead><tbody>${langRows}</tbody></table></div>`:''}
+<h3>First run to best</h3>
+${sm.gains.length?`<div class="sm-scroll"><table class="sm-table"><thead><tr><th>Step</th><th>First</th><th>Best</th><th>Change</th></tr></thead><tbody>${gainRows}</tbody></table></div>`:''}
+${sm.noFirst?`<p class="sm-note">${sm.noFirst} step${sm.noFirst>1?'s were':' was'} finished before first runs were recorded, so ${sm.noFirst>1?'they show':'it shows'} only a best.</p>`:''}
+<h3>Steps to revisit</h3>
+${rev?`<div class="sm-revs">${rev}</div>`:'<p class="sm-note">Every step done so far is at 100%.</p>'}
+<details class="sm-all"><summary>All steps as a table</summary><div class="sm-scroll"><table class="sm-table"><thead><tr><th>#</th><th>Step</th><th>Lang</th><th>Best accuracy</th><th>WPM</th><th>Rank</th></tr></thead><tbody>${all}</tbody></table></div></details>`;
+  body._sm=sm;
+}
+function openSummary(){
+  if(!inTrack())return;
+  sumOpener=document.activeElement;$('summary').hidden=false;renderSummary();$('sumClose').focus();
+}
+function closeSummary(){$('summary').hidden=true;$('sumTip').hidden=true;if(sumOpener&&sumOpener.focus)sumOpener.focus();}
+
 function goTo(i){const p=P();p.lesson=(i+lane.lessons.length)%lane.lessons.length;save();loadLesson();ta.focus();}
 const nextLesson=(d=1)=>goTo(P().lesson+d);
 
@@ -706,6 +770,26 @@ $('lessonSel').addEventListener('change',e=>goTo(+e.target.value));
 $('prevBtn').addEventListener('click',()=>nextLesson(-1));
 $('nextBtn').addEventListener('click',()=>nextLesson(1));
 $('doneNext').addEventListener('click',()=>nextLesson(1));
+$('doneSum').addEventListener('click',openSummary);
+$('sumBtn').addEventListener('click',openSummary);
+$('sumClose').addEventListener('click',closeSummary);
+$('summary').addEventListener('click',e=>{
+  if(e.target===$('summary')){closeSummary();return;}
+  const r=e.target.closest('.sm-rev');if(r){closeSummary();goTo(+r.dataset.i);}
+});
+$('summary').addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closeSummary();}});
+// Hover readout for the charts: the step, its best accuracy and speed.
+$('sumBody').addEventListener('pointermove',e=>{
+  const h=e.target.closest('.sm-hit'),tip=$('sumTip'),sm=$('sumBody')._sm;
+  if(!h||!sm){tip.hidden=true;return;}
+  const s=sm.steps[+h.dataset.i],box=$('summary').querySelector('.sum').getBoundingClientRect();
+  tip.textContent=`Step ${s.i+1} · ${s.t} · ${LD[s.lang].short} · ${s.done?`${s.acc}% · ${s.wpm} WPM`:'not done yet'}`;
+  tip.hidden=false;
+  tip.style.left=Math.min(e.clientX-box.left+12,box.width-tip.offsetWidth-8)+'px';
+  tip.style.top=(e.clientY-box.top+$('summary').querySelector('.sum').scrollTop+14)+'px';
+});
+$('sumBody').addEventListener('pointerleave',()=>{$('sumTip').hidden=true;});
+addEventListener('resize',()=>{if(!$('summary').hidden)renderSummary();});
 $('retryBtn').addEventListener('click',()=>{renderRanks();renderTarget();resetAttempt();ta.focus();});
 $('restartBtn').addEventListener('click',()=>{resetAttempt();ta.focus();});
 $('checkBtn').addEventListener('click',()=>{doCheck();ta.focus();});

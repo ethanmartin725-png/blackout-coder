@@ -40,7 +40,7 @@
   </section>
 
   <section class="map-wrap" id="mapWrap" hidden aria-label="Project steps">
-    <div class="map-head"><span><b id="mapTitle"></b><span id="mapSub"></span></span><span id="mapCount"></span></div>
+    <div class="map-head"><span><b id="mapTitle"></b><span id="mapSub"></span></span><span class="map-right"><span id="mapCount"></span><button class="linkish" id="sumBtn" type="button">Summary</button></span></div>
     <div class="map" id="map"></div>
   </section>
 
@@ -67,6 +67,7 @@
             </div>
             <p id="dMsg"></p>
             <div class="acts">
+              <button class="btn" id="doneSum" hidden>Track summary</button>
               <button class="btn" id="retryBtn">Retry</button>
               <button class="btn gold" id="doneNext">Next lesson</button>
             </div>
@@ -126,6 +127,16 @@
   </section>
 </div>
 <div class="toast" id="toast" hidden></div>
+<div class="sum-wrap" id="summary" hidden>
+  <section class="sum" role="dialog" aria-modal="true" aria-labelledby="sumTitle">
+    <div class="sum-head">
+      <div><span class="eyebrow">Track summary</span><h2 id="sumTitle"></h2><p id="sumSub"></p></div>
+      <button class="btn" id="sumClose" type="button">Close</button>
+    </div>
+    <div class="sum-body" id="sumBody"></div>
+    <div class="sum-tip" id="sumTip" hidden></div>
+  </section>
+</div>
 
 <script src="js/registry.js"></script>
 <script src="js/core.js"></script>

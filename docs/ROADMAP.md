@@ -45,7 +45,7 @@
 - [x] Progress export/import as a JSON file, since progress lives in one browser: Save and Load in the footer; loading merges, keeping the higher rank and each lesson's better score, and refuses a damaged file (`tools/progress-tests.mjs`).
 - [ ] A per-lesson "explain this line" view for the line under the cursor.
 - [ ] Optional sound effects (keystroke, error, lesson complete), off by default.
-- [ ] Track completion summary page: accuracy and WPM trend per step.
+- [x] Track completion summary: best accuracy and WPM per step, per-language means, first run to best, steps to revisit. A full history of every attempt (a trend over time) is not stored; add it if first-to-best proves too thin.
 - [x] PLC interpreter phase 1: ladder runtime (`site/js/plc.js`), 35 instruction tests, verifier checks, generated outputs for all 19 ladder lessons. Design in `docs/PLC_INTERPRETER.md`.
 - [x] PLC interpreter phase 2: Structured Text (assignments, IF/ELSIF, CASE, logic and math, TONR/TOFR/RTOR). The 3 ST track steps have generated outputs identical to their ladder twins.
 - [x] PLC interpreter phase 3: browser simulator. The learner's own ladder or Structured Text runs after the step is finished or checked; Conveyor 3 jam-cell scene on the track's jam-cell steps.

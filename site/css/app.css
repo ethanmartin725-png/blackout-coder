@@ -15,6 +15,7 @@
   --ok:#9be0b6;
   --bad:#ff7d7d;
   --warn:#f3b55f;            /* status amber, kept distinct from the gold brand color */
+  --bar:#a98536;             /* chart bars: gold stepped into the chart lightness band (validated on --panel) */
   --wood:#9a6633; --wood-dark:#5f3d1c; /* barrels in the simulator scene */
   --mask:#2c4372;
   --cur:rgba(214,170,71,.11);
@@ -254,6 +255,45 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
 
 .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--gold-dim);color:var(--ink);padding:10px 16px;border-radius:6px;font-size:13.5px;max-width:min(92vw,520px);z-index:20;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 
+/* Track summary: a dialog over the app. Charts are SVG drawn at the panel's own width. */
+.map-right{display:inline-flex;gap:12px;align-items:baseline}
+.sum-wrap{position:fixed;inset:0;z-index:30;background:rgba(7,16,33,.86);display:grid;place-items:start center;padding:24px 12px;overflow-y:auto}
+.sum{position:relative;background:var(--panel);border:1px solid var(--gold-dim);border-top:3px solid var(--gold);border-radius:8px;padding:18px 20px;width:100%;max-width:820px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.sum-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.sum-head h2{margin:2px 0 4px;font:700 23px var(--f-display);color:var(--ink)}
+.sum-head p{margin:0;color:var(--muted);font-size:13.5px}
+.sum-body{display:flex;flex-direction:column;gap:12px;min-width:0}
+.sum-body h3{margin:8px 0 0;font:700 17px var(--f-display);color:var(--ink)}
+.sm-tiles{display:flex;gap:10px;flex-wrap:wrap}
+.sm-tiles div{background:var(--well);border:1px solid var(--line);border-radius:6px;padding:8px 14px;min-width:110px}
+.sm-tiles span{display:block;font:30px/1 var(--f-lcd);color:var(--gold)}
+.sm-tiles small{display:block;font:600 10px var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+.sm-fig{margin:0;background:var(--well);border:1px solid var(--line);border-radius:6px;padding:10px 0 4px;min-width:0;overflow:hidden}
+.sm-fig figcaption{font:600 11px var(--f-body);letter-spacing:.13em;text-transform:uppercase;color:var(--muted);padding:0 12px}
+.sm-chart{display:block;max-width:100%}
+.sm-bar{fill:var(--bar)}
+.sm-none{stroke:var(--line);stroke-width:2}
+.sm-grid{stroke:var(--line);stroke-width:1;opacity:.6}
+.sm-axis{stroke:var(--muted);stroke-width:1}
+.sm-ref{stroke:var(--ink-2);stroke-width:1;stroke-dasharray:4 3}
+.sm-tick{font:10.5px var(--f-code);fill:var(--muted)}
+.sm-key{letter-spacing:.04em;text-transform:none;font-weight:500}
+.sm-bracket{fill:none;stroke:var(--muted);stroke-width:1}
+.sm-lang{font:600 9.5px var(--f-body);letter-spacing:.1em;fill:var(--ink-2)}
+.sm-hit{fill:transparent;cursor:default}
+.sm-hit:hover{fill:var(--cur)}
+.sum-tip{position:absolute;pointer-events:none;background:var(--panel-2);border:1px solid var(--gold-dim);color:var(--ink);font-size:12.5px;padding:5px 9px;border-radius:5px;max-width:300px;z-index:2}
+.sm-note{margin:0;color:var(--muted);font-size:13px}
+.sm-empty{margin:0;color:var(--ink-2)}
+.sm-scroll{overflow-x:auto}
+.sm-table{border-collapse:collapse;width:100%;font-size:13px}
+.sm-table th{text-align:left;font:600 11px var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--line)}
+.sm-table td{padding:6px 10px;border-bottom:1px solid var(--line);color:var(--ink-2)}
+.sm-todo td{color:var(--muted)}
+.sm-revs{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.sm-rev{text-align:left}
+.sm-all summary{cursor:pointer;color:var(--ink-2);font-size:13.5px}
+
 @media (max-width:880px){
   .sim-body{grid-template-columns:1fr}
   .bench{grid-template-columns:1fr}
@@ -267,6 +307,8 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
   .langs{justify-content:flex-start}
 }
 @media (max-width:600px){
+  .sum{padding:14px}
+  .sum-wrap{padding:12px 8px}
   .sim-scene svg{min-width:0} /* scenes switch to their compact layout here (NARROW_SCENE in app.js) */
   .sim-scene .sc-label{font-size:15px} /* the compact canvas is drawn smaller, so its labels are larger */
   .ref{padding:14px}

@@ -68,6 +68,79 @@ export function runProgressTests(C) {
     C.mergeProgress(cur, inc);
     return JSON.stringify(cur) === before ? "" : "current progress was modified";
   });
+
+  // Scores with the rank they were typed at and the step's first run.
+  t("record: the first run is kept as both best and first", () => {
+    const best = {}; C.recordRun(best, "A", { acc: 84, wpm: 22, rank: 0 });
+    return JSON.stringify(best.A) === JSON.stringify({ acc: 84, wpm: 22, rank: 0, first: { acc: 84, wpm: 22, rank: 0 } }) ? "" : JSON.stringify(best.A);
+  });
+  t("record: a better run replaces the best and keeps the first", () => {
+    const best = {}; C.recordRun(best, "A", { acc: 84, wpm: 22, rank: 0 }); const r = C.recordRun(best, "A", { acc: 97, wpm: 30, rank: 1 });
+    return r && best.A.acc === 97 && best.A.rank === 1 && best.A.first.acc === 84 ? "" : JSON.stringify(best.A);
+  });
+  t("record: equal accuracy and faster replaces the best (matches the merge)", () => {
+    const best = { A: { acc: 96, wpm: 30 } }; const r = C.recordRun(best, "A", { acc: 96, wpm: 35, rank: 2 });
+    return r && best.A.wpm === 35 ? "" : JSON.stringify(best.A);
+  });
+  t("record: a worse run changes nothing", () => {
+    const best = { A: { acc: 96, wpm: 30, rank: 1, first: { acc: 80, wpm: 20, rank: 0 } } }, before = JSON.stringify(best);
+    return !C.recordRun(best, "A", { acc: 96, wpm: 29, rank: 2 }) && JSON.stringify(best) === before ? "" : JSON.stringify(best);
+  });
+  t("record: an old score with no first run never gets one invented", () => {
+    const best = { A: { acc: 90, wpm: 30 } }; C.recordRun(best, "A", { acc: 99, wpm: 31, rank: 1 });
+    return best.A.first === undefined ? "" : JSON.stringify(best.A);
+  });
+  t("file: rank and first run round-trip", () => {
+    const per = { python: py({ best: { "Print a message": { acc: 96, wpm: 41, rank: 2, first: { acc: 80, wpm: 25, rank: 0 } } } }) };
+    const r = read(C.progressFile(per, "2026-11-09T18:00:00Z"));
+    return r.ok && JSON.stringify(r.per) === JSON.stringify(per) ? "" : JSON.stringify(r);
+  });
+  t("file: a damaged first run is refused", () => (read(file({ python: py({ best: { "Print a message": { acc: 96, wpm: 41, first: { acc: 101, wpm: 3 } } } }) })).ok ? "accepted" : ""));
+  t("file: a rank past Master is refused", () => (read(file({ python: py({ best: { "Print a message": { acc: 96, wpm: 41, rank: 7 } } }) })).ok ? "accepted" : ""));
+  t("merge: the better score keeps this browser's first run", () => {
+    const cur = { python: py({ best: { "Print a message": { acc: 90, wpm: 30, rank: 0, first: { acc: 70, wpm: 20, rank: 0 } } } }) };
+    const inc = { python: py({ best: { "Print a message": { acc: 98, wpm: 40, rank: 3, first: { acc: 85, wpm: 28, rank: 1 } } } }) };
+    const b = C.mergeProgress(cur, inc).python.best["Print a message"];
+    return b.acc === 98 && b.rank === 3 && b.first.acc === 70 ? "" : JSON.stringify(b);
+  });
+  t("merge: a first run from the file fills one this browser lacks", () => {
+    const cur = { python: py({ best: { "Print a message": { acc: 99, wpm: 50 } } }) };
+    const inc = { python: py({ best: { "Print a message": { acc: 90, wpm: 30, first: { acc: 75, wpm: 22 } } } }) };
+    const b = C.mergeProgress(cur, inc).python.best["Print a message"];
+    return b.acc === 99 && b.first && b.first.acc === 75 ? "" : JSON.stringify(b);
+  });
+
+  // The summary page's numbers.
+  const lessons = [{ t: "S1", lang: "html" }, { t: "S2", lang: "html" }, { t: "S3", lang: "css" }, { t: "S4", lang: "js" }, { t: "S5", lang: "html" }];
+  const best = {
+    S1: { acc: 100, wpm: 40, rank: 0, first: { acc: 92, wpm: 31, rank: 0 } },
+    S2: { acc: 88, wpm: 36, rank: 0, first: { acc: 88, wpm: 36, rank: 0 } },
+    S3: { acc: 95, wpm: 28 },
+    S5: { acc: 88, wpm: 30, rank: 1, first: { acc: 70, wpm: 18, rank: 1 } },
+  };
+  const s = C.trackSummary(lessons, best);
+  t("summary: counts steps done", () => (s.total === 5 && s.done === 4 ? "" : `${s.done} of ${s.total}`));
+  t("summary: overall means over steps done", () => (s.overall.acc === 92.8 && s.overall.wpm === 34 ? "" : JSON.stringify(s.overall)));
+  t("summary: language groups follow step order", () => {
+    const g = s.groups.map((x) => `${x.lang}${x.from}-${x.to}`).join(" ");
+    return g === "html0-1 css2-2 js3-3 html4-4" ? "" : g;
+  });
+  t("summary: per-language means, a language with nothing done has none", () => {
+    const b = Object.fromEntries(s.byLang.map((x) => [x.lang, x]));
+    return b.html.steps === 3 && b.html.done === 3 && b.html.acc === 92 && b.html.wpm === 35 && b.js.done === 0 && b.js.acc === null ? "" : JSON.stringify(s.byLang);
+  });
+  t("summary: first-to-best only where a first run exists", () => {
+    const g = s.gains.map((x) => `${x.t}:${x.dAcc}/${x.dWpm}`).join(" ");
+    return g === "S1:8/9 S2:0/0 S5:18/12" && s.noFirst === 1 ? "" : `${g} noFirst ${s.noFirst}`;
+  });
+  t("summary: revisit the lowest accuracy, then the slowest, never a perfect step", () => {
+    const r = s.revisit.map((x) => x.t).join(" ");
+    return r === "S5 S2 S3" ? "" : r;
+  });
+  t("summary: nothing done gives empty lists and no means", () => {
+    const e = C.trackSummary(lessons, {});
+    return e.done === 0 && e.overall.acc === null && e.revisit.length === 0 && e.gains.length === 0 ? "" : JSON.stringify(e.overall);
+  });
   return fails;
 }
 
