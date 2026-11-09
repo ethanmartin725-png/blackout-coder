@@ -24,7 +24,7 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 | Line Status Screen | 15 | The Ignition logic behind Conveyor 3's operator screen: expression bindings for state, color, OEE and shift; scripts for fault logging by id, an interlocked reset, setpoints, an audit trail, the Pareto query and the shift change |
 | Downtime Entry | 18 | An operator form for the stops the PLC never sees, in HTML, CSS and JavaScript: validation, a log table, totals and undo |
 
-Three clean runs (90%+ accuracy, no peeks) at a rank unlock the next one. Each lane and track keeps its own rank. Progress saves in the browser, per device.
+Three clean runs (90%+ accuracy, no peeks) at a rank unlock the next one. Each lane and track keeps its own rank. Progress saves in the browser, per device; Save progress and Load progress at the bottom of each lesson move it between devices as a JSON file.
 
 ## Run it locally
 

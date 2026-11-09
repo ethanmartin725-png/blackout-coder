@@ -719,5 +719,30 @@ $('resetBtn').addEventListener('click',e=>{
   delete S.per[lane.id];save();b.classList.remove('armed');loadLesson();flash(`${lane.name} progress reset to Beginner.`);
 });
 
+/* ---------- progress file ---------- */
+// Progress lives in this browser only. Save writes it to a JSON file; Load merges a file back in,
+// keeping the higher rank and each lesson's better score (BCcore.readProgressFile and mergeProgress).
+$('saveProg').addEventListener('click',()=>{
+  const now=new Date(),text=BCcore.progressFile(S.per,now.toISOString());
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));
+  a.download=`blackout-coder-progress-${now.toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  const n=Object.keys(S.per).length;
+  flash(n?`Saved progress for ${n} lane${n===1?'':'s'} and project${n===1?'':'s'}.`:'Saved an empty progress file: nothing has been started yet.');
+});
+$('loadProg').addEventListener('click',()=>$('progFile').click());
+$('progFile').addEventListener('change',async e=>{
+  const f=e.target.files[0];e.target.value='';
+  if(!f)return;
+  if(f.size>2e6){flash('That file is too large to be a progress file.');return;}
+  const r=BCcore.readProgressFile(await f.text(),[...LANES,...TRACKS],NEED,RANKS.length-1);
+  if(!r.ok){flash(r.error);return;}
+  S.per=BCcore.mergeProgress(S.per,r.per);save();loadLesson();
+  const n=Object.keys(r.per).length,k=r.skipped.length;
+  flash(`Loaded progress for ${n} lane${n===1?'':'s'} and project${n===1?'':'s'}; higher ranks and better scores kept.${k?` ${k} not in this version, skipped.`:''}`);
+});
+
 loadLesson();
 })();

@@ -7,6 +7,7 @@ import os from "node:os";
 import { spawnSync, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { runPlcTests } from "./plc-tests.mjs";
+import { runProgressTests } from "./progress-tests.mjs";
 import { routineCode, PLC_LANGS } from "./output-checks/plc/lessons.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -224,6 +225,9 @@ for (const lang of ["cpp", "java"]) {
     fs.rmSync(d, { recursive: true, force: true });
   }
 }
+
+// 7b. Progress files: export, import and merge (site/js/core.js)
+for (const f of runProgressTests(BCcore)) fail(`Progress file test: ${f}`);
 
 // 8. PLC ladder and Structured Text: every lesson parses, the interpreter passes its tests, and
 // every lesson with a scenario (sim) still produces its stored output. See docs/PLC_INTERPRETER.md.

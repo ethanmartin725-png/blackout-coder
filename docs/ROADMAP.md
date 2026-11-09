@@ -41,7 +41,7 @@
 
 ## Engine
 
-- [ ] Progress export/import as a JSON file, since progress lives in one browser.
+- [x] Progress export/import as a JSON file, since progress lives in one browser: Save and Load in the footer; loading merges, keeping the higher rank and each lesson's better score, and refuses a damaged file (`tools/progress-tests.mjs`).
 - [ ] A per-lesson "explain this line" view for the line under the cursor.
 - [ ] Optional sound effects (keystroke, error, lesson complete), off by default.
 - [ ] Track completion summary page: accuracy and WPM trend per step.
@@ -62,7 +62,7 @@
 - [x] C# to 50: 28 Foundations lessons (format strings and culture, loops, arrays, switch expressions, TryParse, nullable, DateTime, decimal for money, collections and LINQ through a cumulative Pareto, enums, records, validation, interfaces, extension and generic methods, pattern matching, exceptions, files, JSON, async/await, banker's rounding), outputs from `dotnet run`.
 - [x] Ladder to 50: 29 Foundations lessons (bit patterns, timers, counters and math, compare and select, ladder state machines, two scene challenges). 9 are held identical to their Structured Text twins with `sameAs`. The on-delay lesson's tags became `No_Feed_Timer`/`No_Feed_Fault`: a starved belt is not a jam.
 - [ ] More challenge lessons per scene, and scenes for new machines as lessons need them. CTUD once its Logix semantics are confirmed. On a phone the conveyor scene scrolls sideways inside its box; a narrower layout would keep the eye and stack light in view.
-- [ ] Ladder simulation: animate a small piece of equipment (e.g. the conveyor jam cell) driven by the learner's own typed ladder logic, so a rung change makes a visible difference. Needs a scan-cycle interpreter for the ladder subset the lessons use (XIC, XIO, OTE, OTL/OTU, TON, CTU, branches), simulated inputs the learner can toggle, and an equipment view bound to the tags.
+- [x] Ladder simulation: the learner's own ladder or Structured Text drives a machine scene in the simulator (PLC interpreter phases 1 to 4).
 
 ## Known limitations
 

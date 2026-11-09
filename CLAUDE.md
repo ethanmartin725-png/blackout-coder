@@ -45,7 +45,7 @@ Key engine behaviors:
 - **Previews**: `preview: true` languages render in a shadow-DOM preview. In a track, all earlier HTML/CSS/JS steps are concatenated so the page builds up step by step. A CSS lesson in a lane styles the sample markup in its own `html` field. The learner's own JavaScript runs only on completion or Check, never while typing. `fetch` is blocked in the preview and intervals are clamped to at least 1 s.
 - **Ladder**: `diagram: true` draws the typed rungs as an SVG ladder diagram, using `BCplc.parseRung`. Ladder outputs come from `sim` scenarios run in the interpreter, never typed by hand.
 - **Simulator**: every ladder or Structured Text lesson with a `sim` gets a Simulate panel (`/* PLC simulator */` in `app.js`). It runs the learner's own code only after the step is finished or Check is pressed, with inputs from the scenario. `sim.scene` adds a machine from `SCENES` (`conveyor3`, `air1`, `char2`; see LESSON_FORMAT). "Compare with the reference" runs the scenario on the learner's code and the lesson's code. Energized paths use the `power` map from `BCplc`.
-- **Progress**: `localStorage` key `blackout-coder-v1`, per lane/track id. Best scores are keyed by lesson **title**, so titles must be unique within a lane or track.
+- **Progress**: `localStorage` key `blackout-coder-v1`, per lane/track id. Save/Load progress in the footer writes and merges a JSON file (`progressFile`, `readProgressFile`, `mergeProgress` in `core.js`, tested by `tools/progress-tests.mjs`, which the verifier runs). Best scores are keyed by lesson **title**, so titles must be unique within a lane or track.
 
 ## Content conventions
 

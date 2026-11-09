@@ -28,5 +28,55 @@ function analyzeText(text,T,py){
 }
 function isCompleteFor(a,T){return a.doneK.size===T.length&&a.usedK===T.length;}
 function targetLines(code){const T=[];code.split('\n').forEach((t,i)=>{if(t.trim())T.push({text:t,idx:i});});return T;}
-g.BCcore={TOK,tokenize,hash,rng,sig,analyzeText,isCompleteFor,targetLines};
+/* ---------- progress files ----------
+   Progress lives in one browser's localStorage. These turn it into a file and back, so a learner
+   can move it to another device or keep a copy. No DOM here, so tools/progress-tests.mjs can test it.
+   per: {groupId: {lesson, earned, rank, prog, best: {title: {acc, wpm}}}}, as app.js keeps it. */
+const PROGRESS_APP='blackout-coder',PROGRESS_FORMAT=1;
+function progressFile(per,now){return JSON.stringify({app:PROGRESS_APP,format:PROGRESS_FORMAT,exported:now,progress:per},null,1);}
+// Check a file against the lanes and tracks this version has. Returns {ok:false,error} or
+// {ok:true,per,skipped}: groups this version does not have are skipped, as are lesson titles it
+// does not have (a renamed lesson's best score cannot follow it). Any malformed entry refuses the file.
+function readProgressFile(text,groups,need,maxRank){
+  let o;
+  try{o=JSON.parse(text);}catch(e){return {ok:false,error:'That file is not valid JSON.'};}
+  if(!o||o.app!==PROGRESS_APP||typeof o.progress!=='object'||o.progress===null||Array.isArray(o.progress))return {ok:false,error:'That file is not a Blackout Coder progress file.'};
+  if(o.format!==PROGRESS_FORMAT)return {ok:false,error:`That progress file is format ${o.format}; this version reads format ${PROGRESS_FORMAT}.`};
+  const int=(v,lo,hi)=>Number.isInteger(v)&&v>=lo&&v<=hi;
+  const per={},skipped=[];
+  for(const [id,p] of Object.entries(o.progress)){
+    const g=groups.find(x=>x.id===id);
+    if(!g){skipped.push(id);continue;}
+    const bad=`The entry for ${g.name} is damaged, so nothing was loaded.`;
+    if(!p||typeof p!=='object')return {ok:false,error:bad};
+    if(!int(p.earned,0,maxRank)||!int(p.rank,0,p.earned)||!int(p.prog,0,need-1)||!int(p.lesson,0,1e6))return {ok:false,error:bad};
+    if(typeof p.best!=='object'||p.best===null||Array.isArray(p.best))return {ok:false,error:bad};
+    const titles=new Set(g.lessons.map(l=>l.t)),best={};
+    for(const [t,b] of Object.entries(p.best)){
+      if(!b||!int(b.acc,0,100)||typeof b.wpm!=='number'||!(b.wpm>=0))return {ok:false,error:bad};
+      if(titles.has(t))best[t]={acc:b.acc,wpm:b.wpm};
+    }
+    per[id]={lesson:Math.min(p.lesson,g.lessons.length-1),earned:p.earned,rank:p.rank,prog:p.prog,best};
+  }
+  return {ok:true,per,skipped};
+}
+// Merge loaded progress into the current one without losing anything: the higher rank wins
+// (with its progress toward the next), and each lesson keeps its better score (accuracy, then speed).
+// The current lesson position stays, unless this browser has nothing for that lane or track yet.
+function mergeProgress(cur,inc){
+  const out=JSON.parse(JSON.stringify(cur||{}));
+  for(const [id,b] of Object.entries(inc)){
+    const a=out[id];
+    if(!a){out[id]=JSON.parse(JSON.stringify(b));continue;}
+    a.best=a.best||{};
+    if(b.earned>a.earned){a.earned=b.earned;a.rank=b.rank;a.prog=b.prog;}
+    else if(b.earned===a.earned)a.prog=Math.max(a.prog,b.prog);
+    for(const [t,s] of Object.entries(b.best)){
+      const x=a.best[t];
+      if(!x||s.acc>x.acc||(s.acc===x.acc&&s.wpm>x.wpm))a.best[t]={acc:s.acc,wpm:s.wpm};
+    }
+  }
+  return out;
+}
+g.BCcore={TOK,tokenize,hash,rng,sig,analyzeText,isCompleteFor,targetLines,progressFile,readProgressFile,mergeProgress};
 })(globalThis);
