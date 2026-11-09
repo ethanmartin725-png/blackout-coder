@@ -255,6 +255,15 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
 
 .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--gold-dim);color:var(--ink);padding:10px 16px;border-radius:6px;font-size:13.5px;max-width:min(92vw,520px);z-index:20;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 
+/* Explain this line: under the editor, the commands on the cursor's line. */
+.explain{border-top:1px solid var(--line);padding:10px 14px 12px;display:flex;flex-direction:column;gap:6px;min-height:76px}
+.explain-head{display:flex;justify-content:space-between;gap:8px;font:600 11px var(--f-body);letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+.explain-head .hint{letter-spacing:.04em;text-transform:none;font-weight:500}
+.explain-body{display:flex;flex-direction:column;gap:4px}
+.ex{display:grid;grid-template-columns:minmax(90px,max-content) minmax(0,1fr);gap:10px;font-size:13px;line-height:1.45;color:var(--ink-2)}
+.ex code{font:600 12.5px var(--f-code);color:var(--gold);overflow-wrap:anywhere}
+.ex-none{margin:0;font-size:13px;color:var(--muted)}
+
 /* Track summary: a dialog over the app. Charts are SVG drawn at the panel's own width. */
 .map-right{display:inline-flex;gap:12px;align-items:baseline}
 .sum-wrap{position:fixed;inset:0;z-index:30;background:rgba(7,16,33,.86);display:grid;place-items:start center;padding:24px 12px;overflow-y:auto}
@@ -307,6 +316,7 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
   .langs{justify-content:flex-start}
 }
 @media (max-width:600px){
+  .ex{grid-template-columns:1fr;gap:0}
   .sum{padding:14px}
   .sum-wrap{padding:12px 8px}
   .sim-scene svg{min-width:0} /* scenes switch to their compact layout here (NARROW_SCENE in app.js) */

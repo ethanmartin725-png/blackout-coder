@@ -8,6 +8,7 @@ import { spawnSync, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { runPlcTests } from "./plc-tests.mjs";
 import { runProgressTests } from "./progress-tests.mjs";
+import { runExplainTests } from "./explain-tests.mjs";
 import { routineCode, PLC_LANGS } from "./output-checks/plc/lessons.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -228,6 +229,38 @@ for (const lang of ["cpp", "java"]) {
 
 // 7b. Progress files: export, import and merge (site/js/core.js)
 for (const f of runProgressTests(BCcore)) fail(`Progress file test: ${f}`);
+for (const f of runExplainTests(BCcore)) fail(`Explain test: ${f}`);
+
+// Glossary for the explain panel (data/glossary.js): well-formed entries, unique keys, no em-dash
+// asides, every entry used by some lesson in its language, and most lines explained.
+let glossLines = 0, glossHit = 0;
+{
+  const all = [...BC.lanes, ...BC.tracks];
+  const lessonsOf = (lang) => all.flatMap((g) => g.lessons.filter((l) => (l.lang || g.lang) === lang));
+  const trivial = (ln) => /^[\s{}()\[\];,)]*$/.test(ln) || /^\s*(END_IF|END_FOR|END_CASE|END_WHILE|end|<\/[\w-]+>|\}\)?;?|\]\)?;?|`;?)\s*;?\s*$/.test(ln);
+  for (const [lang, list] of Object.entries(BC.glossary || {})) {
+    if (!BC.languages[lang]) { fail(`glossary: unknown language ${lang}`); continue; }
+    const seen = new Set(), lines = lessonsOf(lang).flatMap((l) => l.code.split("\n").map((x) => BCcore.codeOnly(x, lang)));
+    for (const e of list) {
+      const where = `glossary ${lang} "${e && e[0]}"`;
+      if (!Array.isArray(e) || (e.length !== 3 && e.length !== 4) || e.slice(0, 3).some((x) => typeof x !== "string" || !x.trim())) { fail(`${where}: expected [key, label, definition] or [key, label, definition, pattern]`); continue; }
+      if (seen.has(e[0])) fail(`${where}: key listed twice`);
+      seen.add(e[0]);
+      if (/—/.test(e[1] + e[2])) fail(`${where}: no em dashes in glossary copy`);
+      if (e[3] !== undefined) { try { new RegExp(e[3]); } catch (x) { fail(`${where}: bad pattern: ${x.message}`); continue; } }
+      if (!lines.some((ln) => BCcore.findEntry(e, ln) >= 0)) fail(`${where}: matches no lesson line; remove it or fix the key`);
+    }
+  }
+  for (const g of all) for (const l of g.lessons) {
+    const lang = l.lang || g.lang;
+    for (const ln of l.code.split("\n")) {
+      if (!ln.trim() || trivial(ln)) continue;
+      glossLines++;
+      if (BCcore.explainLine(ln, lang, l.terms, (BC.glossary || {})[lang] || [], 1).length) glossHit++;
+    }
+  }
+  if (glossLines && glossHit / glossLines < 0.95) fail(`glossary: only ${(100 * glossHit / glossLines).toFixed(1)}% of code lines get an explanation (floor 95%). Add glossary entries for the new lessons' languages.`);
+}
 
 // 8. PLC ladder and Structured Text: every lesson parses, the interpreter passes its tests, and
 // every lesson with a scenario (sim) still produces its stored output. See docs/PLC_INTERPRETER.md.
@@ -268,7 +301,7 @@ else {
   }
 }
 
-const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds, ${nativeCount.cpp} C++ and ${nativeCount.java} Java compiles, ${ladderParsed} ladder and ${stParsed} Structured Text parses, ${plcSims} PLC scenarios`;
+const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds, ${nativeCount.cpp} C++ and ${nativeCount.java} Java compiles, ${ladderParsed} ladder and ${stParsed} Structured Text parses, ${plcSims} PLC scenarios, ${glossHit}/${glossLines} code lines explained (${(100 * glossHit / Math.max(1, glossLines)).toFixed(1)}%)`;
 for (const w of warns) console.warn("warn  " + w);
 if (errors.length) { for (const e of errors) console.error("FAIL  " + e); console.error(`\n${errors.length} problem(s). ${summary}`); process.exit(1); }
 console.log(`All lessons pass. ${summary}`);

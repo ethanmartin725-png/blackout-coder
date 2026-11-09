@@ -601,6 +601,24 @@ function renderGoal(){
   $('tgtHead').textContent=inTrack()?`Code to match · ${LD[lesson.lang].short}`:'Code to match';
 }
 
+/* ---------- explain this line ----------
+   What the commands on the cursor's line do: the lesson's terms first, then the language glossary
+   (BCcore.explainLine). It reads the learner's own line, so it never names blacked-out code. Only at
+   Beginner, where nothing is hidden, does an empty line explain the line still to type. */
+function explainNow(){
+  const v=ta.value,at=ta.selectionStart,li=v.slice(0,at).split('\n').length-1,ul=v.split('\n'),mine=ul[li]||'';
+  let src=mine,from='';
+  if(!mine.trim()){
+    const R=RANKS[P().rank],k=ul.slice(0,li).filter(x=>x.trim()).length,t=cur&&cur.T[k];
+    if(R.w===0&&R.s===0&&t&&!complete){src=t.text;from='the line to type';}
+  }
+  $('explainFrom').textContent=from;
+  const box=$('explainBody');
+  if(!src.trim()){box.innerHTML=`<p class="ex-none">${RANKS[P().rank].w===0?'Put the cursor on a line to see what its commands do.':'Type a line to see what its commands do. Blacked-out code is never explained.'}</p>`;return;}
+  const ex=BCcore.explainLine(src,ld.id,lesson.terms,BC.glossary[ld.id]||[],5);
+  box.innerHTML=ex.length?ex.map(e=>`<div class="ex"><code>${esc(e.label)}</code><span>${esc(e.def)}</span></div>`).join(''):'<p class="ex-none">Nothing on this line is in the glossary yet.</p>';
+}
+
 /* ---------- lifecycle ---------- */
 function resetAttempt(){
   ta.value='';ta.readOnly=false;typed=errors=peeks=0;startT=endT=0;complete=false;checked=false;
@@ -608,6 +626,7 @@ function resetAttempt(){
   const R=RANKS[P().rank];
   ta.placeholder=R.w===1?'Write the code from the goal above.':(pre?'Continue from the earlier steps. Type only the new lines.':'Start typing line 1. Match the code to the right.');
   renderAll(analyze(''));
+  explainNow();
 }
 function loadLesson(){
   lane=laneObj();
@@ -725,8 +744,11 @@ ta.addEventListener('input',e=>{
   }
   programmatic=false;checked=false;
   renderAll(a);
+  explainNow();
   if(isComplete(a))finish();
 });
+// The cursor moves without input on clicks and arrow keys.
+for(const ev of ['click','keyup','focus'])ta.addEventListener(ev,e=>{if(ev!=='keyup'||!['Shift','Control','Alt','Meta'].includes(e.key))explainNow();});
 ta.addEventListener('keydown',e=>{
   if(complete)return;
   if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();doCheck();return;}

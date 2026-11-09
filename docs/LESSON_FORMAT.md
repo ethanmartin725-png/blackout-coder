@@ -106,3 +106,19 @@ JavaScript has two modes. `js` previews a page and only makes sense in a track, 
 - Blank lines in `code` are skipped; learners don't type them.
 - Long lines are harder on phones. Break them where the language allows.
 - Ladder: one rung per line, ending in `;`.
+
+## Glossary (explain panel)
+
+`site/data/glossary.js` defines each language's everyday words once, for the explain panel under the editor:
+
+```js
+BC.addGlossary("python", [
+  ["print", "print()", "Writes its values to the output, separated by spaces, then a new line."],
+  ["dict-entry", "Dictionary entry", "One key: value pair inside a dictionary.", "^\\s*\\{?\\s*[\"'][^\"']*[\"']\\s*:"],
+]);
+```
+
+- An entry is `[key, label, definition]`, matched as a whole word (hyphens count as part of a word), or `[key, label, definition, pattern]`, matched by the regular expression instead, for lines no single word explains.
+- Text in strings and comments is not matched. The lesson's own `terms` show first; a glossary entry with the same label as one already shown is dropped.
+- Catch-all keys listed in `FILLER` in `core.js` (such as `call` and `prop`) show only when nothing more specific matched.
+- The verifier fails on an entry that matches no lesson line in its language, on em dashes, and when under 95% of code lines get an explanation.

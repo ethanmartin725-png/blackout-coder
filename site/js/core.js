@@ -118,5 +118,50 @@ function trackSummary(lessons,best){
     overall:{acc:mean(done.map(x=>x.acc),1),wpm:mean(done.map(x=>x.wpm),0)},
     gains,noFirst:done.length-gains.length,revisit};
 }
-g.BCcore={TOK,tokenize,hash,rng,sig,analyzeText,isCompleteFor,targetLines,progressFile,readProgressFile,mergeProgress,betterRun,recordRun,trackSummary};
+/* ---------- explain this line ----------
+   What the explain panel shows for one line of code: the lesson's own terms first, then the
+   language glossary (data/glossary.js), each found as a whole word, in the order they appear.
+   Text inside string literals and comments is not matched, so "for the shift" never explains for. */
+const QUOTES={html:/"[^"\n]*"?/g,ladder:null};
+const COMMENTS={python:/#.*$/,ignition:/#.*$/,sql:/--.*$/,csharp:/\/\/.*$/,cpp:/\/\/.*$/,java:/\/\/.*$/,js:/\/\/.*$/,jscon:/\/\/.*$/,st:/\/\/.*$|\(\*.*?\*\)/g,css:/\/\*.*?\*\//g,html:/<!--.*?-->/g,ignexpr:/\/\/.*$/};
+function codeOnly(line,lang){
+  const q=lang in QUOTES?QUOTES[lang]:/"(?:[^"\\\n]|\\.)*"?|'(?:[^'\\\n]|\\.)*'?/g;
+  let s=q?line.replace(q,m=>m.length<2?m:m[0]+' '.repeat(m.length-2)+m[m.length-1]):line;
+  const c=COMMENTS[lang];
+  if(c)s=s.replace(c,m=>' '.repeat(m.length));
+  return s;
+}
+const keyRe=new Map(); // a Map: a plain object would hand back toString for the key "toString"
+function findKey(key,line){
+  let re=keyRe.get(key);
+  if(!re){const e=key.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');re=new RegExp((/^\w/.test(key)?'(?<![A-Za-z0-9_-])':'')+e+(/\w$/.test(key)?'(?![A-Za-z0-9_-])':''));keyRe.set(key,re);}
+  const m=re.exec(line);return m?m.index:-1;
+}
+// A glossary entry may carry a pattern as a fourth element (a regular expression source), for
+// lines no single word explains, such as a row of data. Hyphens count as part of a word, so
+// color never matches inside background-color.
+// Fallback entries, shown only when nothing more specific matched: line enders, and the glossary's
+// catch-all patterns (a function call, a row of data, a property line).
+const patRe=new Map(),FILLER=new Set([';','}','call','string-piece','list-row','tuple','arg','args','text','init','row','column','area-row','dict-entry','prop','index-init']);
+function findEntry(t,s){
+  if(!t[3])return findKey(t[0],s);
+  let re=patRe.get(t[3]);if(!re){re=new RegExp(t[3]);patRe.set(t[3],re);}
+  const m=re.exec(s);return m?m.index:-1;
+}
+// terms: the lesson's [key,label,definition]; gloss: the language's glossary entries, same shape.
+function explainLine(line,lang,terms,gloss,max){
+  const s=codeOnly(line,lang),seen=new Set(),out=[];
+  const add=(list,src)=>{for(const t of list||[]){if(!t[0]||seen.has(t[0]))continue;const pos=findEntry(t,s);if(pos<0)continue;seen.add(t[0]);out.push({key:t[0],label:t[1],def:t[2],src,pos});}};
+  add(terms,'lesson');add(gloss,'glossary');
+  // A glossary entry whose word sits inside a matched lesson term (print inside print(f"…")) adds nothing.
+  const kept=out.filter(x=>x.src==='lesson'||!out.some(y=>y.src==='lesson'&&y.pos<=x.pos&&x.pos<y.pos+y.key.length));
+  kept.sort((a,b)=>a.pos-b.pos||(a.src==='lesson'?-1:1));
+  // One card per idea: a glossary entry with the same label as one already shown (IF and THEN are
+  // both "IF … THEN"; a lesson's own .DN) is dropped. Fallback entries (FILLER) show only on their own.
+  const labels=new Set(),uniq=[];
+  for(const x of [...kept.filter(x=>x.src==='lesson'),...kept.filter(x=>x.src!=='lesson')]){const k=x.label.toLowerCase();if(labels.has(k))continue;labels.add(k);uniq.push(x);}
+  const shown=kept.filter(x=>uniq.includes(x)),busy=shown.filter(x=>!FILLER.has(x.key));
+  return (busy.length?busy:shown).slice(0,max||5);
+}
+g.BCcore={TOK,tokenize,hash,rng,sig,analyzeText,isCompleteFor,targetLines,progressFile,readProgressFile,mergeProgress,betterRun,recordRun,trackSummary,codeOnly,findKey,findEntry,explainLine};
 })(globalThis);
