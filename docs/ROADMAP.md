@@ -14,9 +14,10 @@
 - [ ] C++ and Java project tracks. Candidates: C++ for an embedded sensor counter, Java for a back-office integration.
 - [x] Real outputs for the Python, C#, C++ and Java Foundations lessons (`tools/output-checks/foundations/run.mjs`).
 - [x] SQL lane moved onto the canonical tables and extended to 13 lessons (NULLs, date math, LEFT JOIN, INSERT/UPDATE, CTE, LAG). Outputs come from SQL Server 2022 running each lesson on the seeded sample data.
-- [ ] Move the remaining Foundations examples onto the canonical machines (Python, C#, C++ and Java use Line 1/2/3 and Jointer 2; SQL and Ladder are done).
+- [ ] Move the remaining Foundations examples onto the canonical machines (C#, C++ and Java use Line 1/2/3, Jointer 2 and OEE factors 0.86 / 0.91 / 0.98; Python, SQL and Ladder are done). Python now uses Hoop Driver 1's 0.988 / 0.749 / 0.985, so its OEE lessons print 72.9% where the other three languages print 76.7%.
 - [x] Ladder Foundations gap: 8 lessons added (TOF, RTO hour meter, LES with debounce, LIM, MOV/EQU, ONS with ADD, CPT rate, CTU/CTD WIP with an output branch). The diagram draws RTO, LIM, CPT, GEQ/LEQ and SUB/MUL/DIV.
-- [ ] Close the remaining Foundations gaps before the tracks: Python (f-strings, comprehensions, try/except, datetime, defaults, pandas), and new JavaScript and Structured Text lanes.
+- [x] Python Foundations gap: 6 lessons added (f-strings, list comprehensions, try/except, datetime, default arguments, a first pandas DataFrame), all on shift A sample data.
+- [ ] Close the remaining Foundations gaps before the tracks: new JavaScript and Structured Text lanes.
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
 - [ ] HMI design principles as their own steps: ISA-101 alarm colors, layout hierarchy, operator-first faceplates.
 - [ ] More Structured Text: CASE state machines, arrays, user-defined types.
