@@ -24,6 +24,7 @@ Deployed from `site/` as plain static files: GitLab Pages via `.gitlab-ci.yml`, 
 - ERP Export track (Java): `node tools/output-checks/track10-erp/run.mjs`, the same approach as Eye Counter: each step compiled with the earlier steps, its test `main` and a closing brace.
 - Ignition outputs: `bash tools/output-checks/ignition/fetch.sh` once, then `node tools/output-checks/ignition/run.mjs` (`--check`, `--only=<title>`). Runs every Ignition script and expression lesson in real Jython 2.7 with a teaching model of `system.*`; database lessons need `BC_SQL_PASSWORD` and the SQL Server container. Scenarios are in `scenarios.mjs`. Semantics and limits: `docs/IGNITION_SIM.md`.
 - Plant Board track: `node tools/output-checks/track5-board/run.mjs`, the same Chromium approach as Downtime Entry, with the clock fixed at 2026-11-07 14:05 (UTC, en-US locale) and `fetch` rejected as in the app's preview.
+- DB Pulls & Analytics count_log steps: `node tools/output-checks/track2-db/sql_steps.mjs` runs them on SQL Server and writes their `out`.
 - Downtime Entry track: `node tools/output-checks/track7-downtime/run.mjs` builds each JavaScript step's page in Chromium (Playwright), drives it with the scenarios in that file and writes its `out`; `--check` reports stale ones.
 
 ## Architecture
@@ -71,7 +72,7 @@ The tracks share one sample plant. Keep new content consistent with it, or delib
 
 Rates and margin are illustrative, not real plant figures.
 
-- **DB Pulls & Analytics**: 47 seeded faults, "now" = 2026-11-07 10:15. Pareto minutes: Low air 87.4, Char flare 70.0, Hoop misfeed 66.6, Jam 65.7, E-stop 10.8. Lost dollars across all 47 faults: $11,753.79.
+- **DB Pulls & Analytics**: 47 seeded faults, "now" = 2026-11-07 10:15. `count_log` holds hourly shift-counter readings from 2026-10-31 06:00 to 2026-11-07 10:00 (`seeded_counts()` in `sql_exec.py`): the counter resets just after the 06:00, 14:00 and 22:00 readings, the week sums to the OEE Loss Report's counts (6,980 / 7,120 / 6,410) through `v_hourly_barrels`, and Conveyor 3's shift A reads 47 / 94 / 141 / 184. The hour-by-hour split is illustrative. Pareto minutes: Low air 87.4, Char flare 70.0, Hoop misfeed 66.6, Jam 65.7, E-stop 10.8. Lost dollars across all 47 faults: $11,753.79.
 - **OEE Loss Report**: week 2026-10-31 06:00 to 2026-11-07 06:00 (45 of the 47 faults fall inside it). Planned 9,450 min per machine (7 days × 3 shifts × 450 min). OEE: Char Station 2 86.0%, Conveyor 3 73.8%, Hoop Driver 1 72.9%. Dollars per OEE point: $3,347 / $4,016 / $3,682. Weekly loss $251,876, of which performance $221,444.
 - **Shift Handoff**: shift A, 2026-11-07 06:00–14:00, run at 14:05. Barrels 301 / 352 / 274. Status DOWN (open char flare) / OK / BEHIND. Faults this shift: 5. The first two (Conveyor 3 jam 09:08:52, Hoop Driver 1 misfeed 10:09:40) are the same `fault_log` records DB Pulls ends on; the misfeed, open at 10:15 there, closes at 10:17:10. Down minutes 18.75 / 4.62 / 41.00, clipped to the shift window (the open char flare has been down 23.75 min at 14:05, but stops counting for shift A at 14:00). The fault list still shows 23.75 as time down so far.
 - **Plant Board**: reuses the OEE, Pareto and handoff numbers above. Biggest gap to 85%: Hoop Driver 1, 12.1 pts.

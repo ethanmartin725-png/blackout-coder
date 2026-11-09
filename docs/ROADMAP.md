@@ -53,6 +53,7 @@
 - [x] AM Checklist track: a daily Autonomous Maintenance sheet for Hoop Driver 1 (10 HTML, 12 CSS steps), with CSS-only check-off, out-of-range highlighting and a print stylesheet.
 - [x] HTML lane +27 lessons (page skeleton to inline SVG) and a new CSS lane of 28 lessons. CSS lane lessons carry the markup they style in an `html` field; the preview renders it with the target and the typed CSS.
 - [x] JavaScript to 50: 20 console lessons (truthiness, sorting numbers, `??` and `?.`, Map/Set, reduce grouping, parsing and NaN, floating point and cents, classes, closures, errors, async/await, Intl, JSON) and a new Downtime Entry track (4 HTML, 4 CSS, 10 JavaScript steps) whose outputs come from running each step's page in Chromium.
+- [x] count_log seeded with a week of hourly readings that reproduce the OEE Loss Report's counts through v_hourly_barrels; DB Pulls steps 9 and 10 now run on SQL Server with @now, as the SQL lane does.
 - [x] Plant Board outputs generated in Chromium (`tools/output-checks/track5-board/run.mjs`): all 9 JavaScript steps, replacing 3 hand-written descriptions and filling 6 empty ones.
 - [x] Line Status Screen track (Ignition, 15 steps: 7 expressions, 8 scripts). Its Pareto query reproduces the DB track's canonical minutes on the real database.
 - [x] Ignition runtime and lane: real Jython 2.7.4 with a teaching model of `system.*` (tags, db over JDBC to SQL Server, date, dataset, util) and the expression language; the PLC track's 5 Ignition outputs are now generated, and a 30-lesson Ignition lane. The verifier refuses Jython-incompatible code.
@@ -64,7 +65,7 @@
 ## Known limitations
 
 - The trainer checks typed code against the reference; it does not execute Python, SQL, C#, C++ or Java in the browser. The verifier compiles Python, JavaScript, C#, C++ and Java.
-- DB Pulls & Analytics steps 9 and 10 (count_log with LAG) have hand-written outputs: no count_log sample data is seeded. Seed hourly readings, including a counter reset, so `sql_exec.py` can run them. The track's other SQL outputs match SQL Server (rounded for display).
+- DB Pulls & Analytics: steps 9 and 10 run on SQL Server (`tools/output-checks/track2-db/sql_steps.mjs`); the track's other SQL outputs were checked against SQL Server by hand (rounded for display).
 - The page preview cannot trigger the phone-layout media query in Plant Board step 7, because media queries follow the browser window, not the preview box.
 - The learner's own JavaScript runs only when the step is finished or Check is pressed.
 - Ignition outputs come from real Jython 2.7 with a teaching model of `system.*` (docs/IGNITION_SIM.md), not from Ignition itself. CI only compiles the scripts and lints them for Jython 2.7; the Jython run needs `fetch.sh` and the SQL Server container.

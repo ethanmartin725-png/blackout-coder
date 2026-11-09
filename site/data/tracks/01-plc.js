@@ -242,6 +242,7 @@ system.db.runPrepUpdate(query, ["Conveyor 3", count, state, system.date.now()], 
       ],
       out: `count_log, one row per hour:
 machine     barrels  state  ts
+Conveyor 3  336      1      2026-11-07 06:00:00
 Conveyor 3  47       1      2026-11-07 07:00:00
 Conveyor 3  94       1      2026-11-07 08:00:00`,
     },

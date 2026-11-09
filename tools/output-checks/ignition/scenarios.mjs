@@ -45,11 +45,12 @@ print("Downtime for this event: %d min %d s (%.2f min)" % (s // 60, s % 60, s / 
   },
   "t-plc/Hourly count snapshot": {
     db: true, clock: "2026-11-07 07:00:00", tags: { "Conveyor3/Barrel_Count/ACC": 47 },
+    before: `system.db.runPrepUpdate("DELETE FROM count_log WHERE ts >= '2026-11-07 07:00'", [])`,
     after: `set_clock("2026-11-07 08:00:00")
 set_tag("Conveyor3/Barrel_Count/ACC", 94)
 rerun()
 print("count_log, one row per hour:")
-show("SELECT machine, barrels, state, ts FROM count_log ORDER BY ts")`,
+show("SELECT machine, barrels, state, ts FROM count_log WHERE machine = 'Conveyor 3' AND ts >= '2026-11-07 06:00' ORDER BY ts")`,
   },
   "t-plc/Status text binding": {
     cases: [1, 2, 0].map((v) => ({ label: `Conv_State = ${v}`, tags: { "Conveyor3/Conv_State": v } })),
@@ -89,7 +90,7 @@ valueChanged(None, p, qv(1), qv(2), False, False)` },
 valueChanged(None, p, qv(92.0), qv(91.5), False, False)
 valueChanged(None, p, qv(91.5), qv(None, "Bad_Disconnected"), False, False)
 valueChanged(None, p, qv(None, "Bad_Disconnected"), qv(78.0), False, True)` },
-  "ignition/Hourly snapshot for every machine": { db: true, clock: "2026-11-07 14:00:00", after: `show("SELECT machine, barrels, state, ts FROM count_log ORDER BY machine")` },
+  "ignition/Hourly snapshot for every machine": { db: true, clock: "2026-11-07 14:00:00", after: `show("SELECT machine, barrels, state, ts FROM count_log WHERE ts = '2026-11-07 14:00' ORDER BY machine")` },
   "ignition/Rate across a rollover": {  },
   "ignition/Machine from the tag path": {  },
   "ignition/Deadband before logging": { tags: {"HoopDriver1/Air_PSI_Logged": 92.0}, after: `p = "[default]HoopDriver1/Air_PSI"
@@ -133,11 +134,10 @@ print("Speed_SP: %.1f" % system.tag.readBlocking(["[default]Conveyor3/Speed_SP"]
   "t-hmi/Audit the operator's actions": { after: `changeSpeed("J. Ruiz", 55)
 changeSpeed("J. Ruiz", 72)` },
   "t-hmi/Pareto query": { db: true, clock: "2026-11-07 10:15:00" },
-  "t-hmi/Hourly output with a rollover": { db: true, clock: "2026-11-07 07:00:00", tags: {"Conveyor3/Barrel_Count/ACC": 65500, "Conveyor3/Count_Last_Hour": 65453}, after: `set_clock("2026-11-07 08:00:00"); set_tag("Conveyor3/Barrel_Count/ACC", 11); rerun()
-set_clock("2026-11-07 09:00:00"); set_tag("Conveyor3/Barrel_Count/ACC", 58); rerun()
-show("SELECT machine, barrels, ts FROM count_log ORDER BY ts")` },
+  "t-hmi/Hourly output with a rollover": { clock: "2026-11-07 07:00:00", tags: {"Conveyor3/Barrel_Total": 65500, "Conveyor3/Total_Last_Hour": 65453, "Conveyor3/Made_Last_Hour": 0}, after: `set_clock("2026-11-07 08:00:00"); set_tag("Conveyor3/Barrel_Total", 11); rerun()
+set_clock("2026-11-07 09:00:00"); set_tag("Conveyor3/Barrel_Total", 58); rerun()` },
   "t-hmi/Shift change": { db: true, clock: "2026-11-07 14:00:00", tags: {"Shift/Name": "A", "Shift/Reset_Counts": false}, after: `shiftChange("B")
-show("SELECT machine, barrels, state, ts FROM count_log ORDER BY machine")
+show("SELECT machine, barrels, state, ts FROM count_log WHERE ts = '2026-11-07 14:00' ORDER BY machine")
 for qv, p in zip(system.tag.readBlocking(["[default]Shift/Name", "[default]Shift/Reset_Counts"]), ["Shift/Name", "Shift/Reset_Counts"]):
     print("%s: %s" % (p, qv.value))` },
   // <<< hmi

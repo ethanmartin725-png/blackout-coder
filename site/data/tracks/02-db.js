@@ -214,33 +214,50 @@ Rounded for display. The rows add to $11,753.78; the exact total, rounded once, 
       lang: "sql",
       file: "hourly_barrels.sql",
       t: "Barrels per hour with LAG",
-      goal: "From the last day of count_log, show each reading and barrels made since the previous reading for the same machine.",
-      code: `SELECT machine,
+      goal: "Declare @now as 2026-11-07 10:15. From the last 6 hours of count_log, show each reading and barrels made since the previous reading for the same machine.",
+      code: `DECLARE @now DATETIME = '2026-11-07 10:15';
+
+SELECT machine,
     ts,
     barrels,
     barrels - LAG(barrels) OVER (PARTITION BY machine ORDER BY ts) AS made_this_hour
 FROM count_log
-WHERE ts >= DATEADD(DAY, -1, GETDATE())
+WHERE ts >= DATEADD(HOUR, -6, @now)
 ORDER BY machine, ts;`,
-      about: "LAG reaches back one row. PARTITION BY restarts the look-back for each machine, and ORDER BY sets what \"previous\" means. Look at the 15:00 row in the result: the counter reset at shift change, so the subtraction goes negative. Step 10 fixes that.",
+      about: "LAG reaches back one row. PARTITION BY restarts the look-back for each machine, and ORDER BY sets what \"previous\" means. @now stands in for GETDATE() so the result matches the sample data, which ends at 10:15, as in the SQL lane. Two things to see: the 07:00 rows go negative, because the counter reset at the 06:00 shift change; and the 05:00 rows are NULL, because WHERE removes the earlier rows before LAG can look back at them. Step 10 fixes both.",
       terms: [
         ["LAG", "LAG(col)", "The value from the previous row in the window."],
         ["OVER", "OVER ( … )", "Turns a function into a window function: it sees neighboring rows without grouping them away."],
         ["PARTITION", "PARTITION BY machine", "Each machine gets its own sequence."],
       ],
-      out: `machine     ts                barrels  made_this_hour
-Conveyor 3  2026-11-06 12:00  318      53
-Conveyor 3  2026-11-06 13:00  371      53
-Conveyor 3  2026-11-06 14:00  422      51
-Conveyor 3  2026-11-06 15:00  47       -375   ← counter reset
-Conveyor 3  2026-11-06 16:00  101      54`,
+      out: `machine         ts                   barrels  made_this_hour
+Char Station 2  2026-11-07 05:00:00  287      NULL
+Char Station 2  2026-11-07 06:00:00  328      41
+Char Station 2  2026-11-07 07:00:00  40       -288
+Char Station 2  2026-11-07 08:00:00  80       40
+Char Station 2  2026-11-07 09:00:00  121      41
+Char Station 2  2026-11-07 10:00:00  161      40
+Conveyor 3      2026-11-07 05:00:00  294      NULL
+Conveyor 3      2026-11-07 06:00:00  336      42
+Conveyor 3      2026-11-07 07:00:00  47       -289
+Conveyor 3      2026-11-07 08:00:00  94       47
+Conveyor 3      2026-11-07 09:00:00  141      47
+Conveyor 3      2026-11-07 10:00:00  184      43
+Hoop Driver 1   2026-11-07 05:00:00  266      NULL
+Hoop Driver 1   2026-11-07 06:00:00  304      38
+Hoop Driver 1   2026-11-07 07:00:00  37       -267
+Hoop Driver 1   2026-11-07 08:00:00  72       35
+Hoop Driver 1   2026-11-07 09:00:00  108      36
+Hoop Driver 1   2026-11-07 10:00:00  143      35`,
     },
     {
       lang: "sql",
       file: "hourly_barrels_fixed.sql",
       t: "Handle the counter reset",
-      goal: "Put the LAG in a CTE as prev, then output made_this_hour: NULL for the first reading, the raw reading after a reset, otherwise the difference.",
-      code: `WITH c AS (
+      goal: "Put the LAG over all of count_log in a CTE as prev. Then, for the last 6 hours before @now, output made_this_hour: NULL for the first reading, the raw reading after a reset, otherwise the difference.",
+      code: `DECLARE @now DATETIME = '2026-11-07 10:15';
+
+WITH c AS (
     SELECT machine,
         ts,
         barrels,
@@ -255,19 +272,33 @@ SELECT machine,
         ELSE barrels - prev
     END AS made_this_hour
 FROM c
+WHERE ts >= DATEADD(HOUR, -6, @now)
 ORDER BY machine, ts;`,
-      about: "A drop in the counter means it was reset, so the reading itself is what was made since the reset. That slightly undercounts the hour the reset happened in: barrels made between 14:00 and the 14:00:30 reset are lost. Flag it in any report, or log the count just before the PLC resets it.",
+      about: "A drop in the counter means it was reset, so the reading itself is what was made since the reset. That slightly undercounts the hour the reset happened in: barrels made between the 06:00 reading and the reset just after it are lost. Flag it in any report, or log the count just before the PLC resets it. The time filter now sits outside the CTE, so LAG still sees the reading before the window and the 05:00 rows have values.",
       terms: [
         ["prev", "prev", "The previous reading, named once in the CTE so the CASE stays readable."],
         ["CASE", "Reset rule", "barrels < prev can only happen after a reset."],
         [null, "Data caveat", "Write down every assumption a number depends on. Finance will ask."],
       ],
-      out: `machine     ts                made_this_hour
-Conveyor 3  2026-11-06 12:00  53
-Conveyor 3  2026-11-06 13:00  53
-Conveyor 3  2026-11-06 14:00  51
-Conveyor 3  2026-11-06 15:00  47
-Conveyor 3  2026-11-06 16:00  54`,
+      out: `machine         ts                   made_this_hour
+Char Station 2  2026-11-07 05:00:00  40
+Char Station 2  2026-11-07 06:00:00  41
+Char Station 2  2026-11-07 07:00:00  40
+Char Station 2  2026-11-07 08:00:00  40
+Char Station 2  2026-11-07 09:00:00  41
+Char Station 2  2026-11-07 10:00:00  40
+Conveyor 3      2026-11-07 05:00:00  41
+Conveyor 3      2026-11-07 06:00:00  42
+Conveyor 3      2026-11-07 07:00:00  47
+Conveyor 3      2026-11-07 08:00:00  47
+Conveyor 3      2026-11-07 09:00:00  47
+Conveyor 3      2026-11-07 10:00:00  43
+Hoop Driver 1   2026-11-07 05:00:00  37
+Hoop Driver 1   2026-11-07 06:00:00  38
+Hoop Driver 1   2026-11-07 07:00:00  37
+Hoop Driver 1   2026-11-07 08:00:00  35
+Hoop Driver 1   2026-11-07 09:00:00  36
+Hoop Driver 1   2026-11-07 10:00:00  35`,
     },
     {
       lang: "sql",

@@ -7,7 +7,7 @@
 #     including its INSERT of the three machines) and Shift Handoff (handoff_note)
 #   - fault_log rows: the 47 seeded faults from tools/output-checks/track2-db/gen.py
 #   - handoff_note rows: the two open notes the Shift Handoff track starts with
-#   - count_log: no rows (no Foundations lesson reads it yet)
+#   - count_log rows: hourly counter readings from seeded_counts() below
 # A lesson that itself creates a table runs against an empty database instead.
 #
 # Server: a local SQL Server 2022, e.g.
@@ -65,6 +65,37 @@ def seeded_faults():
     return [(r.machine, r.fault, r.start_ts.to_pydatetime(), None if pd.isna(r.end_ts) else r.end_ts.to_pydatetime()) for r in df.itertuples()]
 
 
+def seeded_counts():
+    """Hourly count_log readings for the three machines, 2026-10-31 06:00 to 2026-11-07 10:00.
+
+    barrels is the PLC's shift counter at the reading, as the DB Pulls track defines it. The counter
+    resets at 06:00, 14:00 and 22:00, just after the reading on the hour, so a shift-change reading is
+    the ending shift's total and the next reading starts again from that hour's output.
+      - The week 2026-10-31 06:00 to 2026-11-07 06:00 adds up to the OEE Loss Report's counts:
+        Char Station 2 6,980, Conveyor 3 7,120, Hoop Driver 1 6,410 (through v_hourly_barrels).
+      - Shift A on 2026-11-07 runs to the DB track's "now", 10:15: Conveyor 3 reads 47, 94, 141, 184,
+        the 47 and 94 the PLC & HMI track's hourly snapshot logs.
+    The hour-by-hour split is illustrative: an even share of the week with a small repeating wobble."""
+    week = {"Char Station 2": 6980, "Conveyor 3": 7120, "Hoop Driver 1": 6410}
+    shift_a = {"Char Station 2": [40, 40, 41, 40], "Conveyor 3": [47, 47, 47, 43], "Hoop Driver 1": [37, 35, 36, 35]}
+    wobble = [2, -1, 1, -2, 0, 1, -1, 0]  # sums to 0 over each 8-hour shift
+    start = datetime.datetime(2026, 10, 31, 6)
+    rows = []
+    for machine, total in week.items():
+        base, extra = divmod(total, 168)
+        made = [base + wobble[h % 8] + (1 if h < extra else 0) for h in range(168)] + shift_a[machine]
+        assert sum(made[:168]) == total
+        count = base * 8  # 06:00 on 10-31: shift C's total, before the reset
+        rows.append((machine, count, 1, start))
+        for h, n in enumerate(made):
+            t = start + datetime.timedelta(hours=h + 1)
+            if (t.hour - 1) % 24 in (6, 14, 22):
+                count = 0  # the counter reset just after the previous reading
+            count += n
+            rows.append((machine, count, 1, t))
+    return rows
+
+
 def statements(sql):
     """Split on a semicolon at the end of a line. Fine for these lessons; not a general SQL parser."""
     return [s.strip() for s in re.split(r";[ \t]*(?:\n|$)", sql) if s.strip()]
@@ -108,6 +139,7 @@ if not creates_table:
         for s in statements(ddl):
             cur.execute(s)
     cur.executemany("INSERT INTO fault_log (machine, fault, start_ts, end_ts) VALUES (%s, %s, %s, %s)", seeded_faults())
+    cur.executemany("INSERT INTO count_log (machine, barrels, state, ts) VALUES (%s, %s, %s, %s)", seeded_counts())
     cur.executemany(
         "INSERT INTO handoff_note (shift_date, shift, machine, author, note, created_ts) VALUES (%s, %s, %s, %s, %s, %s)",
         [(datetime.date(2026, 11, 6), "C", "Char Station 2", "T. Nguyen", "Burner B igniter sparking weak on Char Station 2. Maintenance work order opened.", datetime.datetime(2026, 11, 7, 5, 52)),

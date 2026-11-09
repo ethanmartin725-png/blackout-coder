@@ -251,23 +251,22 @@ E-stop         10.8`,
       lang: "ignition",
       file: "Gateway timer · hourly",
       t: "Hourly output with a rollover",
-      goal: "Each hour, read Conveyor 3's count and the last reading kept in a memory tag, work out the barrels made with a 16-bit rollover, log a count_log row, and store the new reading.",
-      code: `LAST = "[default]Conveyor3/Count_Last_Hour"
-count, last = [qv.value for qv in system.tag.readBlocking(["[default]Conveyor3/Barrel_Count/ACC", LAST])]
-made = (count - last) % 65536
+      goal: "Each hour, read Conveyor 3's lifetime barrel counter and last hour's reading from a memory tag, work out the barrels made with a 16-bit rollover, show it in Made_Last_Hour, and store the new reading.",
+      code: `LAST = "[default]Conveyor3/Total_Last_Hour"
+total, last = [qv.value for qv in system.tag.readBlocking(["[default]Conveyor3/Barrel_Total", LAST])]
+made = (total - last) % 65536
 
-query = "INSERT INTO count_log (machine, barrels, state, ts) VALUES (?, ?, ?, ?)"
-system.db.runPrepUpdate(query, ["Conveyor 3", made, 1, system.date.now()], "PlantDB")
-system.tag.writeBlocking([LAST], [count])`,
-      about: "Logging barrels made in the hour, rather than the running total, makes hourly charts a straight read. The difference is taken modulo 65536, so it stays right when the PLC's counter rolls over, as the lane's rollover lesson showed. The last reading lives in a memory tag. The output runs three hours, the counter rolling from 65,500 past 65,535 to 11 in the second; the counts are illustrative, near shift A's 46.9 per hour. A counter reset looks like a huge rollover, so skip the first hour after the shift-change reset.",
+system.tag.writeBlocking(["[default]Conveyor3/Made_Last_Hour", LAST], [made, total])
+system.util.getLogger("Conveyor3").info("%d barrels last hour" % made)`,
+      about: "The shift counter resets every shift and never gets near 65,535, so a rollover comes from a lifetime counter, one that only ever counts up and wraps every 65,536 barrels, a few weeks of running. The difference is taken modulo 65536, so it stays right across the wrap. The screen shows it in a memory tag; count_log keeps the raw shift counter for the database's reset-safe view. The lifetime readings are illustrative, 47 an hour as in shift A's first hours.",
       terms: [
         ["% 65536", "Rollover", "Wraps the difference into the counter's range."],
-        ["Count_Last_Hour", "Memory tag", "The reading from an hour ago."],
+        ["Barrel_Total", "Lifetime counter", "Never reset; wraps after 65,535."],
+        ["Made_Last_Hour", "Memory tag", "Barrels made in the last hour, for the screen."],
       ],
-      out: `machine     barrels  ts
-Conveyor 3  47       2026-11-07 07:00:00
-Conveyor 3  47       2026-11-07 08:00:00
-Conveyor 3  47       2026-11-07 09:00:00`,
+      out: `INFO  [Conveyor3] 47 barrels last hour
+INFO  [Conveyor3] 47 barrels last hour
+INFO  [Conveyor3] 47 barrels last hour`,
     },
     {
       lang: "ignition",
