@@ -17,7 +17,7 @@ Deployed from `site/` as plain static files: GitLab Pages via `.gitlab-ci.yml`, 
 - Check every lesson: `node tools/verify.mjs` (must pass before any commit; CI runs it before deploy)
 - Run locally: `python3 -m http.server 8000 -d site`, or open `site/index.html` directly
 - Regenerate track outputs: see `tools/output-checks/` (needs pandas and openpyxl; track 6 needs the .NET 8 SDK)
-- Ladder outputs: `node tools/output-checks/plc/run.mjs` runs every ladder lesson's `sim` scenario through the PLC interpreter and writes its `out`; `--check` reports stale ones. The verifier also runs them, plus `tools/plc-tests.mjs`.
+- PLC outputs: `node tools/output-checks/plc/run.mjs` runs every ladder and Structured Text lesson's `sim` scenario through the PLC interpreter and writes its `out`; `--check` reports stale ones. The verifier also runs them, plus `tools/plc-tests.mjs`.
 - Foundations outputs: `node tools/output-checks/foundations/run.mjs` runs every Python, JavaScript, C#, C++, Java and SQL Foundations lesson and writes its `out`; `--check` reports stale ones. Run it after editing any of those lessons. SQL runs on a real SQL Server 2022 (Docker container; set `BC_SQL_PASSWORD`, needs `pip install pymssql`) against a fresh copy of the canonical sample database each time; see `sql_exec.py`.
 - MES Helper track: edit `tools/output-checks/track6-mes/lessons6.py`, then `python3 build6.py` there. It compiles and runs the C# and writes `site/data/tracks/06-mes.js`. Do not edit the JS file by hand.
 
@@ -27,7 +27,7 @@ Scripts load in the order listed in `site/index.html`:
 
 1. `js/registry.js` creates `globalThis.BC` with `addLanguage`, `addLane`, `addTrack`.
 2. `js/core.js` exposes `BCcore`: tokenizer, seeded RNG for blackout masks, and `analyzeText(text, targetLines, py)`, which grades typed text line by line. The verifier uses the same file, so grading in CI matches grading in the browser.
-   `js/plc.js` exposes `BCplc`: the ladder parser and a Logix-style scan interpreter (no DOM). The diagram, the verifier and the ladder output tool all use it. Semantics and limits: `docs/PLC_INTERPRETER.md`.
+   `js/plc.js` exposes `BCplc`: ladder and Structured Text parsers and a Logix-style scan interpreter (no DOM). The diagram, the verifier and the ladder output tool all use it. Semantics and limits: `docs/PLC_INTERPRETER.md`.
 3. `data/languages.js`, then every file in `data/foundations/` and `data/tracks/`. A new data file must be added to `index.html`; the verifier fails if it is not.
 4. `js/app.js`: the engine. One IIFE, plain DOM code, sectioned by `/* ---------- name ---------- */` comments.
 

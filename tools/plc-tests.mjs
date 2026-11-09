@@ -150,8 +150,65 @@ export function runPlcTests(P) {
     });
     return out === "3 barrels  →  C.ACC=3  →  Full=1" ? "" : `got "${out}"`;
   });
+  // ---------- Structured Text ----------
+  const st = (code, opts) => { const p = P.createPLC(opts); p.load(code, "st"); return p; };
+  t("ST parses comments of all three kinds", () => P.parseST("(* a *) A := B; /* b */ // c\nC := A;").errors.map((e) => e.msg).join() || "");
+  t("ST flags a missing END_IF", () => P.parseST("IF A THEN B := 1;").errors.some((e) => e.msg.includes("END_IF")) ? "" : "no error");
+  t("ST flags a missing semicolon", () => P.parseST("A := B").errors.length ? "" : "no error");
+  t("ST refuses an unknown function block", () => P.parseST("CTUD(C);").errors.length ? "" : "no error");
+  t("ST AND / OR / NOT and parentheses", () => {
+    const p = st("Y := (A OR B) AND NOT C;"); p.write("B", 1); p.scan(); const m1 = eq(p, "Y", 1);
+    p.write("C", 1); p.scan(); return all(m1, eq(p, "Y", 0));
+  });
+  t("ST & is AND; keywords are case-insensitive", () => { const p = st("y := a & b;\nif y then z := 1; end_if;"); p.write("a", 1); p.write("b", 1); p.scan(); return eq(p, "z", 1); });
+  t("ST seal-in matches the ladder seal-in, scan for scan", () => {
+    const lad = P.runScenario("BST XIC(Start) NXB XIC(Run) BND XIC(Stop) OTE(Run);", seal);
+    const stt = P.runScenario("Run := (Start OR Run) AND Stop;", seal, "st");
+    return lad === stt ? "" : `ladder:\n${lad}\nST:\n${stt}`;
+  });
+  t("ST IF / ELSIF / ELSE: the first true arm wins", () => {
+    const p = st("IF Jam THEN S := 2;\nELSIF Run THEN S := 1;\nELSE S := 3;\nEND_IF;");
+    p.scan(); const m1 = eq(p, "S", 3); p.write("Run", 1); p.scan(); const m2 = eq(p, "S", 1);
+    p.write("Jam", 1); p.scan(); return all(m1, m2, eq(p, "S", 2));
+  });
+  t("ST CASE with a list, a range and ELSE", () => {
+    const p = st("CASE S OF\n1: L := 10;\n2, 3: L := 20;\n4..6: L := 30;\nELSE L := 0;\nEND_CASE;");
+    const at = (v) => { p.write("S", v); p.scan(); return p.read("L"); };
+    const got = [at(1), at(3), at(5), at(9)].join(",");
+    return got === "10,20,30,0" ? "" : `got ${got}`;
+  });
+  t("ST TONR: DN exactly 4.00 s after TimerEnable, reset when disabled", () => {
+    const p = st("T.PRE := 4000;\nT.TimerEnable := A;\nTONR(T);");
+    p.write("A", 1); p.run(4000); const m1 = eq(p, "T.DN", 0); p.scan(); const m2 = eq(p, "T.DN", 1);
+    p.write("A", 0); p.scan(); return all(m1, m2, eq(p, "T.DN", 0), eq(p, "T.ACC", 0));
+  });
+  t("ST TOFR: DN off 30.00 s after TimerEnable drops", () => {
+    const p = st("T.PRE := 30000;\nT.TimerEnable := A;\nTOFR(T);");
+    p.write("A", 1); p.scan(); p.write("A", 0); p.run(30000); const m1 = eq(p, "T.DN", 1); p.scan(); return all(m1, eq(p, "T.DN", 0));
+  });
+  t("ST RTOR keeps ACC; Reset clears it", () => {
+    const p = st("T.PRE := 10000;\nT.TimerEnable := A;\nT.Reset := R;\nRTOR(T);");
+    p.write("A", 1); p.run(3000); p.write("A", 0); p.run(1000); const m1 = eq(p, "T.ACC", 2990);
+    p.write("R", 1); p.scan(); return all(m1, eq(p, "T.ACC", 0));
+  });
+  t("ST REAL math and comparison", () => {
+    const p = st("Rate := Count * 60.0 / Minutes;\nBehind := Rate < 50.0;"); p.write("Count", 352); p.write("Minutes", 450); p.scan();
+    return all(Math.abs(p.read("Rate") - 46.9333) < 0.001 ? "" : `Rate is ${p.read("Rate")}`, eq(p, "Behind", 1));
+  });
+  t("ST refuses AND on numbers (bitwise in Logix)", () => {
+    const p = st("X := A + 1;\nY := X AND 3;");
+    try { p.scan(); return "no error"; } catch (e) { return e instanceof P.NotModeled ? "" : `wrong error: ${e.message}`; }
+  });
+  t("ST refuses integer division with a remainder", () => {
+    const p = st("X := 7;\nY := X / 2;");
+    try { p.scan(); return "no error"; } catch (e) { return e instanceof P.NotModeled ? "" : `wrong error: ${e.message}`; }
+  });
   return fails;
 }
+const seal = {
+  start: { Stop: 1 }, watch: ["Run"],
+  steps: [{ label: "Press Start", set: { Start: 1 } }, { label: "Release Start", set: { Start: 0 } }, { label: "Press Stop", pulse: { Stop: 0 } }],
+};
 
 // Standalone: node tools/plc-tests.mjs
 if (import.meta.url === `file://${process.argv[1]}`) {

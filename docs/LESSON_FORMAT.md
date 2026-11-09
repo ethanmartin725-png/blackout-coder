@@ -39,11 +39,11 @@ Add `soon: true` with no lessons to show a greyed-out placeholder tab.
 | `file` | tracks | The file this step belongs to. Consecutive steps with the same `file` build on each other: earlier code shows as locked context. |
 | `out` | no | Plain-text result, shown under "What it produces". Must come from running the code. |
 | `outHtml` | no | A generated HTML page, rendered as a preview. |
-| `sim` | no | Ladder only: a scenario the PLC interpreter runs to generate `out`. See below. |
+| `sim` | no | Ladder and Structured Text: a scenario the PLC interpreter runs to generate `out`. See below. |
 
-### Ladder scenarios (`sim`)
+### PLC scenarios (`sim`)
 
-A ladder lesson's output comes from running it in the interpreter (`site/js/plc.js`). The `sim` field says what happens over time and what to report:
+A ladder or Structured Text lesson's output comes from running it in the interpreter (`site/js/plc.js`). The `sim` field says what happens over time and what to report:
 
 ```js
 sim: {
@@ -59,7 +59,8 @@ sim: {
 - `set` holds its values from the start of the step; `pulse` holds them for `pulseMs` (default 300) and then restores the old values, like a pushbutton.
 - `runMs` is how long the step runs (default 1000); `repeat` runs it several times, for example once per barrel.
 - `types` declares tags the code alone cannot type, such as a REAL analog input (`{ Hoop1_Air_PSI: "REAL" }`) or a counter that is only read. `scanMs` sets the simulated scan time (default 10).
-- A track step runs together with the earlier ladder steps in the same routine.
+- A track step runs together with the earlier steps in the same routine (same `file` and language).
+- `sameAs: "<step title>"` marks a step that rewrites another one, such as ladder rewritten as Structured Text. The verifier fails if their traces ever differ.
 
 Each step prints `label  →  tag=value  →  …` in the order things changed. Then run `node tools/output-checks/plc/run.mjs` to write the outputs; the verifier fails if a stored output no longer matches its scenario.
 

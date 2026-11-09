@@ -106,14 +106,19 @@ Eye cleared, then Reset_PB  →  Jam_Fault=0  →  Conv_State=3`,
       goal: "Rewrite the permissive and the start/stop seal-in as two Structured Text statements.",
       code: `Run_Permissive := Auto_Mode AND Estop_OK AND NOT Jam_Fault;
 Conv_Run := (Start_PB OR Conv_Run) AND Stop_PB AND Run_Permissive;`,
-      about: "The same logic as ladder rungs 0 and 1, written as Boolean math. Series contacts become AND, a parallel branch becomes OR inside parentheses, and XIO becomes NOT. Many sites keep ladder for anything maintenance troubleshoots and use Structured Text for math and long logic.",
+      about: "The same logic as ladder rungs 0 and 1, written as Boolean math. Series contacts become AND, a parallel branch becomes OR inside parentheses, and XIO becomes NOT. Many sites keep ladder for anything maintenance troubleshoots and use Structured Text for math and long logic. The output comes from running this code with the same inputs as the ladder seal-in step, and the two traces are identical.",
       terms: [
         [":", ":=", "Assignment in Structured Text. A plain = is a comparison."],
         ["AND", "AND", "Series contacts. Both sides must be true."],
         ["OR", "OR", "A parallel branch. Either side may be true."],
         ["NOT", "NOT", "Inverts a bit. NOT Jam_Fault works like XIO(Jam_Fault)."],
       ],
-      out: `Same behavior as ladder rungs 0 and 1.`,
+      sim: {"sameAs":"Start/stop seal-in","start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Run_Permissive","Conv_Run"],"steps":[{"label":"Press Start_PB","set":{"Start_PB":1}},{"label":"Release Start_PB","set":{"Start_PB":0}},{"label":"Press and release Stop_PB","pulse":{"Stop_PB":0}},{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"E-stop pressed","set":{"Estop_OK":0}}]},
+      out: `Press Start_PB              →  Conv_Run=1
+Release Start_PB            →  no change
+Press and release Stop_PB   →  Conv_Run=0
+Press and release Start_PB  →  Conv_Run=1
+E-stop pressed              →  Run_Permissive=0  →  Conv_Run=0`,
     },
     {
       lang: "st",
@@ -131,14 +136,18 @@ END_IF;
 IF Reset_PB AND NOT Eye_Blocked THEN
     Jam_Fault := 0;
 END_IF;`,
-      about: "In Studio 5000 Structured Text the on-delay timer is TONR, using an FBD_TIMER tag: set .PRE and .TimerEnable, then call it every scan. An IF that only ever sets a bit to 1 behaves like a latch. Generic IEC controllers write the same timer as Jam_Timer(IN := ..., PT := T#4S).",
+      about: "In Studio 5000 Structured Text the on-delay timer is TONR, using an FBD_TIMER tag: set .PRE and .TimerEnable, then call it every scan. An IF that only ever sets a bit to 1 behaves like a latch. Generic IEC controllers write the same timer as Jam_Timer(IN := ..., PT := T#4S). Run with the same inputs as the ladder Jam detection step, it produces the identical trace, including the timer dropping when the conveyor stops.",
       terms: [
         ["TONR", "TONR(timer)", "Rockwell's Structured Text on-delay timer. Call it every scan."],
         ["TimerEnable", ".TimerEnable", "The timer's input. True means time; false resets."],
         ["IF", "IF … THEN … END_IF;", "Runs the statements inside only when the condition is true."],
         ["Jam_Fault", "Latch by IF", "Setting a bit inside an IF, and clearing it only in another IF, holds it like OTL/OTU."],
       ],
-      out: `Same behavior as ladder rungs 2, 3 and 4.`,
+      sim: {"sameAs":"Jam detection","start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Jam_Timer.DN","Jam_Fault","Run_Permissive","Conv_Run"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Eye blocked 4 s while running","set":{"Eye_Blocked":1},"runMs":4100},{"label":"Reset_PB while eye still blocked","pulse":{"Reset_PB":1}},{"label":"Eye cleared, then Reset_PB","set":{"Eye_Blocked":0},"pulse":{"Reset_PB":1}}]},
+      out: `Press and release Start_PB        →  Conv_Run=1
+Eye blocked 4 s while running     →  Jam_Timer.DN=1  →  Jam_Fault=1  →  Run_Permissive=0  →  Conv_Run=0  →  Jam_Timer.DN=0
+Reset_PB while eye still blocked  →  no change
+Eye cleared, then Reset_PB        →  Jam_Fault=0  →  Run_Permissive=1`,
     },
     {
       lang: "st",
@@ -152,15 +161,16 @@ ELSIF Conv_Run THEN
 ELSE
     Conv_State := 3;
 END_IF;`,
-      about: "The ladder version relied on rung order to let the jam win. Here priority is explicit: the first true branch wins, so the most important condition goes first.",
+      about: "The ladder version relied on rung order to let the jam win. Here priority is explicit: the first true branch wins, so the most important condition goes first. With the same inputs as the ladder state-code step, the trace is identical.",
       terms: [
         ["ELSIF", "ELSIF", "Checked only if every condition above it was false."],
         ["ELSE", "ELSE", "Runs when nothing above matched."],
         ["END_IF", "END_IF;", "Closes the IF block. Note the semicolon."],
       ],
-      out: `Jammed   →  Conv_State = 2
-Running  →  Conv_State = 1
-Otherwise → Conv_State = 3`,
+      sim: {"sameAs":"Machine state codes","start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Conv_Run","Jam_Fault","Conv_State"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Eye blocked 4 s","set":{"Eye_Blocked":1},"runMs":4100},{"label":"Eye cleared, then Reset_PB","set":{"Eye_Blocked":0},"pulse":{"Reset_PB":1}}]},
+      out: `Press and release Start_PB  →  Conv_Run=1  →  Conv_State=1
+Eye blocked 4 s             →  Jam_Fault=1  →  Conv_State=2  →  Conv_Run=0
+Eye cleared, then Reset_PB  →  Jam_Fault=0  →  Conv_State=3`,
     },
     {
       lang: "ignition",

@@ -1,6 +1,6 @@
 # PLC interpreter: design
 
-Status: phase 1 (ladder) built: `site/js/plc.js`, `tools/plc-tests.mjs` (35 instruction tests), `tools/output-checks/plc/`. All 19 ladder lessons have scenarios and generated outputs. Phases 2 to 4 are not built yet.
+Status: phases 1 (ladder) and 2 (Structured Text) built: `site/js/plc.js`, `tools/plc-tests.mjs` (50 tests), `tools/output-checks/plc/`. All 19 ladder lessons and all 3 Structured Text steps have scenarios and generated outputs; each ST step's trace is identical to the ladder step it rewrites, and the verifier holds them to that. Not built yet: `CTUD` (see open questions), phases 3 and 4.
 
 ## Why
 
@@ -128,6 +128,7 @@ Each phase ends with the verifier passing, the browser test from CLAUDE.md, and 
 
 ## Open questions for review
 
+0. **CTUD on FBD_COUNTER.** Deferred: the meaning of its `.CU`/`.CD` outputs versus its stored edge state needs confirming in 1756-RM003 before it is modeled. No lesson uses it yet.
 0. **RES on a counter.** The model clears `.ACC`, `.DN`, `.OV` and `.UN` and keeps `.CU`/`.CD`. Whether Logix also clears `.CU`/`.CD` decides whether a counter whose input is still on counts again right after a reset. Confirm in 1756-RM003; no scenario depends on it yet.
 1. **Integer rules.** How does Logix round a REAL into a DINT destination, and what do `DIV` and `CPT` give for integer division? These must come from 1756-RM003, not memory. Do you have the manual or a controller to confirm against? Until then the interpreter refuses these cases with a `NotModeled` error instead of guessing.
 2. **Output format.** Keep the "label → changed tags" lines the current outputs use, or switch to a time-stamped table (time, input change, tag values)? The lines read better; the table is more precise.

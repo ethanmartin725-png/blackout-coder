@@ -7,7 +7,7 @@ import os from "node:os";
 import { spawnSync, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { runPlcTests } from "./plc-tests.mjs";
-import { ladderCode } from "./output-checks/plc/lessons.mjs";
+import { routineCode, PLC_LANGS } from "./output-checks/plc/lessons.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SITE = path.join(ROOT, "site");
@@ -187,9 +187,9 @@ for (const lang of ["cpp", "java"]) {
   }
 }
 
-// 8. PLC ladder: every rung parses, the interpreter passes its instruction tests, and every
-// lesson with a scenario (sim) still produces its stored output. See docs/PLC_INTERPRETER.md.
-let ladderParsed = 0, plcSims = 0;
+// 8. PLC ladder and Structured Text: every lesson parses, the interpreter passes its tests, and
+// every lesson with a scenario (sim) still produces its stored output. See docs/PLC_INTERPRETER.md.
+let ladderParsed = 0, stParsed = 0, plcSims = 0;
 if (!BCplc) fail("js/plc.js did not load; is it listed in index.html?");
 else {
   for (const f of runPlcTests(BCplc)) fail(`PLC interpreter test: ${f}`);
@@ -197,16 +197,22 @@ else {
     if (g.soon) continue;
     g.lessons.forEach((l, i) => {
       const lang = kind === "lane" ? g.lang : l.lang;
-      if (lang !== "ladder") return;
+      if (!PLC_LANGS.includes(lang)) return;
       const where = `${g.id} #${i + 1} "${l.t}"`;
-      const parsed = BCplc.parseRoutine(l.code);
-      for (const e of parsed.errors) fail(`${where}: ladder line ${e.line}: ${e.msg}`);
-      ladderParsed++;
+      const parsed = lang === "st" ? BCplc.parseST(l.code) : BCplc.parseRoutine(l.code);
+      for (const e of parsed.errors) fail(`${where}: ${lang === "st" ? "Structured Text" : "ladder"} line ${e.line}: ${e.msg}`);
+      if (lang === "st") stParsed++; else ladderParsed++;
       if (!l.sim) return;
       try {
-        const out = BCplc.runScenario(ladderCode(g, i, kind === "track"), l.sim);
+        const out = BCplc.runScenario(routineCode(g, i, kind === "track"), l.sim, lang);
         plcSims++;
         if (out !== (l.out || "")) fail(`${where}: stored output does not match the scenario. Run node tools/output-checks/plc/run.mjs`);
+        // sameAs: this step rewrites another step (e.g. ladder as Structured Text); their traces must match
+        if (l.sim.sameAs) {
+          const twin = g.lessons.find((x) => x.t === l.sim.sameAs);
+          if (!twin) fail(`${where}: sameAs names "${l.sim.sameAs}", which is not a step here`);
+          else if (twin.out !== out) fail(`${where}: its trace no longer matches "${l.sim.sameAs}"`);
+        }
       } catch (e) {
         fail(`${where}: scenario failed: ${e.message}`);
       }
@@ -214,7 +220,7 @@ else {
   }
 }
 
-const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds, ${nativeCount.cpp} C++ and ${nativeCount.java} Java compiles, ${ladderParsed} ladder parses, ${plcSims} PLC scenarios`;
+const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds, ${nativeCount.cpp} C++ and ${nativeCount.java} Java compiles, ${ladderParsed} ladder and ${stParsed} Structured Text parses, ${plcSims} PLC scenarios`;
 for (const w of warns) console.warn("warn  " + w);
 if (errors.length) { for (const e of errors) console.error("FAIL  " + e); console.error(`\n${errors.length} problem(s). ${summary}`); process.exit(1); }
 console.log(`All lessons pass. ${summary}`);
