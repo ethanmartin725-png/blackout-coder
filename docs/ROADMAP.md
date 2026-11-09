@@ -18,10 +18,11 @@
 - [x] Ladder Foundations gap: 8 lessons added (TOF, RTO hour meter, LES with debounce, LIM, MOV/EQU, ONS with ADD, CPT rate, CTU/CTD WIP with an output branch). The diagram draws RTO, LIM, CPT, GEQ/LEQ and SUB/MUL/DIV.
 - [x] Python Foundations gap: 6 lessons added (f-strings, list comprehensions, try/except, datetime, default arguments, a first pandas DataFrame), all on shift A sample data.
 - [x] JavaScript Foundations lane: 11 console lessons (`jscon` mode, run in Node) covering what the Plant Board track assumes: arrays of objects, map/filter/reduce, dates, JSON and try/catch.
-- [ ] Structured Text Foundations lane. The interpreter now runs ST, so its lessons can have generated outputs.
+- [x] Structured Text Foundations lane, stage 1: 36 lessons (basics, decisions, timers, math, state machines), all with generated outputs and the simulator; 11 are proven identical to their ladder twins with `sameAs`.
+- [ ] Structured Text stage 2: arrays, FOR/WHILE/REPEAT and ABS in the interpreter (with tests), then lessons 37 to 44 and the Conveyor 3 capstone. Stage 3: CTUD and REAL-to-DINT rounding once confirmed in 1756-RM003.
 - [ ] 50 lessons per language, counting Foundations and track steps together (agreed 2026-11-09). Process: an outline of titles for review, then one language per commit with generated outputs. Ignition script and expression count as one language. Ladder and Structured Text wait for the PLC interpreter so their outputs can be generated.
   - [x] SQL: 50 (28 Foundations + 22 track steps)
-  - [ ] Python 42, C# 22, PLC Ladder 21, JavaScript 20 (console 11 + page 9), HTML 9, CSS 6, C++ 6, Java 6, Structured Text 3, Ignition 5
+  - [ ] Python 42, C# 22, PLC Ladder 21, JavaScript 20 (console 11 + page 9), HTML 9, CSS 6, C++ 6, Java 6, Structured Text 39, Ignition 5
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
 - [ ] HMI design principles as their own steps: ISA-101 alarm colors, layout hierarchy, operator-first faceplates.
 - [ ] More Structured Text: CASE state machines, arrays, user-defined types.

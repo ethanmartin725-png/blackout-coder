@@ -66,7 +66,7 @@ sim: {
   - `"char2"`: Char Station 2 burner and fan. Reads `Char2_Burner_On`, `Char2_Exhaust_Fan` and the timers `Purge_Timer`, `Post_Purge`, `Exhaust_Timer`; shows smoke building without the fan.
 - The simulator's "Compare with the reference" button runs the scenario on the learner's code and on the lesson's code and shows the first step where they differ, so logic written differently still passes if it behaves the same.
 - The simulator panel takes its inputs from the scenario: tags in `start`, `set` and `pulse`. Pulsed tags and tags named `*_PB` become hold-to-press buttons; other bits become switches; numbers become number boxes.
-- `sameAs: "<step title>"` marks a step that rewrites another one, such as ladder rewritten as Structured Text. The verifier fails if their traces ever differ.
+- `sameAs: "<step title>"` marks a step that rewrites another one, such as ladder rewritten as Structured Text. The verifier fails if their traces ever differ. To point at a lesson in another lane or track, prefix its id: `"ladder/Seal-in circuit"`. A scenario only proves what it exercises, so give the original scenario a step that would expose the mistakes the lesson warns about.
 
 Each step prints `label  →  tag=value  →  …` in the order things changed. Then run `node tools/output-checks/plc/run.mjs` to write the outputs; the verifier fails if a stored output no longer matches its scenario.
 

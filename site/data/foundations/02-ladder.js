@@ -46,10 +46,12 @@ Auto_Mode off  →  Feeder_Run=0`,
         ["BND", "BND", "Branch End. Closes the branch and rejoins the rung."],
         ["Motor_Run", "Seal-in", "The output's own bit in the branch holds the rung true after Start is released."],
       ],
-      sim: {"start":{"Stop_PB":1},"watch":["Motor_Run"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Wait 5 s","runMs":5000},{"label":"Press and release Stop_PB","pulse":{"Stop_PB":0}}]},
-      out: `Press and release Start_PB  →  Motor_Run=1
-Wait 5 s                    →  no change
-Press and release Stop_PB   →  Motor_Run=0`,
+      sim: {"start":{"Stop_PB":1},"watch":["Motor_Run"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Wait 5 s","runMs":5000},{"label":"Press and release Stop_PB","pulse":{"Stop_PB":0}},{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Hold Start_PB and Stop_PB together","set":{"Start_PB":1,"Stop_PB":0}}]},
+      out: `Press and release Start_PB          →  Motor_Run=1
+Wait 5 s                            →  no change
+Press and release Stop_PB           →  Motor_Run=0
+Press and release Start_PB          →  Motor_Run=1
+Hold Start_PB and Stop_PB together  →  Motor_Run=0`,
     },
     {
       t: "Latch and unlatch",

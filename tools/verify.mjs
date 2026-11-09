@@ -208,9 +208,15 @@ else {
         plcSims++;
         if (out !== (l.out || "")) fail(`${where}: stored output does not match the scenario. Run node tools/output-checks/plc/run.mjs`);
         // sameAs: this step rewrites another step (e.g. ladder as Structured Text); their traces must match
+        // "Title" names a lesson in the same lane or track; "lane-or-track-id/Title" one elsewhere.
         if (l.sim.sameAs) {
-          const twin = g.lessons.find((x) => x.t === l.sim.sameAs);
-          if (!twin) fail(`${where}: sameAs names "${l.sim.sameAs}", which is not a step here`);
+          // A prefix only counts as a lane or track if one has that id: titles can contain "/" too.
+          const k = l.sim.sameAs.indexOf("/");
+          const other = k < 0 ? null : groups.map((x) => x.g).find((x) => x.id === l.sim.sameAs.slice(0, k));
+          const home = other || g;
+          const title = other ? l.sim.sameAs.slice(k + 1) : l.sim.sameAs;
+          const twin = home && home.lessons.find((x) => x.t === title);
+          if (!twin) fail(`${where}: sameAs names "${l.sim.sameAs}", which does not exist`);
           else if (twin.out !== out) fail(`${where}: its trace no longer matches "${l.sim.sameAs}"`);
         }
       } catch (e) {

@@ -81,7 +81,7 @@ BC.addLanguage("st", {
   "name": "Structured Text",
   "short": "ST",
   "tab": 4,
-  "kw": "IF THEN ELSIF ELSE END_IF AND OR NOT XOR TONR CASE OF END_CASE",
+  "kw": "IF THEN ELSIF ELSE END_IF AND OR NOT XOR MOD TONR TOFR RTOR CASE OF END_CASE",
   "note": "Structured Text: the text-based PLC language from IEC 61131-3, written here in Rockwell Studio 5000 style. := assigns a value and every statement ends with a semicolon."
 });
 BC.addLanguage("ignition", {
