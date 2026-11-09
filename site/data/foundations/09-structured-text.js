@@ -350,20 +350,20 @@ END_IF;`,
     },
     {
       t: "No part for 5 seconds",
-      goal: "Latch Jam_Fault when Conveyor_Run is on and Part_Seen stays off for 5 s (Jam_Timer).",
-      code: `Jam_Timer.PRE := 5000;
-Jam_Timer.TimerEnable := Conveyor_Run AND NOT Part_Seen;
-TONR(Jam_Timer);
-IF Jam_Timer.DN THEN
-    Jam_Fault := 1;
+      goal: "Latch No_Feed_Fault when Conveyor_Run is on and Part_Seen stays off for 5 s (No_Feed_Timer).",
+      code: `No_Feed_Timer.PRE := 5000;
+No_Feed_Timer.TimerEnable := Conveyor_Run AND NOT Part_Seen;
+TONR(No_Feed_Timer);
+IF No_Feed_Timer.DN THEN
+    No_Feed_Fault := 1;
 END_IF;`,
       about: "Every part that passes resets the timer, because the enable goes false for a moment. Only a 5-second gap with the conveyor running lets the timer finish. This is the ladder lane's on-delay lesson, and the output matches it exactly.",
       terms: [
         ["NOT Part_Seen", "Reset by each part", "Any part makes the enable false, which restarts the timer."],
       ],
-      sim: {"start":{"Conveyor_Run":1},"watch":["Jam_Timer.DN","Jam_Fault"],"steps":[{"label":"A part every 3 s","pulse":{"Part_Seen":1},"runMs":3000,"repeat":3},{"label":"Last part, then none for 5 s","pulse":{"Part_Seen":1},"runMs":5400}],"types":{"Jam_Fault":"BOOL"},"sameAs":"ladder/On-delay timer"},
+      sim: {"start":{"Conveyor_Run":1},"watch":["No_Feed_Timer.DN","No_Feed_Fault"],"steps":[{"label":"A part every 3 s","pulse":{"Part_Seen":1},"runMs":3000,"repeat":3},{"label":"Last part, then none for 5 s","pulse":{"Part_Seen":1},"runMs":5400}],"types":{"No_Feed_Fault":"BOOL"},"sameAs":"ladder/On-delay timer"},
       out: `A part every 3 s              →  no change
-Last part, then none for 5 s  →  Jam_Timer.DN=1  →  Jam_Fault=1`,
+Last part, then none for 5 s  →  No_Feed_Timer.DN=1  →  No_Feed_Fault=1`,
     },
     {
       t: "Purge in Structured Text",

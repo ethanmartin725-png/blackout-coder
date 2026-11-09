@@ -25,7 +25,8 @@
 - [ ] 50 lessons per language, counting Foundations and track steps together (agreed 2026-11-09). Process: an outline of titles for review, then one language per commit with generated outputs. Ignition script and expression count as one language. Ladder and Structured Text wait for the PLC interpreter so their outputs can be generated.
   - [x] SQL: 50 (28 Foundations + 22 track steps)
   - [x] Python 50
-  - [ ] C# 22, PLC Ladder 21, JavaScript 20 (console 11 + page 9), HTML 9, CSS 6, C++ 6, Java 6, Structured Text 48, Ignition 5
+  - [x] PLC Ladder 50
+  - [ ] C# 22, JavaScript 20 (console 11 + page 9), HTML 9, CSS 6, C++ 6, Java 6, Structured Text 48, Ignition 5
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
 - [ ] HMI design principles as their own steps: ISA-101 alarm colors, layout hierarchy, operator-first faceplates.
 - [ ] More Structured Text: user-defined types.
@@ -40,6 +41,7 @@
 - [x] PLC interpreter phase 2: Structured Text (assignments, IF/ELSIF, CASE, logic and math, TONR/TOFR/RTOR). The 3 ST track steps have generated outputs identical to their ladder twins.
 - [x] PLC interpreter phase 3: browser simulator. The learner's own ladder or Structured Text runs after the step is finished or checked; Conveyor 3 jam-cell scene on the track's jam-cell steps.
 - [x] PLC interpreter phase 4: air header and burner/fan scenes, "Compare with the reference", two challenge lessons (Ladder now 21).
+- [x] Ladder to 50: 29 Foundations lessons (bit patterns, timers, counters and math, compare and select, ladder state machines, two scene challenges). 9 are held identical to their Structured Text twins with `sameAs`. The on-delay lesson's tags became `No_Feed_Timer`/`No_Feed_Fault`: a starved belt is not a jam.
 - [ ] More challenge lessons per scene, and scenes for new machines as lessons need them. CTUD once its Logix semantics are confirmed. On a phone the conveyor scene scrolls sideways inside its box; a narrower layout would keep the eye and stack light in view.
 - [ ] Ladder simulation: animate a small piece of equipment (e.g. the conveyor jam cell) driven by the learner's own typed ladder logic, so a rung change makes a visible difference. Needs a scan-cycle interpreter for the ladder subset the lessons use (XIC, XIO, OTE, OTL/OTU, TON, CTU, branches), simulated inputs the learner can toggle, and an equipment view bound to the tags.
 

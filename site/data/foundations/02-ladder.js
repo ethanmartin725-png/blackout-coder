@@ -70,18 +70,18 @@ Press Reset_PB                 →  Jam_Fault=0`,
     },
     {
       t: "On-delay timer",
-      goal: "If Conveyor_Run is on and Part_Seen stays off for 5 seconds, latch Jam_Fault. Timer tag: Jam_Timer.",
-      code: `XIC(Conveyor_Run) XIO(Part_Seen) TON(Jam_Timer,5000,0);
-XIC(Jam_Timer.DN) OTL(Jam_Fault);`,
-      about: "The timer accumulates while the conveyor runs without seeing a part. Any part resets it. If it reaches 5000 ms, the done bit latches the fault.",
+      goal: "If Conveyor_Run is on and Part_Seen stays off for 5 seconds, latch No_Feed_Fault. Timer tag: No_Feed_Timer.",
+      code: `XIC(Conveyor_Run) XIO(Part_Seen) TON(No_Feed_Timer,5000,0);
+XIC(No_Feed_Timer.DN) OTL(No_Feed_Fault);`,
+      about: "The timer accumulates while the conveyor runs without seeing a part. Any part resets it. If it reaches 5000 ms, the done bit latches the fault. A running belt with no parts means it is starved or blocked upstream, not jammed: the PLC track's jam is the opposite case, a barrel blocking the eye for 4 s, so the two faults get different names.",
       terms: [
         ["TON", "TON(tag,preset,accum)", "Timer On Delay. Times while the rung is true; resets when false."],
         ["5000", "5000", "Preset in milliseconds. 5000 ms is 5 seconds."],
         ["DN", ".DN", "The Done bit. On when the accumulator reaches the preset."],
       ],
-      sim: {"start":{"Conveyor_Run":1},"watch":["Jam_Timer.DN","Jam_Fault"],"steps":[{"label":"A part every 3 s","pulse":{"Part_Seen":1},"runMs":3000,"repeat":3},{"label":"Last part, then none for 5 s","pulse":{"Part_Seen":1},"runMs":5400}]},
+      sim: {"start":{"Conveyor_Run":1},"watch":["No_Feed_Timer.DN","No_Feed_Fault"],"steps":[{"label":"A part every 3 s","pulse":{"Part_Seen":1},"runMs":3000,"repeat":3},{"label":"Last part, then none for 5 s","pulse":{"Part_Seen":1},"runMs":5400}]},
       out: `A part every 3 s              →  no change
-Last part, then none for 5 s  →  Jam_Timer.DN=1  →  Jam_Fault=1`,
+Last part, then none for 5 s  →  No_Feed_Timer.DN=1  →  No_Feed_Fault=1`,
     },
     {
       t: "Count barrels",
@@ -265,6 +265,520 @@ BST XIC(Char2_Start) NXB XIC(Post_Purge.DN) BND OTE(Char2_Exhaust_Fan);`,
 1 s more                     →  Char2_Burner_On=1
 Char2_Start off, first 29 s  →  Char2_Burner_On=0
 1 s more                     →  Char2_Exhaust_Fan=0`,
+    },
+    {
+      t: "Two start stations",
+      goal: "Start Conv_Run from either Local_Start_PB or Remote_Start_PB, hold it on with a seal-in, and stop it with Stop_PB (wired normally closed).",
+      code: `BST XIC(Local_Start_PB) NXB XIC(Remote_Start_PB) NXB XIC(Conv_Run) BND XIC(Stop_PB) OTE(Conv_Run);`,
+      about: "A branch can have more than two legs. Each start button is one leg and the seal-in contact is the third, so any of them powers the coil. Every stop button goes in series instead: one stop anywhere must stop the conveyor. That is the general rule, starts in parallel and stops in series.",
+      terms: [
+        ["NXB", "Third leg", "Each NXB adds another parallel path."],
+        ["Remote_Start_PB", "Second station", "A start button at the far end of the conveyor."],
+        ["Stop_PB", "Stops in series", "One stop anywhere breaks the rung."],
+      ],
+      sim: {"start":{"Stop_PB":1},"scene":"conveyor3","watch":["Conv_Run"],"steps":[{"label":"Press and release Local_Start_PB","pulse":{"Local_Start_PB":1}},{"label":"Press and release Stop_PB","pulse":{"Stop_PB":0}},{"label":"Press and release Remote_Start_PB","pulse":{"Remote_Start_PB":1}}]},
+      out: `Press and release Local_Start_PB   →  Conv_Run=1
+Press and release Stop_PB          →  Conv_Run=0
+Press and release Remote_Start_PB  →  Conv_Run=1`,
+    },
+    {
+      t: "Wired normally closed",
+      goal: "Seal in Hoop1_Run from Start_PB through Stop_PB, which is wired normally closed. Light Stop_Lamp whenever the stop circuit is open.",
+      code: `BST XIC(Start_PB) NXB XIC(Hoop1_Run) BND XIC(Stop_PB) OTE(Hoop1_Run);
+XIO(Stop_PB) OTE(Stop_Lamp);`,
+      about: "A normally closed stop button sends 1 to the input while nobody presses it, so the program uses XIC: true means healthy. The payoff is failure: a cut wire or a loose terminal reads 0, exactly like pressing Stop, so the machine stops. Wire it normally open with an XIO instead and a broken wire leaves a Stop button that does nothing.",
+      terms: [
+        ["XIC(Stop_PB)", "XIC on a closed contact", "True while the button is not pressed and the wire is intact."],
+        ["XIO(Stop_PB)", "Open stop circuit", "True when the button is pressed or the wire is broken."],
+      ],
+      sim: {"start":{"Stop_PB":1},"watch":["Hoop1_Run","Stop_Lamp"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Stop wire breaks","set":{"Stop_PB":0}},{"label":"Wire repaired","set":{"Stop_PB":1}},{"label":"Press and release Start_PB","pulse":{"Start_PB":1}}]},
+      out: `Press and release Start_PB  →  Hoop1_Run=1
+Stop wire breaks            →  Hoop1_Run=0  →  Stop_Lamp=1
+Wire repaired               →  Stop_Lamp=0
+Press and release Start_PB  →  Hoop1_Run=1`,
+    },
+    {
+      t: "Forward and reverse interlock",
+      goal: "Jog Conveyor 3 forward with Fwd_PB and reverse with Rev_PB. Each direction must be off before the other can come on.",
+      code: `XIC(Fwd_PB) XIO(Conv_Rev) OTE(Conv_Fwd);
+XIC(Rev_PB) XIO(Conv_Fwd) OTE(Conv_Rev);`,
+      about: "Reversing a conveyor a few inches is a common way to free a jammed barrel. Both contactors on at once would short two motor phases, so each rung checks that the other direction is off. Real reversing starters also have a mechanical interlock and auxiliary contacts wired in hardware; the PLC interlock is one layer, never the only one.",
+      terms: [
+        ["XIO(Conv_Rev)", "Interlock", "Forward is blocked while reverse is on."],
+        ["XIO(Conv_Fwd)", "Interlock", "Reverse is blocked while forward is on."],
+      ],
+      sim: {"watch":["Conv_Fwd","Conv_Rev"],"steps":[{"label":"Hold Fwd_PB","set":{"Fwd_PB":1}},{"label":"Also press Rev_PB","set":{"Rev_PB":1}},{"label":"Release Fwd_PB, Rev_PB still held","set":{"Fwd_PB":0}},{"label":"Release Rev_PB","set":{"Rev_PB":0}}]},
+      out: `Hold Fwd_PB                        →  Conv_Fwd=1
+Also press Rev_PB                  →  no change
+Release Fwd_PB, Rev_PB still held  →  Conv_Fwd=0  →  Conv_Rev=1
+Release Rev_PB                     →  Conv_Rev=0`,
+    },
+    {
+      t: "Flashing beacon",
+      goal: "Run Flash_Timer as a 1 s timer that restarts itself. While Jam_Fault is on, turn Jam_Beacon on for the first half of each second.",
+      code: `XIO(Flash_Timer.DN) TON(Flash_Timer,1000,0);
+XIC(Jam_Fault) LES(Flash_Timer.ACC,500) OTE(Jam_Beacon);`,
+      about: "The timer's own done bit resets it: when it reaches 1000 ms the rung goes false for one scan, the timer clears, and timing starts again. Comparing the accumulator with 500 splits each second into on and off halves. A flashing light draws the eye more than a steady one, which is why new alarms usually flash.",
+      terms: [
+        ["XIO(Flash_Timer.DN)", "Self-reset", "The done bit drops the rung for one scan, which restarts the timer."],
+        ["LES", "LES(ACC, 500)", "True for the first half of each cycle."],
+      ],
+      sim: {"watch":["Jam_Beacon"],"steps":[{"label":"Jam_Fault on","set":{"Jam_Fault":1},"runMs":250},{"label":"0.5 s later","runMs":500},{"label":"0.5 s later","runMs":500},{"label":"Jam_Fault off","set":{"Jam_Fault":0},"runMs":500}]},
+      out: `Jam_Fault on   →  Jam_Beacon=1
+0.5 s later    →  Jam_Beacon=0
+0.5 s later    →  Jam_Beacon=1
+Jam_Fault off  →  Jam_Beacon=0`,
+    },
+    {
+      t: "Push on, push off",
+      goal: "Each press of Lamp_PB turns Work_Light on if it was off and off if it was on, however long the button is held.",
+      code: `XIC(Lamp_PB) ONS(Lamp_ONS) OTE(Lamp_Edge);
+BST XIC(Lamp_Edge) XIO(Work_Light) NXB XIO(Lamp_Edge) XIC(Work_Light) BND OTE(Work_Light);`,
+      about: "The first rung turns a press into a one-scan pulse. The second keeps the light as it is, except on that pulse, when it flips. The tempting one-rung version, an OTL leg and an OTU leg on the same edge, fails: the first leg turns the light on and the second leg, evaluated next in the same scan, sees it on and turns it straight off.",
+      terms: [
+        ["ONS", "One-shot", "Lamp_Edge is on for one scan per press."],
+        ["XIO(Lamp_Edge)", "Hold", "With no press, the light keeps its state."],
+      ],
+      sim: {"watch":["Work_Light"],"steps":[{"label":"Press and release Lamp_PB","pulse":{"Lamp_PB":1}},{"label":"Press and hold Lamp_PB 1 s","pulse":{"Lamp_PB":1},"pulseMs":1000,"runMs":1500},{"label":"Press and release Lamp_PB","pulse":{"Lamp_PB":1}}]},
+      out: `Press and release Lamp_PB   →  Work_Light=1
+Press and hold Lamp_PB 1 s  →  Work_Light=0
+Press and release Lamp_PB   →  Work_Light=1`,
+    },
+    {
+      t: "Falling edge",
+      goal: "Add 1 to Barrels_Out each time Barrel_Eye goes from blocked to clear, using Eye_Was_Blocked to remember last scan.",
+      code: `XIC(Eye_Was_Blocked) XIO(Barrel_Eye) ADD(Barrels_Out,1,Barrels_Out);
+XIC(Barrel_Eye) OTE(Eye_Was_Blocked);`,
+      about: "Counting when a barrel leaves the eye, not when it arrives, means the count only moves once the barrel is really past. The first rung asks: blocked last scan and clear now? The second rung then remembers this scan for the next one. The order matters: swap the rungs and Eye_Was_Blocked is already updated, so the edge is never seen.",
+      terms: [
+        ["Eye_Was_Blocked", "Last scan", "What the eye was on the previous scan."],
+        ["XIO(Barrel_Eye)", "Clear now", "Blocked before and clear now is a falling edge."],
+        ["ADD", "ADD", "Adds 1 to the count, once per falling edge."],
+      ],
+      sim: {"watch":["Barrels_Out"],"steps":[{"label":"Barrel blocks the eye","set":{"Barrel_Eye":1}},{"label":"Barrel leaves","set":{"Barrel_Eye":0}},{"label":"2 more barrels pass","pulse":{"Barrel_Eye":1},"pulseMs":400,"runMs":1000,"repeat":2}]},
+      out: `Barrel blocks the eye  →  no change
+Barrel leaves          →  Barrels_Out=1
+2 more barrels pass    →  Barrels_Out=3`,
+    },
+    {
+      t: "Lamp test",
+      goal: "Light Run_Lamp from Conv_Run, Jam_Lamp from Jam_Fault and Air_Lamp from Low_Air. Holding Lamp_Test_PB lights all three.",
+      code: `BST XIC(Lamp_Test_PB) NXB XIC(Conv_Run) BND OTE(Run_Lamp);
+BST XIC(Lamp_Test_PB) NXB XIC(Jam_Fault) BND OTE(Jam_Lamp);
+BST XIC(Lamp_Test_PB) NXB XIC(Low_Air) BND OTE(Air_Lamp);`,
+      about: "A burned-out fault lamp looks exactly like no fault. A lamp test button, pressed at the start of a shift, proves every bulb works. Each lamp gets the test button as a parallel leg, so the test cannot hide a real condition: when it is released, each lamp goes back to its own signal.",
+      terms: [
+        ["Lamp_Test_PB", "Lamp test", "A parallel leg on every lamp rung."],
+        ["BST", "One branch per lamp", "Test OR the lamp's own condition."],
+      ],
+      sim: {"start":{"Conv_Run":1},"watch":["Run_Lamp","Jam_Lamp","Air_Lamp"],"steps":[{"label":"Hold Lamp_Test_PB","set":{"Lamp_Test_PB":1}},{"label":"Release Lamp_Test_PB","set":{"Lamp_Test_PB":0}},{"label":"Jam_Fault on","set":{"Jam_Fault":1}}]},
+      out: `Hold Lamp_Test_PB     →  Jam_Lamp=1  →  Air_Lamp=1
+Release Lamp_Test_PB  →  Jam_Lamp=0  →  Air_Lamp=0
+Jam_Fault on          →  Jam_Lamp=1`,
+    },
+    {
+      t: "Debounce an input",
+      goal: "Set Eye_Blocked only after Eye_Raw has been on for 200 ms, and clear it only after Eye_Raw has been off for 200 ms.",
+      code: `XIC(Eye_Raw) TON(Eye_On_Delay,200,0);
+XIO(Eye_Raw) TON(Eye_Off_Delay,200,0);
+XIC(Eye_On_Delay.DN) OTL(Eye_Blocked);
+XIC(Eye_Off_Delay.DN) OTU(Eye_Blocked);`,
+      about: "A photo-eye can flicker: a gap between barrel staves, a reflection, dust. Each flicker counted as a barrel corrupts the count. Two timers filter both edges: a blip shorter than 200 ms never reaches either done bit, so Eye_Blocked does not change. 200 ms is illustrative; it has to be shorter than the real gap between barrels.",
+      terms: [
+        ["Eye_On_Delay", "On filter", "The raw eye must stay on for 200 ms."],
+        ["Eye_Off_Delay", "Off filter", "The raw eye must stay off for 200 ms."],
+        ["OTL", "Holds between", "Between the two filters the clean bit keeps its state."],
+      ],
+      sim: {"watch":["Eye_Blocked"],"steps":[{"label":"Flicker on for 100 ms","pulse":{"Eye_Raw":1},"pulseMs":100},{"label":"Barrel blocks the eye","set":{"Eye_Raw":1}},{"label":"Dropout for 100 ms","pulse":{"Eye_Raw":0},"pulseMs":100},{"label":"Barrel leaves","set":{"Eye_Raw":0}}]},
+      out: `Flicker on for 100 ms  →  no change
+Barrel blocks the eye  →  Eye_Blocked=1
+Dropout for 100 ms     →  no change
+Barrel leaves          →  Eye_Blocked=0`,
+    },
+    {
+      t: "Minimum off time",
+      goal: "Let Comp_Start_PB start Comp_Run only after the compressor has been off for 10 s (Off_Timer). Comp_Stop_PB is wired normally closed.",
+      code: `XIO(Comp_Run) TON(Off_Timer,10000,0);
+BST XIC(Comp_Start_PB) XIC(Off_Timer.DN) NXB XIC(Comp_Run) BND XIC(Comp_Stop_PB) OTE(Comp_Run);`,
+      about: "Restarting a motor seconds after it stopped stresses the windings, and a compressor restarting against full head pressure can stall. A minimum off time blocks the restart until the timer is done. The start leg needs the done bit; the seal-in leg does not, so a running compressor is not affected. 10 s is illustrative: the compressor maker sets the real value.",
+      terms: [
+        ["XIO(Comp_Run)", "Times while off", "The timer only runs while the compressor is stopped."],
+        ["Off_Timer.DN", "Restart allowed", "Start works only after 10 s off."],
+      ],
+      sim: {"start":{"Comp_Stop_PB":1},"watch":["Off_Timer.DN","Comp_Run"],"steps":[{"label":"Press Start at power-up","pulse":{"Comp_Start_PB":1}},{"label":"Wait 10 s","runMs":10000},{"label":"Press and release Comp_Start_PB","pulse":{"Comp_Start_PB":1}},{"label":"Press and release Comp_Stop_PB","pulse":{"Comp_Stop_PB":0}},{"label":"Press Start 3 s later","pulse":{"Comp_Start_PB":1},"runMs":3000}]},
+      out: `Press Start at power-up          →  no change
+Wait 10 s                        →  Off_Timer.DN=1
+Press and release Comp_Start_PB  →  Comp_Run=1  →  Off_Timer.DN=0
+Press and release Comp_Stop_PB   →  Comp_Run=0
+Press Start 3 s later            →  no change`,
+    },
+    {
+      t: "Measure cycle time",
+      goal: "Time between barrels with Cycle_Timer. On each barrel at Barrel_Eye, copy the elapsed time into Last_Cycle_ms and restart the timer.",
+      code: `TON(Cycle_Timer,600000,0);
+XIC(Barrel_Eye) ONS(Eye_ONS) BST MOV(Cycle_Timer.ACC,Last_Cycle_ms) NXB RES(Cycle_Timer) BND;`,
+      about: "A rung with no conditions is always true, so the timer always runs. On each barrel the branch copies the time first and then resets it: swap the legs and you always save 0. Conveyor 3's ideal is 60 barrels per hour, one every 60,000 ms. Two details show in the output. The first barrel after power-up saves a meaningless time, so ignore the first reading. And each reading is 10 ms short: after the reset, the timer's first scan starts from zero, so one 10 ms scan is lost.",
+      terms: [
+        ["TON(Cycle_Timer,600000,0)", "Free-running timer", "No conditions, so it always times. Preset 10 minutes."],
+        ["MOV", "Save first", "Copies the elapsed time before the reset clears it."],
+        ["RES", "Restart", "Clears the accumulator for the next barrel."],
+      ],
+      sim: {"watch":["Last_Cycle_ms"],"steps":[{"label":"First barrel after power-up","pulse":{"Barrel_Eye":1},"runMs":61200},{"label":"Next barrel, 61.2 s later","pulse":{"Barrel_Eye":1},"runMs":59800},{"label":"Next barrel, 59.8 s later","pulse":{"Barrel_Eye":1}}]},
+      out: `First barrel after power-up  →  Last_Cycle_ms=100
+Next barrel, 61.2 s later    →  Last_Cycle_ms=61190
+Next barrel, 59.8 s later    →  Last_Cycle_ms=59790`,
+    },
+    {
+      t: "Downtime accumulator",
+      goal: "During the shift (In_Shift), add up the time Conveyor 3 is not running with an RTO, show it as Down_Min in minutes, and clear it at Shift_Change.",
+      code: `XIC(In_Shift) XIO(Conv_Run) RTO(Down_Timer,28800000,0);
+CPT(Down_Min,Down_Timer.ACC/60000.0);
+XIC(Shift_Change) RES(Down_Timer);`,
+      about: "An RTO keeps its time when the rung goes false, so every stop adds to the total. Dividing by 60000.0 turns milliseconds into REAL minutes. The preset is the 8-hour shift. The stop here is Conveyor 3's shift A jam, 09:08:52 to 09:13:29: 4 min 37 s, the 4.62 minutes on the Shift Handoff report. The output reads 4.6165 because the timer's first scan adds nothing, losing 10 ms; it still rounds to 4.62.",
+      terms: [
+        ["RTO", "Retentive timer", "Keeps its time between stops."],
+        ["28800000", "8 hours", "28,800,000 ms is one 8-hour shift."],
+        ["60000.0", "To minutes", "The .0 keeps the division in REAL."],
+      ],
+      sim: {"start":{"In_Shift":1,"Conv_Run":1},"watch":["Down_Min"],"steps":[{"label":"Jam: stopped 4 min 37 s","set":{"Conv_Run":0},"runMs":277000},{"label":"Running 10 min","set":{"Conv_Run":1},"runMs":600000},{"label":"Shift_Change pulse","pulse":{"Shift_Change":1}}]},
+      out: `Jam: stopped 4 min 37 s  →  Down_Min=4.6165
+Running 10 min           →  no change
+Shift_Change pulse       →  Down_Min=0`,
+    },
+    {
+      t: "Horn before start",
+      goal: "Conveyor 3 states in ladder: idle (3) goes to warning (4) on Start_PB; warning sounds Start_Horn and goes to running (1) when Horn_Timer (3 s) is done; running goes to idle on Stop_Pressed. Any other value goes to idle.",
+      code: `EQU(Conv_State,1) XIC(Stop_Pressed) MOV(3,Conv_State);
+EQU(Conv_State,4) XIC(Horn_Timer.DN) MOV(1,Conv_State);
+EQU(Conv_State,3) XIC(Start_PB) MOV(4,Conv_State);
+NEQ(Conv_State,1) NEQ(Conv_State,3) NEQ(Conv_State,4) MOV(3,Conv_State);
+EQU(Conv_State,4) TON(Horn_Timer,3000,0);
+EQU(Conv_State,4) OTE(Start_Horn);
+EQU(Conv_State,1) OTE(Conv_Run);`,
+      about: "The Structured Text horn lesson, in ladder. Each transition is one rung: an EQU picks the state, the condition follows, and a MOV writes the next state. The rungs run in reverse order of the sequence, so a state entered on one rung is not acted on by a later rung in the same scan. The output matches the Structured Text version exactly.",
+      terms: [
+        ["EQU", "EQU(state, n)", "True while the machine is in state n."],
+        ["MOV", "MOV(n, state)", "Moves the machine to state n."],
+        ["NEQ", "Safe default", "Any unexpected value goes to idle."],
+      ],
+      sim: {"scene":"conveyor3","watch":["Conv_State","Start_Horn","Conv_Run"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"3 s later","runMs":3100},{"label":"Press and release Stop_Pressed","pulse":{"Stop_Pressed":1}}],"sameAs":"structured-text/Warning horn before start"},
+      out: `Press and release Start_PB      →  Conv_State=4  →  Start_Horn=1
+3 s later                       →  Conv_State=1  →  Start_Horn=0  →  Conv_Run=1
+Press and release Stop_Pressed  →  Conv_State=3  →  Conv_Run=0`,
+    },
+    {
+      t: "Preset from a recipe",
+      goal: "When Recipe_Load is pressed, copy Trailer_Qty into Load_Count.PRE. Count Barrel_Loaded with Load_Count and turn on Trailer_Full when it is done.",
+      code: `XIC(Recipe_Load) MOV(Trailer_Qty,Load_Count.PRE);
+XIC(Barrel_Loaded) CTU(Load_Count,48,0);
+XIC(Load_Count.DN) OTE(Trailer_Full);`,
+      about: "The preset typed into an instruction is only its starting value; .PRE is a tag member the program can change. Writing it from a recipe lets one routine serve a full trailer and a half load. 48 barrels per trailer is illustrative. Change the preset only between loads: lowering it below the count sets the done bit at once.",
+      terms: [
+        ["Load_Count.PRE", ".PRE", "The counter's preset, which the program can write."],
+        ["Trailer_Qty", "Recipe value", "How many barrels this load needs."],
+      ],
+      sim: {"types":{"Trailer_Qty":"DINT"},"start":{"Trailer_Qty":48},"watch":["Load_Count.PRE","Load_Count.ACC","Trailer_Full"],"steps":[{"label":"Half-load recipe: 24","set":{"Trailer_Qty":24},"pulse":{"Recipe_Load":1}},{"label":"24 barrels loaded","pulse":{"Barrel_Loaded":1},"runMs":600,"repeat":24}]},
+      out: `Half-load recipe: 24  →  Load_Count.PRE=24
+24 barrels loaded     →  Load_Count.ACC=24  →  Trailer_Full=1`,
+    },
+    {
+      t: "Save, then clear",
+      goal: "Count barrels at Barrel_Eye in Barrel_Count. On Shift_Change, copy the count into Last_Shift_Barrels and then reset the counter.",
+      code: `XIC(Barrel_Eye) CTU(Barrel_Count,9999,0);
+XIC(Shift_Change) ONS(Shift_ONS) BST MOV(Barrel_Count.ACC,Last_Shift_Barrels) NXB RES(Barrel_Count) BND;`,
+      about: "Clearing a count at shift change loses it unless something saves it first. The legs of an output branch run top to bottom, so MOV copies 352, Conveyor 3's shift A count, before RES clears it. Swap the legs and Last_Shift_Barrels is always 0. The ONS keeps a long Shift_Change signal from saving 0 on the next scan.",
+      terms: [
+        ["MOV", "Save", "Copies the count before it is cleared."],
+        ["RES", "Clear", "Resets the counter for the new shift."],
+        ["ONS", "Once", "Saves only on the first scan of Shift_Change."],
+      ],
+      sim: {"watch":["Barrel_Count.ACC","Last_Shift_Barrels"],"steps":[{"label":"Shift A: 352 barrels","pulse":{"Barrel_Eye":1},"runMs":600,"repeat":352},{"label":"Shift_Change held 2 s","pulse":{"Shift_Change":1},"pulseMs":2000,"runMs":2500}]},
+      out: `Shift A: 352 barrels   →  Barrel_Count.ACC=352
+Shift_Change held 2 s  →  Last_Shift_Barrels=352  →  Barrel_Count.ACC=0`,
+    },
+    {
+      t: "Scale a 4-20 mA signal",
+      goal: "Convert Air_mA (4 to 20 mA) into Hoop1_Air_PSI on a 0 to 150 psi range, and set Air_Signal_Fault below 3.6 mA.",
+      code: `CPT(Hoop1_Air_PSI,(Air_mA-4.0)*150.0/16.0);
+LES(Air_mA,3.6) OTE(Air_Signal_Fault);`,
+      about: "A 4-20 mA transmitter sends 4 mA at the bottom of its range and 20 mA at the top, so the span is 16 mA. Starting at 4 instead of 0 means a broken wire, 0 mA, is clearly not a real reading. Below 3.6 mA is the usual failure limit (NAMUR NE 43). The 0 to 150 psi range is illustrative; use the transmitter's nameplate.",
+      terms: [
+        ["16.0", "Span", "20 mA − 4 mA."],
+        ["150.0", "Range", "psi at 20 mA."],
+        ["3.6", "Failure limit", "Below this the signal is not a real reading."],
+      ],
+      sim: {"types":{"Air_mA":"REAL"},"start":{"Air_mA":4},"watch":["Hoop1_Air_PSI","Air_Signal_Fault"],"steps":[{"label":"12.0 mA","set":{"Air_mA":12}},{"label":"13.6 mA","set":{"Air_mA":13.6}},{"label":"20.0 mA","set":{"Air_mA":20}},{"label":"Wire breaks: 0 mA","set":{"Air_mA":0}}]},
+      out: `12.0 mA            →  Hoop1_Air_PSI=75
+13.6 mA            →  Hoop1_Air_PSI=90
+20.0 mA            →  Hoop1_Air_PSI=150
+Wire breaks: 0 mA  →  Hoop1_Air_PSI=-37.5  →  Air_Signal_Fault=1`,
+    },
+    {
+      t: "OEE in ladder",
+      goal: "Compute OEE_Pct from Availability, Performance and Quality, and set World_Class at 85% or more.",
+      code: `CPT(OEE_Pct,Availability*Performance*Quality*100.0);
+GEQ(OEE_Pct,85.0) OTE(World_Class);`,
+      about: "The same formula as every Foundations lane, here in the controller. Hoop Driver 1's week, 0.988 × 0.749 × 0.985, gives 72.9%. The REAL shows 72.89118, where the other lanes round to one decimal when they print. A Logix REAL holds about 7 significant digits, which is plenty for a percentage. The second step asks what performance of 0.875 would do.",
+      terms: [
+        ["CPT", "CPT", "Computes a whole expression in one instruction."],
+        ["GEQ", "GEQ(OEE_Pct, 85.0)", "85% is the usual world-class benchmark."],
+      ],
+      sim: {"types":{"Availability":"REAL","Performance":"REAL","Quality":"REAL"},"watch":["OEE_Pct","World_Class"],"steps":[{"label":"Hoop Driver 1: 0.988, 0.749, 0.985","set":{"Availability":0.988,"Performance":0.749,"Quality":0.985}},{"label":"Performance 0.875","set":{"Performance":0.875}}]},
+      out: `Hoop Driver 1: 0.988, 0.749, 0.985  →  OEE_Pct=72.89118
+Performance 0.875                   →  OEE_Pct=85.15325  →  World_Class=1`,
+    },
+    {
+      t: "Barrels behind target",
+      goal: "Compute Target_Now as Run_Minutes × Ideal_Rate ÷ 60, Behind as Target_Now minus Barrels, and light Behind_Lamp when more than 10 barrels behind.",
+      code: `CPT(Target_Now,Run_Minutes*Ideal_Rate/60.0);
+SUB(Target_Now,Barrels,Behind);
+GRT(Behind,10.0) OTE(Behind_Lamp);`,
+      about: "A board that shows how far behind the line is right now gets a reaction during the shift, not after it. Conveyor 3's ideal is 60 per hour, one barrel a minute. At the end of shift A, 450 paid minutes and 352 barrels, it is 98 behind, the same gap as 78.2% of target. The 10-barrel threshold is illustrative.",
+      terms: [
+        ["Target_Now", "Target so far", "What the ideal rate would have made by now."],
+        ["SUB", "SUB(a, b, dest)", "dest = a − b."],
+        ["GRT", "GRT(Behind, 10.0)", "More than 10 behind lights the lamp."],
+      ],
+      sim: {"types":{"Run_Minutes":"DINT","Ideal_Rate":"DINT","Barrels":"DINT"},"start":{"Ideal_Rate":60},"watch":["Target_Now","Behind","Behind_Lamp"],"steps":[{"label":"2 h in, 114 barrels","set":{"Run_Minutes":120,"Barrels":114}},{"label":"4 h in, 196 barrels","set":{"Run_Minutes":240,"Barrels":196}},{"label":"End of shift: 450 min, 352 barrels","set":{"Run_Minutes":450,"Barrels":352}}]},
+      out: `2 h in, 114 barrels                 →  Target_Now=120  →  Behind=6
+4 h in, 196 barrels                 →  Target_Now=240  →  Behind=44  →  Behind_Lamp=1
+End of shift: 450 min, 352 barrels  →  Target_Now=450  →  Behind=98`,
+    },
+    {
+      t: "Speed deadband",
+      goal: "Set Speed_Error to Speed_SP minus Speed_PV, and Speed_Alarm when the error is outside -2.0 to 2.0.",
+      code: `SUB(Speed_SP,Speed_PV,Speed_Error);
+LIM(-2.0,Speed_Error,2.0) OTE(In_Band);
+XIO(In_Band) OTE(Speed_Alarm);`,
+      about: "Logix ladder has an ABS instruction too, but LIM tests the band in one step: true while the error is between -2.0 and 2.0, ends included. The alarm is simply not in band. This is the Structured Text ABS lesson, and the output matches it exactly: ABS(error) > 2.0 and outside -2.0 to 2.0 are the same test.",
+      terms: [
+        ["LIM", "LIM(low, value, high)", "True while value is between low and high, inclusive."],
+        ["In_Band", "In band", "Error within ±2.0."],
+      ],
+      sim: {"types":{"Speed_SP":"REAL","Speed_PV":"REAL"},"start":{"Speed_SP":60,"Speed_PV":60},"watch":["Speed_Error","Speed_Alarm"],"steps":[{"label":"Runs at 58.5","set":{"Speed_PV":58.5}},{"label":"Slows to 57.5","set":{"Speed_PV":57.5}},{"label":"Overspeeds to 62.5","set":{"Speed_PV":62.5}},{"label":"Settles at 61.0","set":{"Speed_PV":61}}],"sameAs":"structured-text/ABS for a deadband"},
+      out: `Runs at 58.5        →  Speed_Error=1.5
+Slows to 57.5       →  Speed_Error=2.5  →  Speed_Alarm=1
+Overspeeds to 62.5  →  Speed_Error=-2.5
+Settles at 61.0     →  Speed_Error=-1  →  Speed_Alarm=0`,
+    },
+    {
+      t: "State lamps",
+      goal: "Light Green_Lamp when Conv_State is 1 (running), Red_Lamp when it is 2 (jammed) and Amber_Lamp when it is 3 (idle).",
+      code: `EQU(Conv_State,1) OTE(Green_Lamp);
+EQU(Conv_State,2) OTE(Red_Lamp);
+EQU(Conv_State,3) OTE(Amber_Lamp);`,
+      about: "One state number drives every lamp, so the lamps can never disagree with each other. An unexpected value, such as 0 before the state logic has run, lights nothing, which is itself a clue. Lamp colors are a site standard; these are common choices.",
+      terms: [
+        ["EQU", "EQU(Conv_State, n)", "True while the state equals n."],
+        ["Conv_State", "State code", "1 running, 2 jammed, 3 idle, as in the PLC track."],
+      ],
+      sim: {"types":{"Conv_State":"DINT"},"watch":["Green_Lamp","Red_Lamp","Amber_Lamp"],"steps":[{"label":"Conv_State = 3","set":{"Conv_State":3}},{"label":"Conv_State = 1","set":{"Conv_State":1}},{"label":"Conv_State = 2","set":{"Conv_State":2}},{"label":"Conv_State = 0","set":{"Conv_State":0}}]},
+      out: `Conv_State = 3  →  Amber_Lamp=1
+Conv_State = 1  →  Green_Lamp=1  →  Amber_Lamp=0
+Conv_State = 2  →  Green_Lamp=0  →  Red_Lamp=1
+Conv_State = 0  →  Red_Lamp=0`,
+    },
+    {
+      t: "Clamp a setpoint",
+      goal: "Copy Operator_SP into Speed_SP, then limit Speed_SP to between 20 and 60 barrels per hour.",
+      code: `MOV(Operator_SP,Speed_SP);
+GRT(Speed_SP,60.0) MOV(60.0,Speed_SP);
+LES(Speed_SP,20.0) MOV(20.0,Speed_SP);`,
+      about: "The Structured Text clamp in ladder: copy the operator's number, then overwrite it if it is out of range. The two limit rungs come after the copy, so the last write in the scan wins and nothing outside 20 to 60 is ever used. The output matches the Structured Text version exactly.",
+      terms: [
+        ["GRT", "Upper limit", "Above 60 becomes 60."],
+        ["LES", "Lower limit", "Below 20 becomes 20."],
+      ],
+      sim: {"types":{"Operator_SP":"REAL"},"watch":["Speed_SP"],"steps":[{"label":"Operator enters 45","set":{"Operator_SP":45}},{"label":"Operator enters 75","set":{"Operator_SP":75}},{"label":"Operator enters 5","set":{"Operator_SP":5}}],"sameAs":"structured-text/Clamp a setpoint"},
+      out: `Operator enters 45  →  Speed_SP=45
+Operator enters 75  →  Speed_SP=60
+Operator enters 5   →  Speed_SP=20`,
+    },
+    {
+      t: "Hysteresis",
+      goal: "Latch Hoop1_Low_Air below 80 psi and unlatch it above 85 psi; between them, leave it alone.",
+      code: `LES(Hoop1_Air_PSI,80.0) OTL(Hoop1_Low_Air);
+GRT(Hoop1_Air_PSI,85.0) OTU(Hoop1_Low_Air);`,
+      about: "OTL and OTU do nothing on a false rung, so between 80 and 85 neither rung writes and the bit keeps its state. That gap is the deadband that stops a reading hovering at 80 from flooding the alarm log. The output matches the Structured Text version exactly.",
+      terms: [
+        ["OTL", "Set below 80", "Latches the alarm."],
+        ["OTU", "Clear above 85", "Unlatches it."],
+      ],
+      sim: {"types":{"Hoop1_Air_PSI":"REAL","Hoop1_Low_Air":"BOOL"},"start":{"Hoop1_Air_PSI":92},"scene":"air1","watch":["Hoop1_Low_Air"],"steps":[{"label":"Drops to 79 psi","set":{"Hoop1_Air_PSI":79}},{"label":"Recovers to 82 psi","set":{"Hoop1_Air_PSI":82}},{"label":"Recovers to 86 psi","set":{"Hoop1_Air_PSI":86}},{"label":"Sags to 82 psi","set":{"Hoop1_Air_PSI":82}}],"sameAs":"structured-text/Hysteresis"},
+      out: `Drops to 79 psi     →  Hoop1_Low_Air=1
+Recovers to 82 psi  →  no change
+Recovers to 86 psi  →  Hoop1_Low_Air=0
+Sags to 82 psi      →  no change`,
+    },
+    {
+      t: "Speed by mode",
+      goal: "Set Speed_SP to 30.0 in mode 1 (thread), 60.0 in mode 2 (production) and 45.0 in mode 3 (reduced). Any other mode sets 0.0.",
+      code: `EQU(Speed_Mode,1) MOV(30.0,Speed_SP);
+EQU(Speed_Mode,2) MOV(60.0,Speed_SP);
+EQU(Speed_Mode,3) MOV(45.0,Speed_SP);
+LIM(1,Speed_Mode,3) OTE(Mode_Valid);
+XIO(Mode_Valid) MOV(0.0,Speed_SP);`,
+      about: "A selector switch or HMI picks a mode and each mode has its own setpoint. Production is Conveyor 3's ideal of 60 barrels per hour; the other two are illustrative. MOV does nothing on a false rung, so without the last rung an unexpected mode would leave the old speed in place. Mode_Valid turns that into a deliberate 0.",
+      terms: [
+        ["MOV", "One setpoint per mode", "Only the rung for the current mode writes."],
+        ["Mode_Valid", "Known mode", "True for modes 1 to 3."],
+        ["0.0", "Safe default", "Unknown mode stops the conveyor."],
+      ],
+      sim: {"types":{"Speed_Mode":"DINT","Speed_SP":"REAL"},"start":{"Speed_Mode":2},"watch":["Speed_SP"],"steps":[{"label":"Mode 1: thread","set":{"Speed_Mode":1}},{"label":"Mode 3: reduced","set":{"Speed_Mode":3}},{"label":"Mode 7: unexpected","set":{"Speed_Mode":7}},{"label":"Mode 2: production","set":{"Speed_Mode":2}}]},
+      out: `Mode 1: thread      →  Speed_SP=30
+Mode 3: reduced     →  Speed_SP=45
+Mode 7: unexpected  →  Speed_SP=0
+Mode 2: production  →  Speed_SP=60`,
+    },
+    {
+      t: "State machine with MOV and EQU",
+      goal: "Conveyor 3 from Conv_State, as the Structured Text CASE lesson: idle (3) to running (1) on Start_PB with no jam; running to idle on Stop_Pressed or faulted (2) on Jam_Fault; faulted to idle when the jam clears; any other value to idle. Work in Next_State and copy it at the end.",
+      code: `MOV(Conv_State,Next_State);
+EQU(Conv_State,3) XIC(Start_PB) XIO(Jam_Fault) MOV(1,Next_State);
+EQU(Conv_State,1) BST XIC(Stop_Pressed) MOV(3,Next_State) NXB XIO(Stop_Pressed) XIC(Jam_Fault) MOV(2,Next_State) BND;
+EQU(Conv_State,2) XIO(Jam_Fault) MOV(3,Next_State);
+NEQ(Conv_State,1) NEQ(Conv_State,2) NEQ(Conv_State,3) MOV(3,Next_State);
+MOV(Next_State,Conv_State);
+EQU(Conv_State,1) OTE(Conv_Run);`,
+      about: "The ladder trap: rungs see each other's writes in the same scan, so a machine can move through two states in one scan, and a state it passes through for no time at all never gets to act. A CASE runs one branch per scan. Every rung here tests the state as it was at the start of the scan and writes Next_State, copied once at the end, so the ladder also takes one step per scan. The output matches the CASE exactly.",
+      terms: [
+        ["Next_State", "Next state", "Every transition writes here, not to Conv_State."],
+        ["MOV(Next_State,Conv_State)", "Apply once", "The new state takes effect once, at the end."],
+        ["NEQ", "Safe default", "Unexpected values go to idle."],
+      ],
+      sim: {"watch":["Conv_State","Conv_Run"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Jam_Fault on","set":{"Jam_Fault":1}},{"label":"Jam_Fault cleared","set":{"Jam_Fault":0}},{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Press and release Stop_Pressed","pulse":{"Stop_Pressed":1}}],"sameAs":"structured-text/State machine with CASE"},
+      out: `Press and release Start_PB      →  Conv_State=1  →  Conv_Run=1
+Jam_Fault on                    →  Conv_State=2  →  Conv_Run=0
+Jam_Fault cleared               →  Conv_State=3
+Press and release Start_PB      →  Conv_State=1  →  Conv_Run=1
+Press and release Stop_Pressed  →  Conv_State=3  →  Conv_Run=0`,
+    },
+    {
+      t: "First-out fault",
+      goal: "While First_Fault is 0, record the first active fault: 1 e-stop, 2 low air, 3 jam. Clear it on Reset_PB only when no fault is active.",
+      code: `EQU(First_Fault,0) BST XIC(Estop_Active) MOV(1,First_Fault) NXB XIO(Estop_Active) XIC(Low_Air) MOV(2,First_Fault) NXB XIO(Estop_Active) XIO(Low_Air) XIC(Jam_Fault) MOV(3,First_Fault) BND;
+XIC(Reset_PB) XIO(Estop_Active) XIO(Low_Air) XIO(Jam_Fault) MOV(0,First_Fault);`,
+      about: "The EQU in front is checked once, before the branch, so every leg sees First_Fault as 0 and only one fault can be recorded. The XIO contacts give the priority: low air counts only without an e-stop, a jam only without either. The output matches the Structured Text version exactly.",
+      terms: [
+        ["EQU(First_Fault,0)", "Record once", "Only an empty first-out is filled."],
+        ["XIO(Estop_Active)", "Priority", "A lower-priority leg needs the higher faults off."],
+      ],
+      sim: {"watch":["First_Fault"],"steps":[{"label":"Low air","set":{"Low_Air":1}},{"label":"Then a jam","set":{"Jam_Fault":1}},{"label":"Reset_PB with faults still active","pulse":{"Reset_PB":1}},{"label":"Faults cleared, then Reset_PB","set":{"Low_Air":0,"Jam_Fault":0},"pulse":{"Reset_PB":1}}],"sameAs":"structured-text/First-out fault"},
+      out: `Low air                            →  First_Fault=2
+Then a jam                         →  no change
+Reset_PB with faults still active  →  no change
+Faults cleared, then Reset_PB      →  First_Fault=0`,
+    },
+    {
+      t: "Alarm with acknowledge",
+      goal: "When Low_Air comes on, latch Alarm_Unacked until Ack_PB. Keep Alarm_Active equal to Low_Air. Sound Horn while unacknowledged; light Alarm_Lamp while active or unacknowledged.",
+      code: `XIC(Low_Air) XIO(Alarm_Active) OTL(Alarm_Unacked);
+XIC(Low_Air) OTE(Alarm_Active);
+XIC(Ack_PB) OTU(Alarm_Unacked);
+XIC(Alarm_Unacked) OTE(Horn);
+BST XIC(Alarm_Active) NXB XIC(Alarm_Unacked) BND OTE(Alarm_Lamp);`,
+      about: "The first rung reads Alarm_Active before the second rung updates it, so it means \"low air now, but not last scan\": a new alarm. An alarm that comes and goes before anyone looks still waits for acknowledgement. The output matches the Structured Text version exactly.",
+      terms: [
+        ["XIO(Alarm_Active)", "New alarm", "Last scan's value, read before it is updated."],
+        ["Ack_PB", "Acknowledge", "Silences the horn; the lamp stays while low air remains."],
+      ],
+      sim: {"types":{"Alarm_Unacked":"BOOL","Horn":"BOOL"},"watch":["Alarm_Unacked","Horn","Alarm_Lamp"],"steps":[{"label":"Low air","set":{"Low_Air":1}},{"label":"Operator acknowledges","pulse":{"Ack_PB":1}},{"label":"Low air clears","set":{"Low_Air":0}},{"label":"Low air comes and goes, nobody looks","pulse":{"Low_Air":1}},{"label":"Operator acknowledges","pulse":{"Ack_PB":1}}],"sameAs":"structured-text/Alarm with acknowledge"},
+      out: `Low air                               →  Alarm_Unacked=1  →  Horn=1  →  Alarm_Lamp=1
+Operator acknowledges                 →  Alarm_Unacked=0  →  Horn=0
+Low air clears                        →  Alarm_Lamp=0
+Low air comes and goes, nobody looks  →  Alarm_Unacked=1  →  Horn=1  →  Alarm_Lamp=1
+Operator acknowledges                 →  Alarm_Unacked=0  →  Horn=0  →  Alarm_Lamp=0`,
+    },
+    {
+      t: "Hand, off, auto",
+      goal: "With Mode 1 (hand), run Motor while Jog_PB is held; with Mode 2 (auto), run it on Auto_Request with no Fault; any other Mode keeps it off.",
+      code: `BST EQU(Mode,1) XIC(Jog_PB) NXB EQU(Mode,2) XIC(Auto_Request) XIO(Fault) BND OTE(Motor);`,
+      about: "One rung with two legs, one per running mode. OTE writes 0 whenever neither leg is true, so off, and any unexpected Mode value, needs no rung of its own: the safe state is the default. The Structured Text version needs a CASE with an ELSE; the output is the same.",
+      terms: [
+        ["EQU(Mode,1)", "Hand leg", "Runs only while the jog button is held."],
+        ["EQU(Mode,2)", "Auto leg", "Runs on request with no fault."],
+        ["OTE", "Off by default", "No true leg writes 0."],
+      ],
+      sim: {"types":{"Motor":"BOOL","Jog_PB":"BOOL"},"watch":["Motor"],"steps":[{"label":"Off: Jog_PB held","set":{"Jog_PB":1}},{"label":"Hand, Jog_PB still held","set":{"Mode":1}},{"label":"Jog_PB released","set":{"Jog_PB":0}},{"label":"Auto with a request","set":{"Mode":2,"Auto_Request":1}},{"label":"Fault","set":{"Fault":1}}],"sameAs":"structured-text/Hand, off, auto"},
+      out: `Off: Jog_PB held         →  no change
+Hand, Jog_PB still held  →  Motor=1
+Jog_PB released          →  Motor=0
+Auto with a request      →  Motor=1
+Fault                    →  Motor=0`,
+    },
+    {
+      t: "Jam lockout as states",
+      goal: "Conveyor 3 as states, as the Structured Text lesson: idle (3) to running (1) on Start_PB; running to faulted (2) after 4 s of Eye_Blocked (Jam_Timer) or to idle on Stop_Pressed; faulted to idle only on Reset_PB with the eye clear. Conv_Run and Jam_Fault come from the state.",
+      code: `EQU(Conv_State,1) XIC(Eye_Blocked) TON(Jam_Timer,4000,0);
+MOV(Conv_State,Next_State);
+EQU(Conv_State,1) BST XIC(Jam_Timer.DN) MOV(2,Next_State) NXB XIO(Jam_Timer.DN) XIC(Stop_Pressed) MOV(3,Next_State) BND;
+EQU(Conv_State,2) XIC(Reset_PB) XIO(Eye_Blocked) MOV(3,Next_State);
+EQU(Conv_State,3) XIC(Start_PB) MOV(1,Next_State);
+LIM(1,Conv_State,3) OTE(State_Valid);
+XIO(State_Valid) MOV(3,Next_State);
+MOV(Next_State,Conv_State);
+EQU(Conv_State,1) OTE(Conv_Run);
+EQU(Conv_State,2) OTE(Jam_Fault);`,
+      about: "The whole jam cell as a ladder state machine, with Next_State applied once at the end. The fault needs no latch: being in state 2 is the fault, and only a reset with a clear eye leaves it. Run it in the simulator, jam a barrel, try Reset with the barrel still there, and watch the state readout. The output matches the Structured Text version exactly.",
+      terms: [
+        ["Jam_Timer", "Jam timer", "Times only while running with the eye blocked."],
+        ["State_Valid", "Known state", "LIM catches anything outside 1 to 3."],
+        ["Jam_Fault", "Fault from state", "On only in state 2."],
+      ],
+      sim: {"scene":"conveyor3","watch":["Conv_State","Conv_Run","Jam_Fault"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Eye blocked 4 s","set":{"Eye_Blocked":1},"runMs":4100},{"label":"Reset_PB while eye still blocked","pulse":{"Reset_PB":1}},{"label":"Eye cleared, then Reset_PB","set":{"Eye_Blocked":0},"pulse":{"Reset_PB":1}}],"sameAs":"structured-text/Jam lockout as states"},
+      out: `Press and release Start_PB        →  Conv_State=1  →  Conv_Run=1
+Eye blocked 4 s                   →  Conv_State=2  →  Conv_Run=0  →  Jam_Fault=1
+Reset_PB while eye still blocked  →  no change
+Eye cleared, then Reset_PB        →  Conv_State=3  →  Jam_Fault=0`,
+    },
+    {
+      t: "Flame-failure lockout",
+      goal: "Char Station 2: purge 5 s (Purge_Timer) before Char2_Burner_On. If Flame_OK is off for 1 s while burning (Flame_Fail_Timer), latch Flame_Lockout, which stops the burner and can only be reset with Char2_Start off. Run the fan while started, during the 30 s post-purge, and during a lockout.",
+      code: `XIC(Char2_Start) XIO(Flame_Lockout) TON(Purge_Timer,5000,0);
+XIC(Purge_Timer.DN) OTE(Char2_Burner_On);
+XIC(Char2_Burner_On) XIO(Flame_OK) TON(Flame_Fail_Timer,1000,0);
+XIC(Flame_Fail_Timer.DN) OTL(Flame_Lockout);
+XIC(Reset_PB) XIO(Char2_Start) OTU(Flame_Lockout);
+XIC(Char2_Burner_On) TOF(Post_Purge,30000,0);
+BST XIC(Char2_Start) NXB XIC(Post_Purge.DN) NXB XIC(Flame_Lockout) BND OTE(Char2_Exhaust_Fan);`,
+      about: "If the flame goes out while gas still flows, unburned gas builds up in the char chamber. A lockout stops the burner and holds it off. Requiring Start to be off before reset means the next light-off begins with a fresh 5 s purge. The 1 s and 5 s times are illustrative; real burners are protected by a certified burner management system, not by a teaching rung.",
+      terms: [
+        ["Flame_Fail_Timer", "Flame failure", "Flame lost for 1 s while burning."],
+        ["Flame_Lockout", "Lockout", "Latched; blocks the purge timer, so the burner cannot relight."],
+        ["XIO(Char2_Start)", "Reset rule", "Reset only works with Start off, forcing a new purge."],
+      ],
+      sim: {"start":{"Flame_OK":1},"scene":"char2","watch":["Char2_Burner_On","Flame_Lockout","Char2_Exhaust_Fan"],"steps":[{"label":"Char2_Start on, 5 s purge","set":{"Char2_Start":1},"runMs":5100},{"label":"Flame lost for 1 s","set":{"Flame_OK":0},"runMs":1100},{"label":"Flame_OK back, Start still on","set":{"Flame_OK":1}},{"label":"Reset_PB with Start on","pulse":{"Reset_PB":1}},{"label":"Start off, then Reset_PB","set":{"Char2_Start":0},"pulse":{"Reset_PB":1}},{"label":"Start on again, 5 s purge","set":{"Char2_Start":1},"runMs":5100}]},
+      out: `Char2_Start on, 5 s purge      →  Char2_Exhaust_Fan=1  →  Char2_Burner_On=1
+Flame lost for 1 s             →  Flame_Lockout=1  →  Char2_Burner_On=0
+Flame_OK back, Start still on  →  no change
+Reset_PB with Start on         →  no change
+Start off, then Reset_PB       →  Flame_Lockout=0
+Start on again, 5 s purge      →  Char2_Burner_On=1`,
+    },
+    {
+      t: "Auto-restart after low air",
+      goal: "Hoop Driver 1: latch Hoop1_Low_Air after 2 s below 80 psi and clear it at 85 psi or more. If the machine was running when low air tripped, restart it 5 s after the air recovers. Stop_PB (wired normally closed) cancels the restart.",
+      code: `LES(Hoop1_Air_PSI,80.0) TON(Low_Air_Timer,2000,0);
+XIC(Low_Air_Timer.DN) OTL(Hoop1_Low_Air);
+GEQ(Hoop1_Air_PSI,85.0) OTU(Hoop1_Low_Air);
+XIC(Hoop1_Low_Air) XIC(Hoop1_Run) OTL(Restart_Pending);
+XIO(Stop_PB) OTU(Restart_Pending);
+XIO(Hoop1_Low_Air) XIC(Restart_Pending) TON(Restart_Timer,5000,0);
+XIC(Restart_Timer.DN) OTU(Restart_Pending);
+BST XIC(Start_PB) NXB XIC(Restart_Timer.DN) NXB XIC(Hoop1_Run) BND XIC(Stop_PB) XIO(Hoop1_Low_Air) OTE(Hoop1_Run);`,
+      about: "A short air dip should not need an operator to restart the machine, but only a machine that was running should restart. Restart_Pending remembers that: it latches on the scan low air trips, before the run rung drops Hoop1_Run. Automatic restart is a safety decision: use it only where the risk assessment allows, usually with a warning horn first.",
+      terms: [
+        ["Restart_Pending", "Was running", "Latched when low air stops a running machine."],
+        ["Restart_Timer", "Recovery delay", "5 s of good air before the restart."],
+        ["XIO(Stop_PB)", "Operator wins", "A stop cancels any pending restart."],
+      ],
+      sim: {"types":{"Hoop1_Air_PSI":"REAL"},"start":{"Stop_PB":1,"Hoop1_Air_PSI":92},"scene":"air1","watch":["Hoop1_Low_Air","Restart_Pending","Hoop1_Run"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Air drops to 70 psi for 3 s","set":{"Hoop1_Air_PSI":70},"runMs":3000},{"label":"Air back to 92 psi for 6 s","set":{"Hoop1_Air_PSI":92},"runMs":6000},{"label":"Press and release Stop_PB","pulse":{"Stop_PB":0}},{"label":"Air drops to 70 psi for 3 s","set":{"Hoop1_Air_PSI":70},"runMs":3000},{"label":"Air back to 92 psi for 6 s","set":{"Hoop1_Air_PSI":92},"runMs":6000}]},
+      out: `Press and release Start_PB   →  Hoop1_Run=1
+Air drops to 70 psi for 3 s  →  Hoop1_Low_Air=1  →  Restart_Pending=1  →  Hoop1_Run=0
+Air back to 92 psi for 6 s   →  Hoop1_Low_Air=0  →  Restart_Pending=0  →  Hoop1_Run=1
+Press and release Stop_PB    →  Hoop1_Run=0
+Air drops to 70 psi for 3 s  →  Hoop1_Low_Air=1
+Air back to 92 psi for 6 s   →  Hoop1_Low_Air=0`,
     },
   ],
 });
