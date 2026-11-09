@@ -43,6 +43,9 @@ const pyFiles = [];
 const jsFiles = [];
 const csProjects = {};
 const nativeFiles = []; // C++ and Java: one compile per lesson, or per track file once finished
+// A term key that starts or ends with a letter must not be part of a longer word ("int" inside "println")
+const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const wholeToken = (k, code) => new RegExp((/^\w/.test(k) ? "(?<!\\w)" : "") + reEsc(k) + (/\w$/.test(k) ? "(?!\\w)" : "")).test(code);
 let lessons = 0;
 const ids = new Set();
 const groups = [...BC.lanes.map((l) => ({ kind: "lane", g: l })), ...BC.tracks.map((t) => ({ kind: "track", g: t }))];
@@ -67,6 +70,7 @@ for (const { kind, g } of groups) {
     (l.terms || []).forEach((t, j) => {
       if (!Array.isArray(t) || t.length !== 3) fail(`${where}: term ${j + 1} must be [key, label, definition]`);
       else if (t[0] !== null && !l.code.includes(t[0])) warns.push(`${where}: term key "${t[0]}" not found in this step's code`);
+      else if (t[0] !== null && !wholeToken(t[0], l.code)) warns.push(`${where}: term key "${t[0]}" only appears inside a longer word, so clicking it outlines the wrong text`);
     });
     if (/\t/.test(l.code)) fail(`${where}: code contains a tab character; use spaces`);
     // The lesson must be completable by typing its own code

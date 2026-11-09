@@ -1,5 +1,6 @@
 // Foundations lane: C#
 // Lesson format: docs/LESSON_FORMAT.md. Run `node tools/verify.mjs` after any edit.
+// Numbers come from the canonical sample plant. Outputs: node tools/output-checks/foundations/run.mjs
 BC.addLane({
   id: "csharp",
   name: "C#",
@@ -23,43 +24,43 @@ Shift A is running`,
     },
     {
       t: "Typed variables",
-      goal: "Declare availability 0.86, performance 0.91, quality 0.98 as doubles. Multiply into oee and print \"OEE:\" as a 1-decimal percent.",
-      code: `double availability = 0.86;
-double performance = 0.91;
-double quality = 0.98;
+      goal: "Declare availability 0.988, performance 0.749, quality 0.985 as doubles. Multiply into oee and print \"OEE:\" as a 1-decimal percent.",
+      code: `double availability = 0.988;
+double performance = 0.749;
+double quality = 0.985;
 
 double oee = availability * performance * quality;
 Console.WriteLine($"OEE: {oee:P1}");`,
-      about: "C# makes you state each variable's type. The interpolated string formats oee with P1, a percent with one decimal.",
+      about: "C# makes you state each variable's type. The factors are Hoop Driver 1's sample week from the OEE Loss Report track, rounded to 3 places. The interpolated string formats oee with P1, a percent with one decimal: 72.9%, the same OEE that track reports.",
       terms: [
         ["double", "double", "A number type with decimals."],
         ["$", "$\"…{x}\"", "Interpolated string. Values in {braces} are inserted."],
         ["P1", ":P1", "Format code: percent with 1 decimal. N2 is a number with 2 decimals."],
       ],
-      out: `OEE: 76.7%`,
+      out: `OEE: 72.9%`,
     },
     {
       t: "Write a method",
-      goal: "Write static double Oee(a, p, q) that returns a * p * q, then print Oee(0.86, 0.91, 0.98).",
+      goal: "Write static double Oee(a, p, q) that returns a * p * q, then print \"OEE is\" with Oee(0.988, 0.749, 0.985) as a 1-decimal percent.",
       code: `static double Oee(double a, double p, double q)
 {
     return a * p * q;
 }
 
-Console.WriteLine(Oee(0.86, 0.91, 0.98));`,
-      about: "A method packages a calculation. The first double is the return type; each parameter also gets a type. Braces mark the body.",
+Console.WriteLine($"OEE is {Oee(0.988, 0.749, 0.985):P1}");`,
+      about: "A method packages a calculation. The first double is the return type; each parameter also gets a type. Braces mark the body. The call can go straight inside the interpolated string, with its format after the colon.",
       terms: [
         ["static", "static", "Belongs to the program itself, not to an object."],
         ["Oee", "double Oee(…)", "Return type, method name, then typed parameters."],
         ["{", "{ }", "Braces mark where a block starts and ends."],
         ["return", "return", "Sends a value back to the caller."],
       ],
-      out: `0.766948`,
+      out: `OEE is 72.9%`,
     },
     {
       t: "If and else",
-      goal: "Set barrels 412 and target 450. Print \"Target hit\" if barrels meets target, else \"Short by\" and the gap.",
-      code: `int barrels = 412;
+      goal: "Set barrels 352 and target 450. Print \"Target hit\" if barrels meets target, else \"Short by\" and the gap.",
+      code: `int barrels = 352;
 int target = 450;
 
 if (barrels >= target)
@@ -70,41 +71,44 @@ else
 {
     Console.WriteLine($"Short by {target - barrels}");
 }`,
-      about: "The condition goes in parentheses. 412 is below 450, so the else block runs and prints Short by 38.",
+      about: "The condition goes in parentheses. Conveyor 3 made 352 barrels in shift A against a target of 450, its ideal 60 per hour over 7.5 paid hours, so the else block runs and prints Short by 98.",
       terms: [
         ["int", "int", "Whole-number type."],
         ["if", "if (condition)", "The condition must be in parentheses."],
         ["else", "else", "Runs when the if condition is false."],
       ],
-      out: `Short by 38`,
+      out: `Short by 98`,
     },
     {
       t: "Loop a list",
-      goal: "Make a List<int> of downtime 42, 15, 88, 7, 30. Sum it with foreach and print \"Total:\" with the minutes.",
-      code: `var downtime = new List<int> { 42, 15, 88, 7, 30 };
-int total = 0;
+      goal: "Make a List<double> of Hoop Driver 1's shift A fault minutes 7.5, 18.5, 15.0. Sum it with foreach and print \"Total:\" with the minutes.",
+      code: `var downtime = new List<double> { 7.5, 18.5, 15.0 };
+double total = 0;
 
-foreach (int minutes in downtime)
+foreach (double minutes in downtime)
 {
     total += minutes;
 }
 
 Console.WriteLine($"Total: {total} min");`,
-      about: "foreach visits each item once. var lets the compiler infer the type from the right side.",
+      about: "foreach visits each item once. var lets the compiler infer the type from the right side. The list holds doubles because fault minutes have decimals. C# prints a whole-number double without a decimal point, so the 41 minutes from the Shift Handoff track prints as 41.",
       terms: [
         ["var", "var", "Lets the compiler infer the type from the right side."],
         ["List", "List<int>", "A resizable list of ints. Lives in System.Collections.Generic, included by default in .NET 6+ projects."],
         ["foreach", "foreach (x in items)", "Loops over every item in a collection."],
         ["new", "new", "Creates an object."],
       ],
-      out: `Total: 182 min`,
+      out: `Total: 41 min`,
     },
     {
       t: "Define a class",
-      goal: "Define a public class Machine with Name, GoodCount, TotalCount properties and a Quality() method returning good / total as a double.",
-      code: `public class Machine
+      goal: "Define a public class Machine with Name, GoodCount, TotalCount properties and a Quality() method returning good / total as a double. Create Hoop Driver 1 with 6314 good of 6410 and print its quality as a 1-decimal percent.",
+      code: `var hoop = new Machine { Name = "Hoop Driver 1", GoodCount = 6314, TotalCount = 6410 };
+Console.WriteLine($"{hoop.Name}: {hoop.Quality():P1}");
+
+public class Machine
 {
-    public string Name { get; set; }
+    public string Name { get; set; } = "";
     public int GoodCount { get; set; }
     public int TotalCount { get; set; }
 
@@ -113,13 +117,15 @@ Console.WriteLine($"Total: {total} min");`,
         return (double)GoodCount / TotalCount;
     }
 }`,
-      about: "A class bundles data and behavior. The cast to double matters: int divided by int drops the decimals, so 940 / 1000 would be 0.",
+      about: "A class bundles data and behavior. The program's own statements come first and the class goes after them; that order is required with top-level statements. The cast to double matters: int divided by int drops the decimals, so 6314 / 6410 would be 0. The counts are Hoop Driver 1's week from the OEE Loss Report track, 96 rejects out of 6410.",
       terms: [
         ["class", "class", "A blueprint for objects: data plus behavior."],
         ["public", "public", "Visible to code outside the class."],
         ["get", "{ get; set; }", "An auto-property: a value with a built-in getter and setter."],
-        ["(", "(double)", "A cast. Converts the value to double before dividing."],
+        ["new Machine", "new Machine { … }", "Creates an object and sets its properties in one step."],
+        ["(double)", "(double)", "A cast. Converts the value to double before dividing."],
       ],
+      out: `Hoop Driver 1: 98.5%`,
     },
   ],
 });
