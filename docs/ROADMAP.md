@@ -32,6 +32,7 @@
 - [ ] A per-lesson "explain this line" view for the line under the cursor.
 - [ ] Optional sound effects (keystroke, error, lesson complete), off by default.
 - [ ] Track completion summary page: accuracy and WPM trend per step.
+- [ ] PLC interpreter: design in `docs/PLC_INTERPRETER.md`, awaiting review. Phases: ladder runtime, Structured Text, browser simulator, more scenes.
 - [ ] Ladder simulation: animate a small piece of equipment (e.g. the conveyor jam cell) driven by the learner's own typed ladder logic, so a rung change makes a visible difference. Needs a scan-cycle interpreter for the ladder subset the lessons use (XIC, XIO, OTE, OTL/OTU, TON, CTU, branches), simulated inputs the learner can toggle, and an equipment view bound to the tags.
 
 ## Known limitations
