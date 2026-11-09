@@ -19,6 +19,9 @@
 - [x] Python Foundations gap: 6 lessons added (f-strings, list comprehensions, try/except, datetime, default arguments, a first pandas DataFrame), all on shift A sample data.
 - [x] JavaScript Foundations lane: 11 console lessons (`jscon` mode, run in Node) covering what the Plant Board track assumes: arrays of objects, map/filter/reduce, dates, JSON and try/catch.
 - [ ] Structured Text Foundations lane. Nothing here runs ST yet, so outputs need the PLC interpreter below (or would be hand-written, which the output rule forbids).
+- [ ] 50 lessons per language, counting Foundations and track steps together (agreed 2026-11-09). Process: an outline of titles for review, then one language per commit with generated outputs. Ignition script and expression count as one language. Ladder and Structured Text wait for the PLC interpreter so their outputs can be generated.
+  - [x] SQL: 50 (28 Foundations + 22 track steps)
+  - [ ] Python 42, C# 22, PLC Ladder 19, JavaScript 20 (console 11 + page 9), HTML 9, CSS 6, C++ 6, Java 6, Structured Text 3, Ignition 5
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
 - [ ] HMI design principles as their own steps: ISA-101 alarm colors, layout hierarchy, operator-first faceplates.
 - [ ] More Structured Text: CASE state machines, arrays, user-defined types.

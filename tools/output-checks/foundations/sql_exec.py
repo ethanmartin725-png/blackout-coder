@@ -20,7 +20,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-DB = "bc_lesson"
+DB = "PlantDB"  # the name the Python and C# lessons connect to, so error messages read naturally
 
 try:
     import pymssql
@@ -111,11 +111,17 @@ if not creates_table:
         [(datetime.date(2026, 11, 6), "C", "Char Station 2", "T. Nguyen", "Burner B igniter sparking weak on Char Station 2. Maintenance work order opened.", datetime.datetime(2026, 11, 7, 5, 52)),
          (datetime.date(2026, 11, 6), "C", None, "T. Nguyen", 'Hoop stock for 26" heads running low; 2 pallets left.', datetime.datetime(2026, 11, 7, 5, 55))])
 
-# Run the lesson. A script that declares variables runs as one batch so they stay in scope;
-# otherwise each statement runs on its own so its row count can be reported.
+# Run the lesson. GO on its own line separates batches, as in SSMS and sqlcmd. A batch that
+# declares variables, uses TRY/CATCH or creates a procedure, function, view or trigger runs whole,
+# so its variables stay in scope and its body stays intact. Any other batch runs one statement
+# at a time, so each INSERT, UPDATE or DELETE can report its row count.
+WHOLE = re.compile(r"^\s*(DECLARE\b|BEGIN\s+TRY\b|CREATE\s+(PROC|PROCEDURE|FUNCTION|VIEW|TRIGGER)\b)", re.I | re.M)
 blocks = []
 try:
-    batches = [lesson] if re.search(r"^\s*DECLARE\b", lesson, re.I | re.M) else statements(lesson)
+    batches = []
+    for batch in re.split(r"^\s*GO\s*$", lesson, flags=re.I | re.M):
+        if batch.strip():
+            batches += [batch.strip()] if WHOLE.search(batch) else statements(batch)
     for b in batches:
         cur.execute(b)
         while True:
