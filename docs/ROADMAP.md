@@ -36,6 +36,7 @@
   - [x] Ignition 50
   - [ ] Structured Text 48 (stage 3 waits on 1756-RM003)
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
+- [x] Phone layout for the simulator scenes: below 600px each scene draws a compact 440-wide layout (the conveyor shows the belt from the eye on), so nothing scrolls sideways. Drawing only; the scene physics are the same at every width.
 - [x] HMI design principles as their own steps: the High-Performance HMI track (18 steps). ISA-101 display hierarchy, grey for normal with color reserved for alarms (high-performance HMI practice; ISA-101 itself sets no colors), analog indicators with a normal band, ISA-18.2 alarm priority, acknowledge and return-to-normal.
 - [ ] More Structured Text: user-defined types.
 
@@ -63,7 +64,7 @@
 - [x] Ignition runtime and lane: real Jython 2.7.4 with a teaching model of `system.*` (tags, db over JDBC to SQL Server, date, dataset, util) and the expression language; the PLC track's 5 Ignition outputs are now generated, and a 30-lesson Ignition lane. The verifier refuses Jython-incompatible code.
 - [x] C# to 50: 28 Foundations lessons (format strings and culture, loops, arrays, switch expressions, TryParse, nullable, DateTime, decimal for money, collections and LINQ through a cumulative Pareto, enums, records, validation, interfaces, extension and generic methods, pattern matching, exceptions, files, JSON, async/await, banker's rounding), outputs from `dotnet run`.
 - [x] Ladder to 50: 29 Foundations lessons (bit patterns, timers, counters and math, compare and select, ladder state machines, two scene challenges). 9 are held identical to their Structured Text twins with `sameAs`. The on-delay lesson's tags became `No_Feed_Timer`/`No_Feed_Fault`: a starved belt is not a jam.
-- [ ] More challenge lessons per scene, and scenes for new machines as lessons need them. CTUD once its Logix semantics are confirmed. On a phone the conveyor scene scrolls sideways inside its box; a narrower layout would keep the eye and stack light in view.
+- [ ] More challenge lessons per scene, and scenes for new machines as lessons need them. CTUD once its Logix semantics are confirmed.
 - [x] Ladder simulation: the learner's own ladder or Structured Text drives a machine scene in the simulator (PLC interpreter phases 1 to 4).
 
 ## Known limitations

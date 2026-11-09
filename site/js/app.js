@@ -327,6 +327,8 @@ const lamp=(cls,x,y,lit,label)=>`<circle class="sc-lamp ${cls}${lit?' on':''}" c
 // Scenes: small machines bound to tag names. A scene factory returns null when the routine
 // lacks the tags it needs; otherwise an object with drives (tags the scene writes, so they are
 // not offered as inputs), controls ([{label, run}] returning a message), step(dt), svg(), note().
+// Phones draw each scene's compact 440-wide layout instead of scrolling a 640-wide one.
+const NARROW_SCENE=matchMedia('(max-width:600px)');
 const SCENES={
   // Conveyor 3 jam cell: barrels ride the belt while Conv_Run is on; the photo eye drives
   // Eye_Blocked from where they are. "Jam a barrel" sticks the next barrel at the eye.
@@ -359,17 +361,20 @@ const SCENES={
       if(plc.has('Eye_Blocked'))plc.write('Eye_Blocked',S.blocked?1:0);
     };
     S.note=()=>S.stuck?'A barrel is stuck at the eye. Watch whether your logic catches the jam.':null;
-    S.svg=()=>{
-      const run=plcOn(plc,'Conv_Run'),jam=plcOn(plc,'Jam_Fault'),o=[];
-      o.push('<rect class="sc-belt" x="0" y="110" width="640" height="14" rx="3"/>');
-      for(let x=20;x<640;x+=80)o.push(`<circle class="sc-roller" cx="${x}" cy="117" r="5"/>`);
-      for(const b of S.barrels){const x=b.x.toFixed(1),x2=(b.x+S.W).toFixed(1);o.push(`<g class="sc-barrel${b===S.stuck?' jam':''}"><rect x="${x}" y="66" width="${S.W}" height="44" rx="7"/><line x1="${x}" y1="78" x2="${x2}" y2="78"/><line x1="${x}" y1="98" x2="${x2}" y2="98"/></g>`);}
-      o.push(`<rect class="sc-eye" x="${S.EYE-7}" y="22" width="14" height="18" rx="2"/><line class="sc-beam${S.blocked?' blocked':''}" x1="${S.EYE}" y1="40" x2="${S.EYE}" y2="110"/><text class="sc-label" x="${S.EYE+12}" y="34">Eye_Blocked ${S.blocked?1:0}</text>`);
+    // Narrow: draw only the belt from x 200 on (eye and stack light), on a 440-wide canvas.
+    // Only the drawing moves; the belt's physics are the same at every screen width.
+    S.svg=narrow=>{
+      const run=plcOn(plc,'Conv_Run'),jam=plcOn(plc,'Jam_Fault'),o=[],ox=narrow?200:0,W=640-ox;
+      o.push(`<rect class="sc-belt" x="0" y="110" width="${W}" height="14" rx="3"/>`);
+      for(let x=20;x<640;x+=80)if(x>=ox)o.push(`<circle class="sc-roller" cx="${x-ox}" cy="117" r="5"/>`);
+      for(const b of S.barrels){const x=(b.x-ox).toFixed(1),x2=(b.x-ox+S.W).toFixed(1);o.push(`<g class="sc-barrel${b===S.stuck?' jam':''}"><rect x="${x}" y="66" width="${S.W}" height="44" rx="7"/><line x1="${x}" y1="78" x2="${x2}" y2="78"/><line x1="${x}" y1="98" x2="${x2}" y2="98"/></g>`);}
+      const ex=S.EYE-ox;
+      o.push(`<rect class="sc-eye" x="${ex-7}" y="22" width="14" height="18" rx="2"/><line class="sc-beam${S.blocked?' blocked':''}" x1="${ex}" y1="40" x2="${ex}" y2="110"/><text class="sc-label" x="${ex+12}" y="34">Eye_Blocked ${S.blocked?1:0}</text>`);
       o.push(`<rect class="sc-motor${run?' on':''}" x="6" y="130" width="46" height="30" rx="4"/><text class="sc-label dark" x="29" y="149" text-anchor="middle">M</text><text class="sc-label" x="60" y="150">Conv_Run ${run?1:0}</text>`);
-      o.push('<rect class="sc-pole" x="609" y="12" width="6" height="98"/>',lamp('r',612,22,jam),lamp('a',612,44,!run&&!jam),lamp('g',612,66,run));
+      o.push(`<rect class="sc-pole" x="${609-ox}" y="12" width="6" height="98"/>`,lamp('r',612-ox,22,jam),lamp('a',612-ox,44,!run&&!jam),lamp('g',612-ox,66,run));
       if(plc.has('Barrel_Count'))o.push(`<text class="sc-lcd" x="8" y="24">BARRELS ${String(plc.read(plc.typeOf('Barrel_Count')==='COUNTER'?'Barrel_Count.ACC':'Barrel_Count')).padStart(4,'0')}</text>`);
       if(plc.has('Conv_State')){const v=plc.read('Conv_State');o.push(`<text class="sc-lcd" x="8" y="48">STATE ${v} ${STATE_NAMES[v]||''}</text>`);}
-      return `<svg viewBox="0 0 640 170" role="img" aria-label="Conveyor 3: barrels on the belt, photo eye, motor and stack light">${o.join('')}</svg>`;
+      return `<svg viewBox="0 0 ${W} 170" role="img" aria-label="Conveyor 3: barrels on the belt, photo eye, motor and stack light">${o.join('')}</svg>`;
     };
     return S;
   },
@@ -394,8 +399,9 @@ const SCENES={
       plc.write('Hoop1_Air_PSI',Math.round((S.base-(S.dip>0?14:0))*10)/10);
     };
     S.note=()=>null;
-    S.svg=()=>{
-      const psi=plc.read('Hoop1_Air_PSI'),cx=120,cy=118,r=84,o=[];
+    // Narrow: a shorter cylinder and the lamps moved in, on a 440-wide canvas.
+    S.svg=narrow=>{
+      const psi=plc.read('Hoop1_Air_PSI'),cx=120,cy=118,r=84,o=[],cyl=narrow?236:268,cw=narrow?60:110,stroke=narrow?50:70,lx=narrow?360:500;
       const pt=(v,rr)=>{const a=Math.PI*(1-Math.max(0,Math.min(150,v))/150);return [cx+rr*Math.cos(a),cy-rr*Math.sin(a)];};
       const arc=(v1,v2,cls)=>{const [x1,y1]=pt(v1,r),[x2,y2]=pt(v2,r);return `<path class="${cls}" d="M${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}"/>`;};
       o.push(arc(0,150,'sc-dial'),arc(0,80,'sc-dial low'),arc(85,110,'sc-dial band'));
@@ -404,11 +410,11 @@ const SCENES={
       o.push(`<line class="sc-needle" x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}"/><circle class="sc-hub" cx="${cx}" cy="${cy}" r="6"/>`);
       o.push(`<text class="sc-lcd" x="${cx}" y="${cy+30}" text-anchor="middle">${Number(psi).toFixed(1)} PSI</text>`);
       const firing=S.dip>0;
-      o.push(`<rect class="sc-cyl" x="268" y="58" width="110" height="34" rx="4"/><rect class="sc-rod${firing?' out':''}" x="378" y="69" width="${firing?70:18}" height="12" rx="2"/><text class="sc-label" x="268" y="50">Cylinder${firing?' firing':''}</text>`);
-      o.push(`<text class="sc-label" x="268" y="122">${S.mode}</text>`);
-      let y=22;const row=(cls,tag,label)=>{if(plc.has(tag)){o.push(lamp(cls,500,y,plcOn(plc,tag),label));y+=26;}};
+      o.push(`<rect class="sc-cyl" x="${cyl}" y="58" width="${cw}" height="34" rx="4"/><rect class="sc-rod${firing?' out':''}" x="${cyl+cw}" y="69" width="${firing?stroke:18}" height="12" rx="2"/><text class="sc-label" x="${cyl}" y="50">Cylinder${firing?' firing':''}</text>`);
+      o.push(`<text class="sc-label" x="${cyl}" y="${narrow?150:122}">${S.mode}</text>`);
+      let y=22;const row=(cls,tag,label)=>{if(plc.has(tag)){o.push(lamp(cls,lx,y,plcOn(plc,tag),label));y+=26;}};
       row('g','Hoop1_Air_OK','AIR OK');row('r','Hoop1_Low_Air','LOW AIR');row('g','Hoop1_Run','RUN');
-      return `<svg viewBox="0 0 640 170" role="img" aria-label="Hoop Driver 1 air header: pressure gauge, cylinder and status lamps">${o.join('')}</svg>`;
+      return `<svg viewBox="0 0 ${narrow?440:640} 170" role="img" aria-label="Hoop Driver 1 air header: pressure gauge, cylinder and status lamps">${o.join('')}</svg>`;
     };
     return S;
   },
@@ -423,7 +429,8 @@ const SCENES={
       if(fan)S.angle=(S.angle+540*s)%360;
     };
     S.note=()=>plcOn(plc,'Char2_Burner_On')&&!plcOn(plc,'Char2_Exhaust_Fan')?'The burner is on with the fan off: smoke is building up.':null;
-    S.svg=()=>{
+    // Narrow: the lamps moved in, on a 440-wide canvas.
+    S.svg=narrow=>{
       const burn=plcOn(plc,'Char2_Burner_On'),fan=plcOn(plc,'Char2_Exhaust_Fan'),o=[];
       o.push('<path class="sc-hood" d="M210 18 L330 18 L360 52 L180 52 Z"/><rect class="sc-duct" x="255" y="4" width="30" height="16"/>');
       o.push(`<g transform="rotate(${S.angle.toFixed(0)} 270 35)"><path class="sc-blade${fan?' on':''}" d="M270 35 L262 23 L278 23 Z M270 35 L282 43 L274 49 Z M270 35 L258 43 L266 49 Z"/></g><circle class="sc-hub" cx="270" cy="35" r="4"/>`);
@@ -433,9 +440,9 @@ const SCENES={
       o.push(`<text class="sc-lcd" x="8" y="24">SMOKE ${String(Math.round(S.smoke)).padStart(3,' ')}%</text>`);
       const t=(tag,label)=>{if(plc.has(tag)&&plc.read(`${tag}.TT`)){const left=(plc.read(`${tag}.PRE`)-plc.read(`${tag}.ACC`))/1000;o.push(`<text class="sc-lcd" x="8" y="48">${label} ${left.toFixed(1)} S</text>`);}};
       t('Purge_Timer','PURGE');t('Post_Purge','POST-PURGE');t('Exhaust_Timer','RUN-ON');
-      let y=22;const row=(cls,tag,label)=>{if(plc.has(tag)){o.push(lamp(cls,500,y,plcOn(plc,tag),label));y+=26;}};
+      let y=22;const row=(cls,tag,label)=>{if(plc.has(tag)){o.push(lamp(cls,narrow?360:500,y,plcOn(plc,tag),label));y+=26;}};
       row('a','Char2_Burner_On','BURNER');row('g','Char2_Exhaust_Fan','FAN');
-      return `<svg viewBox="0 0 640 170" role="img" aria-label="Char Station 2: burner, barrel, exhaust hood and fan">${o.join('')}</svg>`;
+      return `<svg viewBox="0 0 ${narrow?440:640} 170" role="img" aria-label="Char Station 2: burner, barrel, exhaust hood and fan">${o.join('')}</svg>`;
     };
     return S;
   },
@@ -547,7 +554,7 @@ function simDraw(){
   });
   document.querySelectorAll('#simInputs .sim-in').forEach(b=>b.setAttribute('aria-pressed',String(+p.read(b.dataset.tag)!==(b.dataset.mode==='hold'?+b.dataset.rest:0))));
   if(sim.scene){
-    $('simScene').innerHTML=sim.scene.svg();
+    $('simScene').innerHTML=sim.scene.svg(NARROW_SCENE.matches);
     const n=sim.scene.note();
     if(n&&n!==sim.note)simMsg(n);
     sim.note=n;

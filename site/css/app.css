@@ -195,7 +195,7 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
 .sim-msg{margin:0;font-size:13px;color:var(--ink-2)}
 .sim-msg.err{color:var(--bad)}
 .sim-scene{overflow-x:auto}
-.sim-scene svg{display:block;width:100%;height:auto;max-width:760px;min-width:520px} /* stays readable on a phone; scrolls in its own box */
+.sim-scene svg{display:block;width:100%;height:auto;max-width:760px;min-width:520px} /* phones use the compact layout below */
 .sim-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
 .sim-inputs{display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
 .sim-in{font:600 12px var(--f-code);color:var(--ink);background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:7px 10px;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;text-align:left}
@@ -265,6 +265,12 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
   .lesson-nav select{flex:1;max-width:none;width:0} /* shrink to the row, whatever the longest lesson title */
   .nav{align-items:flex-start}
   .langs{justify-content:flex-start}
+}
+@media (max-width:600px){
+  .sim-scene svg{min-width:0} /* scenes switch to their compact layout here (NARROW_SCENE in app.js) */
+  .sim-scene .sc-label{font-size:15px} /* the compact canvas is drawn smaller, so its labels are larger */
+  .ref{padding:14px}
+  .sim{padding:8px}
 }
 @media (max-width:520px){
   .goal{grid-template-columns:minmax(0,1fr)}
