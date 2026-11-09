@@ -25,10 +25,16 @@ BC.addTrack({
       ],
       out: `Commands completed successfully.
 
-Sample rows:
-machine         reason      qty  ts
-Char Station 2  Bad char    4    2026-11-02 23:18:05
-Conveyor 3      Leaker      2    2026-11-03 09:41:50`,
+SELECT COLUMN_NAME AS column_name, DATA_TYPE AS type, CHARACTER_MAXIMUM_LENGTH AS max_len,
+    IS_NULLABLE AS nullable, COLUMN_DEFAULT AS default_value,
+    COLUMNPROPERTY(OBJECT_ID('reject_log'), COLUMN_NAME, 'IsIdentity') AS is_identity
+FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'reject_log' ORDER BY ORDINAL_POSITION;
+column_name  type      max_len  nullable  default_value  is_identity
+reject_id    int       NULL     NO        NULL           1
+machine      varchar   50       NO        NULL           0
+reason       varchar   50       NO        NULL           0
+qty          int       NULL     NO        NULL           0
+ts           datetime  NULL     NO        (getdate())    0`,
     },
     {
       lang: "sql",
@@ -57,7 +63,14 @@ FROM c;`,
         ["made_this_hour", "made_this_hour", "Barrels since the previous reading, with counter resets handled."],
         ["0", "THEN 0", "A first reading has nothing to compare to. 0 keeps sums clean; NULL would be more honest for analysis. Choose deliberately."],
       ],
-      out: `Commands completed successfully.`,
+      out: `Commands completed successfully.
+
+SELECT TOP 4 * FROM v_hourly_barrels ORDER BY ts, machine;
+machine         ts                   made_this_hour
+Char Station 2  2026-10-31 06:00:00  0
+Conveyor 3      2026-10-31 06:00:00  0
+Hoop Driver 1   2026-10-31 06:00:00  0
+Char Station 2  2026-10-31 07:00:00  44`,
     },
     {
       lang: "sql",
@@ -124,16 +137,16 @@ LEFT JOIN made AS c ON c.machine = m.machine
 LEFT JOIN rej AS r ON r.machine = m.machine
 LEFT JOIN down AS d ON d.machine = m.machine
 ORDER BY m.machine;`,
-      about: "Start from the dimension so every machine appears even if it logged nothing. A plain JOIN would silently drop a machine with zero faults, which is the best machine you have. ISNULL turns the gaps into 0.",
+      about: "Start from the dimension so every machine appears even if it logged nothing. A plain JOIN would silently drop a machine with zero faults, which is the best machine you have. ISNULL turns the gaps into 0. Look closely at down_min: 87.049997, not 87.05. The view divides each fault's seconds by 60.0, SQL Server keeps 6 decimals and drops the rest, and 45 slightly-short values add up short. Summing seconds first and dividing once gives exactly 87.05; at one decimal it makes no difference.",
       terms: [
         ["LEFT", "LEFT JOIN", "Keeps every row from the left table, matched or not."],
         ["ISNULL", "ISNULL(d.down_min, 0)", "No faults logged means 0 down minutes, not a missing row."],
         ["dim_machine", "Start from the dimension", "The machine list drives the report, not whichever logs happen to have data."],
       ],
-      out: `machine         ideal_rate_hr  margin_per_barrel  down_min  total_count  rejects
-Char Station 2  50             42.50              87.05     6980         211
-Conveyor 3      60             42.50              94.73     7120         142
-Hoop Driver 1   55             42.50              108.85    6410         96`,
+      out: `machine         ideal_rate_hr  margin_per_barrel  down_min    total_count  rejects
+Char Station 2  50             42.50              87.049997   6980         211
+Conveyor 3      60             42.50              94.733327   7120         142
+Hoop Driver 1   55             42.50              108.849994  6410         96`,
     },
     {
       lang: "python",
@@ -160,9 +173,9 @@ print(df.to_string(index=False))`,
         ["to_string", ".to_string(index=False)", "Prints the whole table without the row numbers."],
       ],
       out: `       machine  ideal_rate_hr  margin_per_barrel   down_min  total_count  rejects
-Char Station 2             50               42.5  87.050000         6980      211
-    Conveyor 3             60               42.5  94.733333         7120      142
- Hoop Driver 1             55               42.5 108.850000         6410       96`,
+Char Station 2             50               42.5  87.049997         6980      211
+    Conveyor 3             60               42.5  94.733327         7120      142
+ Hoop Driver 1             55               42.5 108.849994         6410       96`,
     },
     {
       lang: "python",
@@ -180,7 +193,8 @@ df["availability"] = df["run_min"] / df["planned_min"]`,
         ["run_min", "run_min", "Planned minutes minus down minutes."],
         ["availability", "Availability", "Run time ÷ planned time."],
       ],
-      out: `planned_min   9,450 for every machine
+      out: `After this step:
+planned_min   9,450 for every machine
 run_min       Char Station 2 9,362.95 · Conveyor 3 9,355.27 · Hoop Driver 1 9,341.15
 availability  99.1% · 99.0% · 98.8%`,
     },
@@ -337,7 +351,9 @@ for cell in ws[1]:
         ["PatternFill", "PatternFill(\"solid\", fgColor=…)", "A solid cell background."],
         ["Font", "Font(bold=True, color=…)", "Text style for a cell."],
       ],
-      out: `Sheet "OEE Summary", row 1: navy header with gold bold labels.`,
+      out: `After this step:
+Sheet "OEE Summary", row 1: Machine, Availability, Performance, Quality, OEE, Avail $, Perf $, Qual $, $ per OEE pt
+A1: fill #1F2A44, font #D6AA47, bold True, center`,
     },
     {
       lang: "python",
@@ -362,7 +378,10 @@ for row in ws.iter_rows(min_row=2, max_row=last):
         ["number_format", ".number_format", "Excel display format. The cell keeps the full value."],
         ["[", "row[1:5]", "A slice: items 1, 2, 3 and 4."],
       ],
-      out: `Rows 2–4: one per machine. Ratios show as 99.1%, dollars as $3,083.`,
+      out: `After this step:
+Row 2: Char Station 2 | OEE 0.8596 as 0.0% | Avail $ 3,083.02 as $#,##0
+Row 3: Conveyor 3 | OEE 0.7384 as 0.0% | Avail $ 4,026.17 as $#,##0
+Row 4: Hoop Driver 1 | OEE 0.7289 as 0.0% | Avail $ 4,240.61 as $#,##0`,
     },
     {
       lang: "python",
@@ -382,8 +401,10 @@ for col in "FGH":
         ["=SUM", "\"=SUM(F2:F4)\"", "A string that starts with = is stored as an Excel formula."],
         ["FGH", "for col in \"FGH\"", "Looping over a string visits each letter."],
       ],
-      out: `Row 5:  Total   …   =SUM(F2:F4)   =SUM(G2:G4)   =SUM(H2:H4)
-In Excel: $11,350   $221,444   $19,083`,
+      out: `After this step:
+Row 5: Total | =SUM(F2:F4) | =SUM(G2:G4) | =SUM(H2:H4)
+The SUMs over rows 2 to 4: 11,349.80   221,443.95   19,082.50
+Excel shows them as $11,350   $221,444   $19,083`,
     },
     {
       lang: "python",
@@ -406,7 +427,8 @@ print("Saved oee_loss_week.xlsx")`,
       ],
       out: `Saved oee_loss_week.xlsx
 
-oee_loss_week.xlsx → "OEE Summary": header, 3 machines, live total row`,
+After this step:
+Reopened: 5 rows x 9 columns, frozen at A2, column A width 16`,
     },
   ],
 });

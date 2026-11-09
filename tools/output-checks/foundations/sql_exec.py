@@ -8,6 +8,7 @@
 #   - fault_log rows: the 47 seeded faults from tools/output-checks/track2-db/gen.py
 #   - handoff_note rows: the two open notes the Shift Handoff track starts with
 #   - count_log rows: hourly counter readings from seeded_counts() below
+#   - reject_log rows: rejects from seeded_rejects() below (table from OEE Loss Report's CREATE step)
 # A lesson that itself creates a table runs against an empty database instead.
 #
 # Server: a local SQL Server 2022, e.g.
@@ -47,9 +48,9 @@ def canonical_ddl():
     js = r"""
 const fs=require('fs'),vm=require('vm'),c={T:{}};
 c.BC={addLanguage(){},addLane(){},addTrack(t){c.T[t.id]=t}};vm.createContext(c);
-for(const f of ['02-db','04-handoff'])vm.runInContext(fs.readFileSync(process.argv[1]+'/site/data/tracks/'+f+'.js','utf8'),c);
+for(const f of ['02-db','03-oee','04-handoff'])vm.runInContext(fs.readFileSync(process.argv[1]+'/site/data/tracks/'+f+'.js','utf8'),c);
 const pick=(id,t)=>{const l=c.T[id].lessons.find(x=>x.t===t);if(!l)throw new Error('missing '+t);return l.code};
-console.log(JSON.stringify([pick('t-db','Create fault_log'),pick('t-db','Create count_log'),pick('t-db','Machine dimension'),pick('t-handoff','Create handoff_note')]));
+console.log(JSON.stringify([pick('t-db','Create fault_log'),pick('t-db','Create count_log'),pick('t-db','Machine dimension'),pick('t-oee','Create reject_log'),pick('t-handoff','Create handoff_note')]));
 """
     r = subprocess.run(["node", "-e", js, str(ROOT)], capture_output=True, text=True, check=True)
     return json.loads(r.stdout)
@@ -96,6 +97,39 @@ def seeded_counts():
     return rows
 
 
+def seeded_rejects():
+    """reject_log rows: barrels scrapped or sent to rework, by reason.
+
+    - The week 2026-10-31 06:00 to 2026-11-07 06:00 adds up to the OEE Loss Report's rejects:
+      Char Station 2 211, Conveyor 3 142, Hoop Driver 1 96 (Hoop Driver 1's 6,314 good of 6,410).
+    - It includes the two sample rows the OEE track's CREATE step shows.
+    - Shift A on 2026-11-07 matches shift_log.csv: Conveyor 3 5 (347 good of 352) and Hoop Driver 1 3
+      (271 of 274). Char Station 2's row there is the known bad one (310 good of 301), so it gets none.
+    Reasons, times and the split into entries are illustrative: one entry per machine per shift,
+    logged 3 h 25 min into the shift, the week's total spread as evenly as whole barrels allow."""
+    reasons = {"Char Station 2": ["Bad char", "Bad char", "Scorched head"],
+               "Conveyor 3": ["Leaker", "Damaged stave", "Leaker"],
+               "Hoop Driver 1": ["Loose hoop", "Leaker", "Loose hoop"]}
+    week = {"Char Station 2": 211, "Conveyor 3": 142, "Hoop Driver 1": 96}
+    samples = [("Char Station 2", "Bad char", 4, datetime.datetime(2026, 11, 2, 23, 18, 5)),
+               ("Conveyor 3", "Leaker", 2, datetime.datetime(2026, 11, 3, 9, 41, 50))]
+    start = datetime.datetime(2026, 10, 31, 6)
+    rows = list(samples)
+    for machine, total in week.items():
+        left = total - sum(q for m, _, q, _ in samples if m == machine)
+        base, extra = divmod(left, 21)  # 21 shifts in the week
+        for k in range(21):
+            qty = base + (1 if k < extra else 0)
+            if qty:
+                ts = start + datetime.timedelta(hours=8 * k, minutes=205)
+                rows.append((machine, reasons[machine][k % 3], qty, ts))
+    rows += [("Conveyor 3", "Leaker", 5, datetime.datetime(2026, 11, 7, 9, 40)),
+             ("Hoop Driver 1", "Loose hoop", 3, datetime.datetime(2026, 11, 7, 9, 40))]
+    for machine, total in week.items():
+        assert sum(q for m, _, q, t in rows if m == machine and start <= t < datetime.datetime(2026, 11, 7, 6)) == total
+    return sorted(rows, key=lambda r: r[3])
+
+
 def statements(sql):
     """Split on a semicolon at the end of a line. Fine for these lessons; not a general SQL parser."""
     return [s.strip() for s in re.split(r";[ \t]*(?:\n|$)", sql) if s.strip()]
@@ -140,6 +174,7 @@ if not creates_table:
             cur.execute(s)
     cur.executemany("INSERT INTO fault_log (machine, fault, start_ts, end_ts) VALUES (%s, %s, %s, %s)", seeded_faults())
     cur.executemany("INSERT INTO count_log (machine, barrels, state, ts) VALUES (%s, %s, %s, %s)", seeded_counts())
+    cur.executemany("INSERT INTO reject_log (machine, reason, qty, ts) VALUES (%s, %s, %s, %s)", seeded_rejects())
     cur.executemany(
         "INSERT INTO handoff_note (shift_date, shift, machine, author, note, created_ts) VALUES (%s, %s, %s, %s, %s, %s)",
         [(datetime.date(2026, 11, 6), "C", "Char Station 2", "T. Nguyen", "Burner B igniter sparking weak on Char Station 2. Maintenance work order opened.", datetime.datetime(2026, 11, 7, 5, 52)),
