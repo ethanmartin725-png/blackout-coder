@@ -28,7 +28,8 @@
   - [x] PLC Ladder 50
   - [x] C# 50
   - [x] JavaScript 50 (console 31 + page 19)
-  - [ ] HTML 40, CSS 38 (AM Checklist track next: +10 HTML, +12 CSS), C++ 6, Java 6, Structured Text 48, Ignition 5
+  - [x] HTML 50, CSS 50
+  - [ ] C++ 6, Java 6, Structured Text 48, Ignition 5
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
 - [ ] HMI design principles as their own steps: ISA-101 alarm colors, layout hierarchy, operator-first faceplates.
 - [ ] More Structured Text: user-defined types.
@@ -43,6 +44,7 @@
 - [x] PLC interpreter phase 2: Structured Text (assignments, IF/ELSIF, CASE, logic and math, TONR/TOFR/RTOR). The 3 ST track steps have generated outputs identical to their ladder twins.
 - [x] PLC interpreter phase 3: browser simulator. The learner's own ladder or Structured Text runs after the step is finished or checked; Conveyor 3 jam-cell scene on the track's jam-cell steps.
 - [x] PLC interpreter phase 4: air header and burner/fan scenes, "Compare with the reference", two challenge lessons (Ladder now 21).
+- [x] AM Checklist track: a daily Autonomous Maintenance sheet for Hoop Driver 1 (10 HTML, 12 CSS steps), with CSS-only check-off, out-of-range highlighting and a print stylesheet.
 - [x] HTML lane +27 lessons (page skeleton to inline SVG) and a new CSS lane of 28 lessons. CSS lane lessons carry the markup they style in an `html` field; the preview renders it with the target and the typed CSS.
 - [x] JavaScript to 50: 20 console lessons (truthiness, sorting numbers, `??` and `?.`, Map/Set, reduce grouping, parsing and NaN, floating point and cents, classes, closures, errors, async/await, Intl, JSON) and a new Downtime Entry track (4 HTML, 4 CSS, 10 JavaScript steps) whose outputs come from running each step's page in Chromium.
 - [x] C# to 50: 28 Foundations lessons (format strings and culture, loops, arrays, switch expressions, TryParse, nullable, DateTime, decimal for money, collections and LINQ through a cumulative Pareto, enums, records, validation, interfaces, extension and generic methods, pattern matching, exceptions, files, JSON, async/await, banker's rounding), outputs from `dotnet run`.
