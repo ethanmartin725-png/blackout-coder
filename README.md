@@ -6,9 +6,9 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 
 ## What's inside
 
-**Foundations**: ten single-language lanes (Python, PLC ladder, SQL, C#, C++, Java, HTML, JavaScript, Structured Text, CSS), 301 lessons.
+**Foundations**: ten single-language lanes (Python, PLC ladder, SQL, C#, C++, Java, HTML, JavaScript, Structured Text, CSS), 325 lessons.
 
-**Projects**: nine tracks, 158 steps, that build one connected system for a sample cooperage line:
+**Projects**: ten tracks, 178 steps, that build one connected system for a sample cooperage line:
 
 | Track | Steps | Builds |
 |---|---|---|
@@ -20,6 +20,7 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 | MES Helper | 17 | A .NET console tool in C#: PLC faults to coded MES downtime events, posted in one transaction, plus a shift summary and CSV |
 | AM Checklist | 22 | A daily Autonomous Maintenance check sheet in HTML and CSS: CIL checklists, readings that flag out-of-range values, an abnormality tag, print styles |
 | Eye Counter | 20 | Firmware-style C++ for a barrel counter on Conveyor 3's photo-eye: debounce, edge counting, a cycle-time ring buffer, jam detection, status bits, a serial line |
+| ERP Export | 20 | A Java back-office job: shift counts to a fixed-width ERP file with header and trailer control totals, bad rows held back with reasons, safe to rerun |
 | Downtime Entry | 18 | An operator form for the stops the PLC never sees, in HTML, CSS and JavaScript: validation, a log table, totals and undo |
 
 Three clean runs (90%+ accuracy, no peeks) at a rank unlock the next one. Each lane and track keeps its own rank. Progress saves in the browser, per device.

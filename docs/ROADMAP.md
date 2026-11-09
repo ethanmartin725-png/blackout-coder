@@ -12,7 +12,7 @@
 
 - [x] C# project track: MES Helper (`t-mes`), 17 steps.
 - [x] C++ project track: Eye Counter (20 steps), outputs from compiling each step with a test main (`tools/output-checks/track9-eye/run.mjs`).
-- [ ] Java project track: ERP Export (back-office integration).
+- [x] Java project track: ERP Export (20 steps), outputs from compiling each step with a test main (`tools/output-checks/track10-erp/run.mjs`).
 - [x] Real outputs for the Python, C#, C++ and Java Foundations lessons (`tools/output-checks/foundations/run.mjs`).
 - [x] SQL lane moved onto the canonical tables and extended to 13 lessons (NULLs, date math, LEFT JOIN, INSERT/UPDATE, CTE, LAG). Outputs come from SQL Server 2022 running each lesson on the seeded sample data.
 - [x] Foundations examples on the canonical machines in every lane. Python, C#, C++ and Java print the same numbers (OEE 72.9%, 41 fault minutes, quality 98.5%).
@@ -31,7 +31,8 @@
   - [x] JavaScript 50 (console 31 + page 19)
   - [x] HTML 50, CSS 50
   - [x] C++ 50
-  - [ ] Java 6, Structured Text 48, Ignition 5
+  - [x] Java 50
+  - [ ] Structured Text 48, Ignition 5
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
 - [ ] HMI design principles as their own steps: ISA-101 alarm colors, layout hierarchy, operator-first faceplates.
 - [ ] More Structured Text: user-defined types.
@@ -46,6 +47,7 @@
 - [x] PLC interpreter phase 2: Structured Text (assignments, IF/ELSIF, CASE, logic and math, TONR/TOFR/RTOR). The 3 ST track steps have generated outputs identical to their ladder twins.
 - [x] PLC interpreter phase 3: browser simulator. The learner's own ladder or Structured Text runs after the step is finished or checked; Conveyor 3 jam-cell scene on the track's jam-cell steps.
 - [x] PLC interpreter phase 4: air header and burner/fan scenes, "Compare with the reference", two challenge lessons (Ladder now 21).
+- [x] Java to 50: 24 lane lessons (String methods, StringBuilder, Locale formatting, text blocks, switch expressions, lists, Comparator, merge, records, enums, classes, interfaces, abstract classes, var, checked exceptions, try-with-resources, Optional, streams, groupingBy, java.time, int overflow, BigDecimal, generics, cumulative Pareto) and the ERP Export track.
 - [x] C++ to 50: 24 lane lessons (iomanip, switch, strings, stringstream, references, constexpr and std::array, map, unordered_map, pairs, sort, accumulate, algorithms, classes, enum class, optional, exceptions, unique_ptr, templates, integer division, 16-bit wraparound, bit masks, chrono, files) and the Eye Counter track.
 - [x] AM Checklist track: a daily Autonomous Maintenance sheet for Hoop Driver 1 (10 HTML, 12 CSS steps), with CSS-only check-off, out-of-range highlighting and a print stylesheet.
 - [x] HTML lane +27 lessons (page skeleton to inline SVG) and a new CSS lane of 28 lessons. CSS lane lessons carry the markup they style in an `html` field; the preview renders it with the target and the typed CSS.
