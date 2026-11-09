@@ -601,6 +601,29 @@ function renderGoal(){
   $('tgtHead').textContent=inTrack()?`Code to match · ${LD[lesson.lang].short}`:'Code to match';
 }
 
+/* ---------- sound ----------
+   Optional, off by default (S.sound, kept in this browser). Synthesized with Web Audio, so there are
+   no sound files: a soft tick per correct key, a short low buzz on a wrong character, and a rising
+   three-note chime when a lesson completes. Any failure (no audio device, blocked) is silent. */
+let actx=null;
+function tone(freq,ms,type,gain,delay){
+  if(!S.sound)return;
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume();
+    const t=actx.currentTime+(delay||0)/1000,o=actx.createOscillator(),g=actx.createGain();
+    o.type=type;o.frequency.setValueAtTime(freq,t);
+    g.gain.setValueAtTime(gain,t);g.gain.exponentialRampToValueAtTime(0.0001,t+ms/1000);
+    o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+ms/1000+0.02);
+  }catch(e){}
+}
+const SOUND={
+  key:()=>tone(1500,22,'square',0.015),
+  bad:()=>tone(130,110,'sawtooth',0.04),
+  done:()=>{tone(523.25,200,'sine',0.07,0);tone(659.25,200,'sine',0.07,110);tone(783.99,320,'sine',0.07,220);},
+};
+function renderSound(){const b=$('soundBtn');b.textContent=`Sound: ${S.sound?'on':'off'}`;b.setAttribute('aria-pressed',S.sound?'true':'false');}
+
 /* ---------- explain this line ----------
    What the commands on the cursor's line do: the lesson's terms first, then the language glossary
    (BCcore.explainLine). It reads the learner's own line, so it never names blacked-out code. Only at
@@ -662,6 +685,7 @@ function finish(){
   $('doneNext').textContent=inTrack()?'Next step':'Next lesson';
   $('doneSum').hidden=!(inTrack()&&idx===lane.lessons.length-1);
   $('done').hidden=false;$('doneNext').focus();
+  SOUND.done();
   renderStats();markTarget(lastA);renderRanks();renderGoal();renderMap();renderLiveViz();
 }
 /* ---------- track summary ----------
@@ -740,7 +764,7 @@ ta.addEventListener('input',e=>{
   if(!startT&&ta.value.length){startT=performance.now();timer=setInterval(renderStats,250);}
   const a=analyze(ta.value);
   if(!programmatic&&(e.inputType==='insertText'||e.inputType==='insertLineBreak')){
-    typed++;if(statusAt(a,ta.selectionStart-1)==='bad')errors++;
+    typed++;if(statusAt(a,ta.selectionStart-1)==='bad'){errors++;SOUND.bad();}else SOUND.key();
   }
   programmatic=false;checked=false;
   renderAll(a);
@@ -826,6 +850,7 @@ $('ranks').addEventListener('click',e=>{
   if(i===p.rank)return;
   p.rank=i;save();renderRanks();renderTarget();resetAttempt();ta.focus();
 });
+$('soundBtn').addEventListener('click',()=>{S.sound=!S.sound;save();renderSound();if(S.sound)SOUND.done();});
 $('resetBtn').addEventListener('click',e=>{
   const b=e.currentTarget;
   if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent=`Click again to reset ${lane.name}`;setTimeout(()=>{b.classList.remove('armed');b.textContent=`Reset progress for ${lane.name}`;},3500);return;}
@@ -857,5 +882,6 @@ $('progFile').addEventListener('change',async e=>{
   flash(`Loaded progress for ${n} lane${n===1?'':'s'} and project${n===1?'':'s'}; higher ranks and better scores kept.${k?` ${k} not in this version, skipped.`:''}`);
 });
 
+renderSound();
 loadLesson();
 })();
