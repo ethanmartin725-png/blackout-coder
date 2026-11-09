@@ -27,7 +27,8 @@
   - [x] Python 50
   - [x] PLC Ladder 50
   - [x] C# 50
-  - [ ] JavaScript 20 (console 11 + page 9), HTML 9, CSS 6, C++ 6, Java 6, Structured Text 48, Ignition 5
+  - [x] JavaScript 50 (console 31 + page 19)
+  - [ ] HTML 13, CSS 10, C++ 6, Java 6, Structured Text 48, Ignition 5
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
 - [ ] HMI design principles as their own steps: ISA-101 alarm colors, layout hierarchy, operator-first faceplates.
 - [ ] More Structured Text: user-defined types.
@@ -42,6 +43,7 @@
 - [x] PLC interpreter phase 2: Structured Text (assignments, IF/ELSIF, CASE, logic and math, TONR/TOFR/RTOR). The 3 ST track steps have generated outputs identical to their ladder twins.
 - [x] PLC interpreter phase 3: browser simulator. The learner's own ladder or Structured Text runs after the step is finished or checked; Conveyor 3 jam-cell scene on the track's jam-cell steps.
 - [x] PLC interpreter phase 4: air header and burner/fan scenes, "Compare with the reference", two challenge lessons (Ladder now 21).
+- [x] JavaScript to 50: 20 console lessons (truthiness, sorting numbers, `??` and `?.`, Map/Set, reduce grouping, parsing and NaN, floating point and cents, classes, closures, errors, async/await, Intl, JSON) and a new Downtime Entry track (4 HTML, 4 CSS, 10 JavaScript steps) whose outputs come from running each step's page in Chromium.
 - [x] C# to 50: 28 Foundations lessons (format strings and culture, loops, arrays, switch expressions, TryParse, nullable, DateTime, decimal for money, collections and LINQ through a cumulative Pareto, enums, records, validation, interfaces, extension and generic methods, pattern matching, exceptions, files, JSON, async/await, banker's rounding), outputs from `dotnet run`.
 - [x] Ladder to 50: 29 Foundations lessons (bit patterns, timers, counters and math, compare and select, ladder state machines, two scene challenges). 9 are held identical to their Structured Text twins with `sameAs`. The on-delay lesson's tags became `No_Feed_Timer`/`No_Feed_Fault`: a starved belt is not a jam.
 - [ ] More challenge lessons per scene, and scenes for new machines as lessons need them. CTUD once its Logix semantics are confirmed. On a phone the conveyor scene scrolls sideways inside its box; a narrower layout would keep the eye and stack light in view.

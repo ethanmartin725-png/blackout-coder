@@ -6,9 +6,9 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 
 ## What's inside
 
-**Foundations**: nine single-language lanes (Python, PLC ladder, SQL, C#, C++, Java, HTML, JavaScript, Structured Text), 202 lessons.
+**Foundations**: nine single-language lanes (Python, PLC ladder, SQL, C#, C++, Java, HTML, JavaScript, Structured Text), 222 lessons.
 
-**Projects**: six tracks, 98 steps, that build one connected system for a sample cooperage line:
+**Projects**: seven tracks, 116 steps, that build one connected system for a sample cooperage line:
 
 | Track | Steps | Builds |
 |---|---|---|
@@ -18,6 +18,7 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 | Shift Handoff | 16 | Shift window logic, a generated one-page handoff, notes written back to SQL |
 | Plant Board Page | 16 | A live line board in HTML, CSS and JavaScript |
 | MES Helper | 17 | A .NET console tool in C#: PLC faults to coded MES downtime events, posted in one transaction, plus a shift summary and CSV |
+| Downtime Entry | 18 | An operator form for the stops the PLC never sees, in HTML, CSS and JavaScript: validation, a log table, totals and undo |
 
 Three clean runs (90%+ accuracy, no peeks) at a rank unlock the next one. Each lane and track keeps its own rank. Progress saves in the browser, per device.
 
