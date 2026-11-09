@@ -158,7 +158,8 @@ let csBuilt = 0;
 if (csNames.length && spawnSync("dotnet", ["--version"]).status !== 0) warns.push("dotnet not found; skipped C# compile checks");
 else if (csNames.length) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "bc-cs-"));
-  const env = { ...process.env, DOTNET_CLI_TELEMETRY_OPTOUT: "1", DOTNET_NOLOGO: "1" };
+  // The builds need no HTTPS dev certificate or global-tools PATH entry, two of the first-run steps
+  const env = { ...process.env, DOTNET_CLI_TELEMETRY_OPTOUT: "1", DOTNET_NOLOGO: "1", DOTNET_GENERATE_ASPNET_CERTIFICATE: "false", DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: "false" };
   const jobs = csNames.map((name) => {
     const p = csProjects[name];
     const d = path.join(dir, name);
@@ -176,9 +177,11 @@ else if (csNames.length) {
       });
     });
   });
-  // Build a few at a time: each build is a separate process
-  const results = [];
-  for (let i = 0; i < jobs.length; i += 4) results.push(...(await Promise.all(jobs.slice(i, i + 4).map((run) => run()))));
+  // The first build runs alone: on a fresh machine (a CI runner) the first dotnet call does one-time
+  // setup, and several builds starting at once can collide in it and crash. Then a few at a time,
+  // since each build is a separate process.
+  const results = [await jobs[0]()];
+  for (let i = 1; i < jobs.length; i += 4) results.push(...(await Promise.all(jobs.slice(i, i + 4).map((run) => run()))));
   for (const r of results) {
     if (r.ok) { csBuilt++; continue; }
     const msgs = [...new Set(r.out.split("\n").filter((x) => /error [A-Z]+\d+/.test(x)))];
