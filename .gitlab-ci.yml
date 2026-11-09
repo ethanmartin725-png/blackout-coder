@@ -9,10 +9,18 @@ stages:
 verify:
   stage: verify
   # .NET 8 SDK image (Debian); Node, Python, g++ and a JDK are added below for the verifier.
+  # Node 22, the line the GitHub workflow uses, pinned here to an exact build from nodejs.org and
+  # checked against nodejs.org's published SHA-256 list (Debian's own nodejs package is older).
   image: mcr.microsoft.com/dotnet/sdk:8.0
+  variables:
+    NODE_VERSION: "22.23.4"
   before_script:
     - apt-get update -qq
-    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs python3 g++ default-jdk-headless > /dev/null
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl python3 g++ default-jdk-headless > /dev/null
+    - NODE_TAR="node-v${NODE_VERSION}-linux-x64.tar.gz"
+    - curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_TAR}"
+    - curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" | grep " ${NODE_TAR}\$" | sha256sum -c -
+    - tar -xzf "${NODE_TAR}" -C /usr/local --strip-components=1 && rm "${NODE_TAR}"
     - node --version && python3 --version && dotnet --version && g++ --version | head -1 && javac -version
   script:
     - node tools/verify.mjs

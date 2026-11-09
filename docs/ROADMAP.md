@@ -4,7 +4,7 @@
 
 - [x] Push to GitHub, enable Pages (Source: GitHub Actions), confirm the deploy. Live at https://ethanmartin725-png.github.io/blackout-coder/
 - [x] License: MIT (`LICENSE`).
-- [x] Hosting: GitHub access was suspended on 2026-11-08 and restored on 2026-11-09; GitHub Pages deploys from `main` again. `.gitlab-ci.yml` stays as a fallback host.
+- [x] Hosting: GitHub access was suspended on 2026-11-08 and restored on 2026-11-09; GitHub Pages deploys from `main` again. `.gitlab-ci.yml` stays as a fallback host; it pins Node 22.23.4 from nodejs.org, checked against the published SHA-256.
 - [x] CI actions updated to their Node 24 majors (checkout v7, setup-node v7 with Node 22, setup-python v7, setup-dotnet v6, setup-java v6, configure-pages v6, upload-pages-artifact v5, deploy-pages v5).
 - [ ] Test on the devices friends will actually use: a Windows laptop in Chrome/Edge, an iPhone, an Android phone.
 - [ ] Share the link and collect feedback through GitHub Issues (a lesson-problem template is in `.github/ISSUE_TEMPLATE/`).
