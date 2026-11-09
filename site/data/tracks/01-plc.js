@@ -17,8 +17,11 @@ BC.addTrack({
         ["XIO", "XIO", "True when the bit is 0. Here: no jam fault present."],
         ["Run_Permissive", "Permissive", "One bit that means \"all run conditions met\". Keeps later rungs short and gives maintenance one place to look."],
       ],
-      out: `Auto_Mode=1  Estop_OK=1  Jam_Fault=0   →  Run_Permissive=1
-Any one of those wrong                 →  Run_Permissive=0`,
+      sim: {"watch":["Run_Permissive"],"steps":[{"label":"Auto_Mode=1, Estop_OK=1, Jam_Fault=0","set":{"Auto_Mode":1,"Estop_OK":1}},{"label":"E-stop pressed: Estop_OK=0","set":{"Estop_OK":0}},{"label":"E-stop reset: Estop_OK=1","set":{"Estop_OK":1}},{"label":"Jam_Fault=1","set":{"Jam_Fault":1}}]},
+      out: `Auto_Mode=1, Estop_OK=1, Jam_Fault=0  →  Run_Permissive=1
+E-stop pressed: Estop_OK=0            →  Run_Permissive=0
+E-stop reset: Estop_OK=1              →  Run_Permissive=1
+Jam_Fault=1                           →  Run_Permissive=0`,
     },
     {
       lang: "ladder",
@@ -32,10 +35,12 @@ Any one of those wrong                 →  Run_Permissive=0`,
         ["Conv_Run", "Seal-in", "The output's own bit in the branch holds the rung after Start is released."],
         ["Stop_PB", "Normally closed stop", "The stop button reads 1 at rest. Pressing it, or a broken wire, reads 0 and stops the motor. That is the fail-safe choice."],
       ],
-      out: `Press Start_PB          →  Conv_Run=1
-Release Start_PB        →  Conv_Run stays 1 (sealed in)
-Press Stop_PB           →  Conv_Run=0
-Run_Permissive drops    →  Conv_Run=0`,
+      sim: {"start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Run_Permissive","Conv_Run"],"steps":[{"label":"Press Start_PB","set":{"Start_PB":1}},{"label":"Release Start_PB","set":{"Start_PB":0}},{"label":"Press and release Stop_PB","pulse":{"Stop_PB":0}},{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"E-stop pressed","set":{"Estop_OK":0}}]},
+      out: `Press Start_PB              →  Conv_Run=1
+Release Start_PB            →  no change
+Press and release Stop_PB   →  Conv_Run=0
+Press and release Start_PB  →  Conv_Run=1
+E-stop pressed              →  Run_Permissive=0  →  Conv_Run=0`,
     },
     {
       lang: "ladder",
@@ -45,17 +50,18 @@ Run_Permissive drops    →  Conv_Run=0`,
       code: `XIC(Conv_Run) XIC(Eye_Blocked) TON(Jam_Timer,4000,0);
 XIC(Jam_Timer.DN) OTL(Jam_Fault);
 XIC(Reset_PB) XIO(Eye_Blocked) OTU(Jam_Fault);`,
-      about: "A barrel normally clears the photo eye in about a second, so 4 seconds blocked means it is stuck. The fault latches so it survives the conveyor stopping. The reset rung refuses to clear it while the barrel is still in the way.",
+      about: "A barrel normally clears the photo eye in about a second, so 4 seconds blocked means it is stuck. The fault latches so it survives the conveyor stopping. The reset rung refuses to clear it while the barrel is still in the way. Clearing the fault does not restart the conveyor: the seal-in dropped when the permissive did, so an operator has to press Start again, which is what you want after a jam.",
       terms: [
         ["TON", "TON(timer,preset,accum)", "Timer On Delay. Times while the rung is true, resets when false. Preset is in ms."],
         ["DN", ".DN", "Done bit. On when the accumulator reaches the preset."],
         ["OTL", "OTL / OTU", "Latch and unlatch. The bit stays set until the unlatch rung clears it."],
         ["Eye_Blocked", "Reset interlock", "XIO(Eye_Blocked) on the reset rung blocks a reset until the jam is physically cleared."],
       ],
-      out: `Eye blocked 4.0 s while running   →  Jam_Timer.DN=1  →  Jam_Fault=1
-Jam_Fault=1  →  Run_Permissive=0  →  Conv_Run=0
-Reset_PB while eye still blocked   →  no change
-Reset_PB with eye clear            →  Jam_Fault=0`,
+      sim: {"start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Jam_Timer.DN","Jam_Fault","Run_Permissive","Conv_Run"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Eye blocked 4 s while running","set":{"Eye_Blocked":1},"runMs":4100},{"label":"Reset_PB while eye still blocked","pulse":{"Reset_PB":1}},{"label":"Eye cleared, then Reset_PB","set":{"Eye_Blocked":0},"pulse":{"Reset_PB":1}}]},
+      out: `Press and release Start_PB        →  Conv_Run=1
+Eye blocked 4 s while running     →  Jam_Timer.DN=1  →  Jam_Fault=1  →  Run_Permissive=0  →  Conv_Run=0  →  Jam_Timer.DN=0
+Reset_PB while eye still blocked  →  no change
+Eye cleared, then Reset_PB        →  Jam_Fault=0  →  Run_Permissive=1`,
     },
     {
       lang: "ladder",
@@ -70,8 +76,9 @@ XIC(Shift_Change) RES(Barrel_Count);`,
         ["RES", "RES", "Reset. Zeroes the counter's accumulator and status bits."],
         ["Barrel_Count", ".ACC", "The counter's running total. This is the number Ignition will read."],
       ],
-      out: `3 barrels pass the eye   →  Barrel_Count.ACC = 3
-Shift_Change pulse       →  Barrel_Count.ACC = 0`,
+      sim: {"start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Barrel_Count.ACC"],"steps":[{"label":"3 barrels pass the eye","pulse":{"Eye_Blocked":1},"pulseMs":500,"runMs":1500,"repeat":3},{"label":"Shift_Change pulse","pulse":{"Shift_Change":1}}]},
+      out: `3 barrels pass the eye  →  Barrel_Count.ACC=3
+Shift_Change pulse      →  Barrel_Count.ACC=0`,
     },
     {
       lang: "ladder",
@@ -87,9 +94,10 @@ XIO(Conv_Run) XIO(Jam_Fault) MOV(3,Conv_State);`,
         ["Conv_State", "State code", "An INT tag. 1 Running, 2 Faulted, 3 Idle. These codes become your downtime categories."],
         [null, "Scan order", "Later rungs overwrite earlier ones in the same scan. Order rungs so the highest-priority state is last."],
       ],
-      out: `Running             →  Conv_State = 1
-Jammed              →  Conv_State = 2
-Stopped, no fault   →  Conv_State = 3`,
+      sim: {"start":{"Auto_Mode":1,"Estop_OK":1,"Stop_PB":1},"watch":["Conv_Run","Jam_Fault","Conv_State"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Eye blocked 4 s","set":{"Eye_Blocked":1},"runMs":4100},{"label":"Eye cleared, then Reset_PB","set":{"Eye_Blocked":0},"pulse":{"Reset_PB":1}}]},
+      out: `Press and release Start_PB  →  Conv_Run=1  →  Conv_State=1
+Eye blocked 4 s             →  Jam_Fault=1  →  Conv_State=2  →  Conv_Run=0
+Eye cleared, then Reset_PB  →  Jam_Fault=0  →  Conv_State=3`,
     },
     {
       lang: "st",

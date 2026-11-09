@@ -39,6 +39,29 @@ Add `soon: true` with no lessons to show a greyed-out placeholder tab.
 | `file` | tracks | The file this step belongs to. Consecutive steps with the same `file` build on each other: earlier code shows as locked context. |
 | `out` | no | Plain-text result, shown under "What it produces". Must come from running the code. |
 | `outHtml` | no | A generated HTML page, rendered as a preview. |
+| `sim` | no | Ladder only: a scenario the PLC interpreter runs to generate `out`. See below. |
+
+### Ladder scenarios (`sim`)
+
+A ladder lesson's output comes from running it in the interpreter (`site/js/plc.js`). The `sim` field says what happens over time and what to report:
+
+```js
+sim: {
+  start: { Auto_Mode: 1, Estop_OK: 1, Stop_PB: 1 },   // values before the first step
+  watch: ["Jam_Timer.DN", "Jam_Fault", "Conv_Run"],    // tags reported when they change
+  steps: [
+    { label: "Press and release Start_PB", pulse: { Start_PB: 1 } },
+    { label: "Eye blocked 4 s while running", set: { Eye_Blocked: 1 }, runMs: 4100 },
+  ],
+}
+```
+
+- `set` holds its values from the start of the step; `pulse` holds them for `pulseMs` (default 300) and then restores the old values, like a pushbutton.
+- `runMs` is how long the step runs (default 1000); `repeat` runs it several times, for example once per barrel.
+- `types` declares tags the code alone cannot type, such as a REAL analog input (`{ Hoop1_Air_PSI: "REAL" }`) or a counter that is only read. `scanMs` sets the simulated scan time (default 10).
+- A track step runs together with the earlier ladder steps in the same routine.
+
+Each step prints `label  →  tag=value  →  …` in the order things changed. Then run `node tools/output-checks/plc/run.mjs` to write the outputs; the verifier fails if a stored output no longer matches its scenario.
 
 ### Terms
 

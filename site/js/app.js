@@ -152,7 +152,6 @@ function renderAll(a){lastA=a;renderHL(a);markTarget(a);renderStats();renderLive
 
 /* ---------- ladder drawing ---------- */
 const LBOX=new Set(['TON','TOF','RTO','CTU','CTD','RES','MOV','ADD','SUB','MUL','DIV','CPT','GRT','GEQ','LES','LEQ','EQU','NEQ','LIM']);
-const LOPS=new Set(['XIC','XIO','OTE','OTL','OTU','ONS','BST','NXB','BND',...LBOX]);
 const LCMP=new Set(['GRT','GEQ','LES','LEQ','EQU','NEQ']),LMATH=new Set(['ADD','SUB','MUL','DIV']);
 // Text shown inside an instruction box, one entry per line
 function boxLines(it){
@@ -167,19 +166,9 @@ function boxLines(it){
 const LCW=6.4; // approximate width of one 10.5px code character, so long labels widen their box
 let lowY=0; // lowest box edge drawn so far, so the drawing is tall enough for 3-line boxes
 const U=124,RH=72;
-function parseRung(s){
-  const root={rows:[[]]},stack=[root];let row=root.rows[0];
-  const re=/([A-Z]{3})(?:\(([^)]*)\)?)?/g;let m;
-  while((m=re.exec(s))){
-    const op=m[1];if(!LOPS.has(op))continue;
-    const args=(m[2]||'').split(',').map(x=>x.trim()).filter(Boolean);
-    if(op==='BST'){const b={br:1,rows:[[]]};row.push(b);stack.push(b);row=b.rows[0];}
-    else if(op==='NXB'){const b=stack[stack.length-1];if(b!==root){row=[];b.rows.push(row);}}
-    else if(op==='BND'){if(stack.length>1){stack.pop();const t=stack[stack.length-1];row=t.rows[t.rows.length-1];}}
-    else row.push({op,args});
-  }
-  return root.rows[0];
-}
+// The diagram reads rungs with the interpreter's parser (js/plc.js), so the drawing and the
+// simulation can never disagree. The parse is best effort, so a half-typed rung still draws.
+const parseRung=s=>BCplc.parseRung(s).items;
 const iw=it=>it.br?Math.max(0.5,...it.rows.map(sw)):(LBOX.has(it.op)?Math.max(1.5,(Math.max(it.op.length,...boxLines(it).map(t=>t.length))*LCW+36)/U):1);
 const sw=seq=>seq.reduce((a,it)=>a+iw(it),0);
 const ih=it=>it.br?it.rows.reduce((a,r)=>a+sh(r),0):1;

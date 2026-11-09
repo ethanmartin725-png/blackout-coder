@@ -50,7 +50,7 @@ On a free GitHub account, Pages requires the repository to be public.
 
 1. Edit the lane or track file in `site/data/`. The format is in `docs/LESSON_FORMAT.md`.
 2. Run `node tools/verify.mjs`. It checks that every lesson can be completed by typing its own code, that Python, JavaScript, C#, C++ and Java steps compile (C# needs the .NET 8 SDK, C++ needs g++, Java needs a JDK; a missing compiler skips its check with a warning), that titles are unique, and that every data file is loaded.
-3. If the step shows output, regenerate it with the scripts in `tools/output-checks/` rather than typing it by hand. The MES Helper track is generated whole: edit `tools/output-checks/track6-mes/lessons6.py` and run `build6.py`.
+3. If the step shows output, regenerate it with the scripts in `tools/output-checks/` rather than typing it by hand. Ladder outputs come from a `sim` scenario run by `tools/output-checks/plc/run.mjs`. The MES Helper track is generated whole: edit `tools/output-checks/track6-mes/lessons6.py` and run `build6.py`.
 
 ## Repository layout
 

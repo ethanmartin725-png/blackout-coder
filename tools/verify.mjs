@@ -6,6 +6,8 @@ import vm from "node:vm";
 import os from "node:os";
 import { spawnSync, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { runPlcTests } from "./plc-tests.mjs";
+import { ladderCode } from "./output-checks/plc/lessons.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SITE = path.join(ROOT, "site");
@@ -35,7 +37,7 @@ for (const f of walk(path.join(SITE, "data"))) {
   if (rel.endsWith(".js") && !srcs.includes(rel)) fail(`${rel} exists but is not loaded in index.html`);
 }
 
-const { BC, BCcore } = ctx;
+const { BC, BCcore, BCplc } = ctx;
 if (!BC || !BCcore) { console.error("Registry or core failed to load."); console.error(errors.join("\n")); process.exit(1); }
 
 // 3. Lesson checks
@@ -185,7 +187,34 @@ for (const lang of ["cpp", "java"]) {
   }
 }
 
-const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds, ${nativeCount.cpp} C++ and ${nativeCount.java} Java compiles`;
+// 8. PLC ladder: every rung parses, the interpreter passes its instruction tests, and every
+// lesson with a scenario (sim) still produces its stored output. See docs/PLC_INTERPRETER.md.
+let ladderParsed = 0, plcSims = 0;
+if (!BCplc) fail("js/plc.js did not load; is it listed in index.html?");
+else {
+  for (const f of runPlcTests(BCplc)) fail(`PLC interpreter test: ${f}`);
+  for (const { kind, g } of groups) {
+    if (g.soon) continue;
+    g.lessons.forEach((l, i) => {
+      const lang = kind === "lane" ? g.lang : l.lang;
+      if (lang !== "ladder") return;
+      const where = `${g.id} #${i + 1} "${l.t}"`;
+      const parsed = BCplc.parseRoutine(l.code);
+      for (const e of parsed.errors) fail(`${where}: ladder line ${e.line}: ${e.msg}`);
+      ladderParsed++;
+      if (!l.sim) return;
+      try {
+        const out = BCplc.runScenario(ladderCode(g, i, kind === "track"), l.sim);
+        plcSims++;
+        if (out !== (l.out || "")) fail(`${where}: stored output does not match the scenario. Run node tools/output-checks/plc/run.mjs`);
+      } catch (e) {
+        fail(`${where}: scenario failed: ${e.message}`);
+      }
+    });
+  }
+}
+
+const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds, ${nativeCount.cpp} C++ and ${nativeCount.java} Java compiles, ${ladderParsed} ladder parses, ${plcSims} PLC scenarios`;
 for (const w of warns) console.warn("warn  " + w);
 if (errors.length) { for (const e of errors) console.error("FAIL  " + e); console.error(`\n${errors.length} problem(s). ${summary}`); process.exit(1); }
 console.log(`All lessons pass. ${summary}`);

@@ -16,4 +16,6 @@ node tools/output-checks/foundations/run.mjs            # add --check to report 
 
 Track 6 works the other way round: `lessons6.py` is the source. `build6.py` compiles the C# with `FakeDb.cs` in place of the lesson's `Db.cs` (same API, Shift Handoff sample data), runs `Program.cs` one step at a time, and writes `site/data/tracks/06-mes.js` with each step's real output. It also compiles the real `Db.cs`.
 
+Ladder lessons with a `sim` scenario get their output from the PLC interpreter (`site/js/plc.js`): `node tools/output-checks/plc/run.mjs`, with `--check` to report stale ones. `lib/lesson-file.mjs` holds the code both runners use to edit a lesson's `out` and `sim` fields.
+
 Generated files (`*.pkl`, `*.xlsx`, `*.sql`, `outs*.json`, `handoff_*.html`, `track6-mes/build/`) are ignored by git.

@@ -15,6 +15,9 @@ BC.addLane({
         ["OTE", "OTE(tag)", "Output Energize. Bit is 1 while the rung is true, 0 when false. Drawn as -( )-."],
         [";", ";", "Ends the rung."],
       ],
+      sim: {"watch":["Conveyor_Run"],"steps":[{"label":"Press Start_PB","set":{"Start_PB":1}},{"label":"Release Start_PB","set":{"Start_PB":0}}]},
+      out: `Press Start_PB    →  Conveyor_Run=1
+Release Start_PB  →  Conveyor_Run=0`,
     },
     {
       t: "Series logic (AND)",
@@ -26,6 +29,11 @@ BC.addLane({
         ["XIC", "Series", "Instructions side by side on one rung are AND logic. All must be true."],
         ["Part_Present", "Tag names", "Names like Part_Present point to memory in the controller. Underscores, no spaces."],
       ],
+      sim: {"start":{"Auto_Mode":1},"watch":["Feeder_Run"],"steps":[{"label":"Part arrives","set":{"Part_Present":1}},{"label":"Jam_Fault on","set":{"Jam_Fault":1}},{"label":"Jam cleared","set":{"Jam_Fault":0}},{"label":"Auto_Mode off","set":{"Auto_Mode":0}}]},
+      out: `Part arrives   →  Feeder_Run=1
+Jam_Fault on   →  Feeder_Run=0
+Jam cleared    →  Feeder_Run=1
+Auto_Mode off  →  Feeder_Run=0`,
     },
     {
       t: "Seal-in circuit",
@@ -38,6 +46,10 @@ BC.addLane({
         ["BND", "BND", "Branch End. Closes the branch and rejoins the rung."],
         ["Motor_Run", "Seal-in", "The output's own bit in the branch holds the rung true after Start is released."],
       ],
+      sim: {"start":{"Stop_PB":1},"watch":["Motor_Run"],"steps":[{"label":"Press and release Start_PB","pulse":{"Start_PB":1}},{"label":"Wait 5 s","runMs":5000},{"label":"Press and release Stop_PB","pulse":{"Stop_PB":0}}]},
+      out: `Press and release Start_PB  →  Motor_Run=1
+Wait 5 s                    →  no change
+Press and release Stop_PB   →  Motor_Run=0`,
     },
     {
       t: "Latch and unlatch",
@@ -50,6 +62,9 @@ XIC(Reset_PB) OTU(Jam_Fault);`,
         ["OTU", "OTU(tag)", "Output Unlatch. Clears a latched bit to 0."],
         [null, "Scan", "Each line is a rung. The PLC evaluates every rung in order, then repeats, many times a second."],
       ],
+      sim: {"watch":["Jam_Fault"],"steps":[{"label":"Jam_Sensor trips, then clears","pulse":{"Jam_Sensor":1}},{"label":"Press Reset_PB","pulse":{"Reset_PB":1}}]},
+      out: `Jam_Sensor trips, then clears  →  Jam_Fault=1
+Press Reset_PB                 →  Jam_Fault=0`,
     },
     {
       t: "On-delay timer",
@@ -62,6 +77,9 @@ XIC(Jam_Timer.DN) OTL(Jam_Fault);`,
         ["5000", "5000", "Preset in milliseconds. 5000 ms is 5 seconds."],
         ["DN", ".DN", "The Done bit. On when the accumulator reaches the preset."],
       ],
+      sim: {"start":{"Conveyor_Run":1},"watch":["Jam_Timer.DN","Jam_Fault"],"steps":[{"label":"A part every 3 s","pulse":{"Part_Seen":1},"runMs":3000,"repeat":3},{"label":"Last part, then none for 5 s","pulse":{"Part_Seen":1},"runMs":5400}]},
+      out: `A part every 3 s              →  no change
+Last part, then none for 5 s  →  Jam_Timer.DN=1  →  Jam_Fault=1`,
     },
     {
       t: "Count barrels",
@@ -75,6 +93,10 @@ XIC(Shift_Reset) RES(Barrel_Count);`,
         ["RES", "RES(tag)", "Reset. Clears a counter or timer accumulator and its status bits."],
         ["DN", ".DN", "Counter done bit: on when the count is at or above the preset."],
       ],
+      sim: {"watch":["Barrel_Count.ACC","Lot_Complete"],"steps":[{"label":"498 barrels pass the eye","pulse":{"Barrel_Eye":1},"runMs":600,"repeat":498},{"label":"2 more barrels","pulse":{"Barrel_Eye":1},"runMs":600,"repeat":2},{"label":"Press Shift_Reset","pulse":{"Shift_Reset":1}}]},
+      out: `498 barrels pass the eye  →  Barrel_Count.ACC=498
+2 more barrels            →  Barrel_Count.ACC=500  →  Lot_Complete=1
+Press Shift_Reset         →  Barrel_Count.ACC=0  →  Lot_Complete=0`,
     },
     {
       t: "Off-delay timer",
@@ -87,6 +109,10 @@ XIC(Exhaust_Timer.DN) OTE(Char2_Exhaust_Fan);`,
         ["DN", ".DN on a TOF", "On while the rung is true, and for the preset time after it goes false."],
         ["30000", "30000", "30,000 ms is 30 seconds."],
       ],
+      sim: {"watch":["Exhaust_Timer.DN","Char2_Exhaust_Fan"],"steps":[{"label":"Burner on","set":{"Char2_Burner_On":1}},{"label":"Burner off, first 29 s","set":{"Char2_Burner_On":0},"runMs":29000},{"label":"1 s more","runMs":1100}]},
+      out: `Burner on               →  Exhaust_Timer.DN=1  →  Char2_Exhaust_Fan=1
+Burner off, first 29 s  →  no change
+1 s more                →  Exhaust_Timer.DN=0  →  Char2_Exhaust_Fan=0`,
     },
     {
       t: "Retentive timer",
@@ -101,6 +127,11 @@ XIC(Conv3_Run_Hours.DN) OTE(Conv3_PM_Due);`,
         ["BST", "Output branch", "Branches can hold outputs too. Both legs run when the rung is true."],
         ["RES", "RES(timer)", "Clears the timer so it starts the next hour from zero."],
       ],
+      sim: {"scanMs":100,"start":{"Conv3_Run_Hours.ACC":498},"watch":["Conv3_Run_Hours.ACC","Conv3_PM_Due"],"steps":[{"label":"Runs 40 min","set":{"Conv_Run":1},"runMs":2400000},{"label":"Stopped 15 min","set":{"Conv_Run":0},"runMs":900000},{"label":"Runs 21 min more","set":{"Conv_Run":1},"runMs":1260000},{"label":"Runs another 61 min","runMs":3660000}]},
+      out: `Runs 40 min          →  no change
+Stopped 15 min       →  no change
+Runs 21 min more     →  Conv3_Run_Hours.ACC=499
+Runs another 61 min  →  Conv3_Run_Hours.ACC=500  →  Conv3_PM_Due=1`,
     },
     {
       t: "Compare a value",
@@ -113,6 +144,9 @@ XIC(Low_Air_Timer.DN) OTL(Hoop1_Low_Air);`,
         ["Hoop1_Air_PSI", "Analog value", "A REAL tag holding a measurement, not an on/off bit."],
         ["TON", "Debounce", "A timer after a compare makes the condition hold for a while before anything acts on it."],
       ],
+      sim: {"types":{"Hoop1_Air_PSI":"REAL"},"start":{"Hoop1_Air_PSI":92},"watch":["Low_Air_Timer.DN","Hoop1_Low_Air"],"steps":[{"label":"Cylinder fires: 76 psi for 0.5 s","pulse":{"Hoop1_Air_PSI":76},"pulseMs":500,"runMs":1000},{"label":"Header drops to 74 psi for 2.1 s","set":{"Hoop1_Air_PSI":74},"runMs":2100}]},
+      out: `Cylinder fires: 76 psi for 0.5 s  →  no change
+Header drops to 74 psi for 2.1 s  →  Low_Air_Timer.DN=1  →  Hoop1_Low_Air=1`,
     },
     {
       t: "Limit test",
@@ -123,6 +157,11 @@ XIC(Low_Air_Timer.DN) OTL(Hoop1_Low_Air);`,
         ["LIM", "LIM(low,test,high)", "Limit Test. True when the test value is inside the band, ends included."],
         ["110", "Band limits", "Typed numbers here for clarity. Real programs usually use tags so the band can be changed from the HMI."],
       ],
+      sim: {"types":{"Hoop1_Air_PSI":"REAL"},"watch":["Hoop1_Air_OK"],"steps":[{"label":"Header comes up to 92 psi","set":{"Hoop1_Air_PSI":92}},{"label":"Drops to 84 psi","set":{"Hoop1_Air_PSI":84}},{"label":"Back to 85 psi, the low limit","set":{"Hoop1_Air_PSI":85}},{"label":"Rises to 112 psi","set":{"Hoop1_Air_PSI":112}}]},
+      out: `Header comes up to 92 psi      →  Hoop1_Air_OK=1
+Drops to 84 psi                →  Hoop1_Air_OK=0
+Back to 85 psi, the low limit  →  Hoop1_Air_OK=1
+Rises to 112 psi               →  Hoop1_Air_OK=0`,
     },
     {
       t: "Move a value",
@@ -136,6 +175,9 @@ EQU(Barrel_Size_Gal,53) OTE(Big_Head_Tooling);`,
         ["EQU", "EQU(a,b)", "Equal. True when A equals B. Use it on whole numbers; exact equality on REAL values is unreliable."],
         ["Barrel_Size_Gal", "One source of truth", "One tag holds the selection, so the rest of the program does not care which button set it."],
       ],
+      sim: {"watch":["Barrel_Size_Gal","Big_Head_Tooling"],"steps":[{"label":"Press Size_53_Sel","pulse":{"Size_53_Sel":1}},{"label":"Press Size_30_Sel","pulse":{"Size_30_Sel":1}}]},
+      out: `Press Size_53_Sel  →  Barrel_Size_Gal=53  →  Big_Head_Tooling=1
+Press Size_30_Sel  →  Barrel_Size_Gal=30  →  Big_Head_Tooling=0`,
     },
     {
       t: "One-shot for math",
@@ -147,6 +189,9 @@ EQU(Barrel_Size_Gal,53) OTE(Big_Head_Tooling);`,
         ["ADD", "ADD(a,b,dest)", "Add. Dest = A + B. Here the destination is also a source, so the tag adds 1 to itself."],
         [null, "When to one-shot", "In front of instructions that act every scan: ADD, MOV, CPT. Not in front of CTU, CTD or timers."],
       ],
+      sim: {"watch":["Reject_Count"],"steps":[{"label":"Press Reject_PB, hold 0.5 s","pulse":{"Reject_PB":1},"pulseMs":500},{"label":"Two more presses","pulse":{"Reject_PB":1},"repeat":2}]},
+      out: `Press Reject_PB, hold 0.5 s  →  Reject_Count=1
+Two more presses             →  Reject_Count=3`,
     },
     {
       t: "Compute a rate",
@@ -160,6 +205,9 @@ CPT(Pct_Of_Ideal,Barrels_Per_Hr/60.0*100.0);`,
         ["60.0", "60.0", "A REAL constant. Keeps the math in decimals."],
         ["ACC", ".ACC", "A counter's current count, usable as a number in math."],
       ],
+      sim: {"types":{"Barrel_Count":"COUNTER"},"watch":["Barrels_Per_Hr","Pct_Of_Ideal"],"steps":[{"label":"Shift starts: 0 min, 0 barrels","set":{"Run_Minutes":0,"Barrel_Count.ACC":0}},{"label":"After 450 min with 352 barrels","set":{"Run_Minutes":450,"Barrel_Count.ACC":352}}]},
+      out: `Shift starts: 0 min, 0 barrels  →  no change
+After 450 min with 352 barrels  →  Barrels_Per_Hr=46.93333  →  Pct_Of_Ideal=78.22222`,
     },
     {
       t: "Count in and out",
@@ -174,6 +222,9 @@ XIC(Conv3_WIP.DN) BST OTE(Infeed_Hold) NXB OTE(Conv3_Full_Light) BND;`,
         ["BST", "Output branch", "Parallel legs at the end of a rung, each with its own output. One condition, two actions."],
         ["DN", ".DN", "On when the count is at or above the preset: the conveyor is full."],
       ],
+      sim: {"watch":["Conv3_WIP.ACC","Infeed_Hold","Conv3_Full_Light"],"steps":[{"label":"12 barrels enter","pulse":{"Entry_Eye":1},"runMs":600,"repeat":12},{"label":"1 barrel leaves","pulse":{"Exit_Eye":1},"runMs":600}]},
+      out: `12 barrels enter  →  Conv3_WIP.ACC=12  →  Infeed_Hold=1  →  Conv3_Full_Light=1
+1 barrel leaves   →  Conv3_WIP.ACC=11  →  Infeed_Hold=0  →  Conv3_Full_Light=0`,
     },
   ],
 });

@@ -1,6 +1,6 @@
 # PLC interpreter: design
 
-Status: proposal for review. Nothing here is built yet.
+Status: phase 1 (ladder) built: `site/js/plc.js`, `tools/plc-tests.mjs` (35 instruction tests), `tools/output-checks/plc/`. All 19 ladder lessons have scenarios and generated outputs. Phases 2 to 4 are not built yet.
 
 ## Why
 
@@ -128,7 +128,8 @@ Each phase ends with the verifier passing, the browser test from CLAUDE.md, and 
 
 ## Open questions for review
 
-1. **Integer rules.** How does Logix round a REAL into a DINT destination, and what do `DIV` and `CPT` give for integer division? These must come from 1756-RM003, not memory. Do you have the manual or a controller to confirm against?
+0. **RES on a counter.** The model clears `.ACC`, `.DN`, `.OV` and `.UN` and keeps `.CU`/`.CD`. Whether Logix also clears `.CU`/`.CD` decides whether a counter whose input is still on counts again right after a reset. Confirm in 1756-RM003; no scenario depends on it yet.
+1. **Integer rules.** How does Logix round a REAL into a DINT destination, and what do `DIV` and `CPT` give for integer division? These must come from 1756-RM003, not memory. Do you have the manual or a controller to confirm against? Until then the interpreter refuses these cases with a `NotModeled` error instead of guessing.
 2. **Output format.** Keep the "label → changed tags" lines the current outputs use, or switch to a time-stamped table (time, input change, tag values)? The lines read better; the table is more precise.
 3. **Scan time.** 10 ms by default, matching the "a scan takes a few milliseconds" explanations in the lessons. Change it per scenario where a lesson is about scan timing?
 4. **First scene.** The Conveyor 3 jam cell is proposed because the PLC track already builds its logic. Would a different machine be more useful to you or your friends?

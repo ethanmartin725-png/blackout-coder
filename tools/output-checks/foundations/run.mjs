@@ -16,6 +16,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { setOut } from "../lib/lesson-file.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "../../..");
@@ -101,22 +102,6 @@ for (const f of files) {
   const before = ctx.lanes.length;
   vm.runInContext(fs.readFileSync(path.join(DIR, f), "utf8"), ctx);
   for (const l of ctx.lanes.slice(before)) laneFile[l.id] = f;
-}
-
-const tpl = (s) => "`" + s.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${") + "`";
-
-// Replace or insert the out field of one lesson, found by its unique title
-function setOut(src, title, out) {
-  const at = src.indexOf(`      t: ${JSON.stringify(title)},`);
-  if (at < 0) throw new Error(`cannot find lesson "${title}" in source`);
-  // Search from the end of the terms block: code samples can contain "    }," but terms cannot
-  const terms = src.indexOf("\n      terms: [", at);
-  const termsEnd = src.indexOf("\n      ],", terms);
-  const end = src.indexOf("\n    },", termsEnd);
-  if (terms < 0 || termsEnd < 0 || end < 0) throw new Error(`cannot find the end of lesson "${title}"`);
-  let body = src.slice(at, end).replace(/\n      out: `(?:[^`\\]|\\.)*`,/, "");
-  if (out !== null) body += `\n      out: ${tpl(out)},`;
-  return src.slice(0, at) + body + src.slice(end);
 }
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "bc-found-"));
