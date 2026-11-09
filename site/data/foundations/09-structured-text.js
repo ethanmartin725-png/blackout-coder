@@ -895,6 +895,82 @@ Overspeeds to 62.5  →  Speed_Error=-2.5
 Settles at 61.0     →  Speed_Error=-1  →  Speed_Alarm=0`,
     },
     {
+      t: "A machine as one tag",
+      goal: "Conv3 and Hoop1 are Machine_UDT tags. Set each one's Run from its own Auto and Jam_Fault: run in auto with no jam.",
+      code: `(* Conv3 and Hoop1 are both Machine_UDT tags *)
+Conv3.Run := Conv3.Auto AND NOT Conv3.Jam_Fault;
+Hoop1.Run := Hoop1.Auto AND NOT Hoop1.Jam_Fault;`,
+      about: "A user-defined type (UDT) bundles everything about one machine into one tag: Conv3.Auto, Conv3.Run, Conv3.Jam_Fault and the rest. The type is defined once in the project's Data Types folder, shown under the lesson, and every machine tag of that type gets the same members. The rule for each machine reads the same, only the tag name changes, and an HMI faceplate can be pointed at any machine tag. Member names are typed after a dot, as with a timer's .DN.",
+      terms: [
+        ["Conv3.Run", "Tag.Member", "One member of a UDT tag, read and written like any tag."],
+        ["Hoop1", "Same type", "A second Machine_UDT tag: the same members, its own values."],
+        [null, "User-defined type", "A data type you define: named members, each with its own type."],
+      ],
+      sim: {"types":{"Conv3":"Machine_UDT","Hoop1":"Machine_UDT"},"watch":["Conv3.Run","Hoop1.Run"],"steps":[{"label":"Both machines to auto","set":{"Conv3.Auto":1,"Hoop1.Auto":1}},{"label":"Conveyor 3 jams","set":{"Conv3.Jam_Fault":1}},{"label":"Jam cleared","set":{"Conv3.Jam_Fault":0}}],"udts":{"Machine_UDT":[["Auto","BOOL","Auto mode selected"],["Eye_Blocked","BOOL","Photo eye blocked"],["Run","BOOL","Motor running"],["Jam_Fault","BOOL","Latched jam fault"],["Jam_Timer","FBD_TIMER","Times a blocked eye"],["Barrels","DINT","Barrels this shift"],["Rate_Hr","REAL","Ideal rate, barrels per hour"],["Behind","BOOL","Under 70% of the shift target"]]}},
+      out: `Both machines to auto  →  Conv3.Run=1  →  Hoop1.Run=1
+Conveyor 3 jams        →  Conv3.Run=0
+Jam cleared            →  Conv3.Run=1`,
+    },
+    {
+      t: "Timer inside a UDT",
+      goal: "Use Conv3.Jam_Timer, a timer inside the UDT, to latch Conv3.Jam_Fault when the eye stays blocked 4 s while Conv3.Run is on.",
+      code: `Conv3.Jam_Timer.PRE := 4000;
+Conv3.Jam_Timer.TimerEnable := Conv3.Run AND Conv3.Eye_Blocked;
+TONR(Conv3.Jam_Timer);
+IF Conv3.Jam_Timer.DN THEN
+    Conv3.Jam_Fault := 1;
+END_IF;`,
+      about: "The jam rule from the PLC track, with the timer living inside the machine's tag instead of beside it. Conv3.Jam_Timer is an FBD_TIMER member, so its own members take a second dot: Conv3.Jam_Timer.DN. A barrel passing blocks the eye for about a second and resets the timer; only a barrel stuck for 4 s latches the fault. A second conveyor would get its own timer just by being another Machine_UDT tag.",
+      terms: [
+        ["Conv3.Jam_Timer", "Timer member", "An FBD_TIMER inside the UDT. TONR runs it like any timer."],
+        ["Conv3.Jam_Timer.DN", "Tag.Member.Member", "The timer's Done bit: a member of a member."],
+        ["4000", "4 s", "The PLC track's jam rule: blocked 4 s while running."],
+      ],
+      sim: {"types":{"Conv3":"Machine_UDT"},"start":{"Conv3.Run":1},"watch":["Conv3.Jam_Timer.DN","Conv3.Jam_Fault"],"steps":[{"label":"A barrel passes: eye blocked 1 s","set":{"Conv3.Eye_Blocked":1}},{"label":"Eye clears","set":{"Conv3.Eye_Blocked":0}},{"label":"A barrel sticks: eye blocked 4 s","set":{"Conv3.Eye_Blocked":1},"runMs":4100}],"udts":{"Machine_UDT":[["Auto","BOOL","Auto mode selected"],["Eye_Blocked","BOOL","Photo eye blocked"],["Run","BOOL","Motor running"],["Jam_Fault","BOOL","Latched jam fault"],["Jam_Timer","FBD_TIMER","Times a blocked eye"],["Barrels","DINT","Barrels this shift"],["Rate_Hr","REAL","Ideal rate, barrels per hour"],["Behind","BOOL","Under 70% of the shift target"]]}},
+      out: `A barrel passes: eye blocked 1 s  →  no change
+Eye clears                        →  no change
+A barrel sticks: eye blocked 4 s  →  Conv3.Jam_Timer.DN=1  →  Conv3.Jam_Fault=1`,
+    },
+    {
+      t: "An array of machines",
+      goal: "Line is an array of three Machine_UDT tags. Add up their Barrels members into Total with a FOR loop.",
+      code: `Total := 0;
+FOR i := 0 TO 2 DO
+    Total := Total + Line[i].Barrels;
+END_FOR;`,
+      about: "An array of a UDT gives one tag per machine with one index: Line[0] is Conveyor 3, Line[1] Hoop Driver 1, Line[2] Char Station 2, the same order as the Total with a FOR loop lesson. Instead of a separate array for each value (barrels, rates, flags) kept in step by hand, each element carries all of one machine's values. The counts are shift A's, 352 + 274 + 301 = 927.",
+      terms: [
+        ["Line[i].Barrels", "Array[i].Member", "The Barrels member of machine i."],
+        ["Total := 0;", "Start from zero", "Without it the sum keeps growing scan after scan."],
+      ],
+      sim: {"types":{"Line":"Machine_UDT[3]"},"watch":["Total"],"steps":[{"label":"Shift A counts arrive","set":{"Line[0].Barrels":352,"Line[1].Barrels":274,"Line[2].Barrels":301}},{"label":"Hoop Driver 1 makes 2 more","set":{"Line[1].Barrels":276}}],"udts":{"Machine_UDT":[["Auto","BOOL","Auto mode selected"],["Eye_Blocked","BOOL","Photo eye blocked"],["Run","BOOL","Motor running"],["Jam_Fault","BOOL","Latched jam fault"],["Jam_Timer","FBD_TIMER","Times a blocked eye"],["Barrels","DINT","Barrels this shift"],["Rate_Hr","REAL","Ideal rate, barrels per hour"],["Behind","BOOL","Under 70% of the shift target"]]}},
+      out: `Shift A counts arrive       →  Total=927
+Hoop Driver 1 makes 2 more  →  Total=929`,
+    },
+    {
+      t: "Who is behind target",
+      goal: "For each machine in Line, set Behind when its Barrels are under 70% of its shift target, Rate_Hr × 7.5 paid hours, and count the machines behind in Behind_Count.",
+      code: `n := 0;
+FOR i := 0 TO 2 DO
+    Line[i].Behind := Line[i].Barrels < Line[i].Rate_Hr * 7.5 * 0.7;
+    IF Line[i].Behind THEN
+        n := n + 1;
+    END_IF;
+END_FOR;
+Behind_Count := n;`,
+      about: "The Shift Handoff's BEHIND rule, written once for every machine. A comparison is already true or false, so it can be stored straight into a BOOL member. The 70% lines are 315 barrels for Conveyor 3 (60 × 7.5 × 0.7), 288.75 for Hoop Driver 1 and 262.5 for Char Station 2. Every count starts the shift at 0, so all three machines start behind; when shift A's counts arrive, Conveyor 3 and Char Station 2 clear and only Hoop Driver 1, at 274, stays behind, so Behind_Count is 1. The count is built in n and copied to Behind_Count once, at the end: an HMI can read a tag partway through a scan, and would otherwise catch it at 0 while the loop is still adding. Barrels is a DINT and Rate_Hr a REAL; the comparison is made in REAL.",
+      terms: [
+        ["Line[i].Behind", "BOOL member", "Set straight from the comparison: 1 when behind."],
+        ["7.5", "Paid hours", "An 8-hour shift less a 30-minute break."],
+        ["0.7", "70% line", "The Shift Handoff's BEHIND threshold."],
+        ["n := n + 1;", "Working count", "Built up during the loop, never shown on a screen."],
+        ["Behind_Count := n;", "Publish once", "The finished count, written once per scan, for the HMI."],
+      ],
+      sim: {"types":{"Line":"Machine_UDT[3]"},"start":{"Line[0].Rate_Hr":60.0,"Line[1].Rate_Hr":55.0,"Line[2].Rate_Hr":50.0},"watch":["Line[0].Behind","Line[1].Behind","Line[2].Behind","Behind_Count"],"steps":[{"label":"Shift A counts arrive","set":{"Line[0].Barrels":352,"Line[1].Barrels":274,"Line[2].Barrels":301}},{"label":"Hoop Driver 1 reaches 300","set":{"Line[1].Barrels":300}}],"udts":{"Machine_UDT":[["Auto","BOOL","Auto mode selected"],["Eye_Blocked","BOOL","Photo eye blocked"],["Run","BOOL","Motor running"],["Jam_Fault","BOOL","Latched jam fault"],["Jam_Timer","FBD_TIMER","Times a blocked eye"],["Barrels","DINT","Barrels this shift"],["Rate_Hr","REAL","Ideal rate, barrels per hour"],["Behind","BOOL","Under 70% of the shift target"]]}},
+      out: `Shift A counts arrive      →  Line[0].Behind=0  →  Line[2].Behind=0  →  Behind_Count=1
+Hoop Driver 1 reaches 300  →  Line[1].Behind=0  →  Behind_Count=0`,
+    },
+    {
       t: "Conveyor 3 in Structured Text",
       goal: "Write all of Conveyor 3 in Structured Text: permissive, seal-in, 4 s jam fault with a reset interlock, a barrel count on the eye's leading edge cleared by Shift_Change, and Conv_State 2 jammed, 1 running, 3 idle.",
       code: `(* Permissive and seal-in *)

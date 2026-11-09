@@ -255,6 +255,15 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
 
 .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--gold-dim);color:var(--ink);padding:10px 16px;border-radius:6px;font-size:13.5px;max-width:min(92vw,520px);z-index:20;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 
+/* User-defined types: the Data Types folder entry a Structured Text lesson relies on. */
+.udt-table{border-collapse:collapse;width:100%;font-size:13px;margin-bottom:8px}
+.udt-table caption{text-align:left;font:600 13px var(--f-code);color:var(--gold);padding:0 0 6px}
+.udt-table th{text-align:left;font:600 11px var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--line)}
+.udt-table td{padding:6px 10px;border-bottom:1px solid var(--line);color:var(--ink-2)}
+.udt-table code{font:12.5px var(--f-code);color:var(--ink)}
+.udt-tags{margin:0;font-size:13.5px;color:var(--ink-2)}
+.udt-tags code{font:12.5px var(--f-code);color:var(--ink)}
+
 /* Explain this line: under the editor, the commands on the cursor's line. */
 .explain{border-top:1px solid var(--line);padding:10px 14px 12px;display:flex;flex-direction:column;gap:6px;min-height:76px}
 .explain-head{display:flex;justify-content:space-between;gap:8px;font:600 11px var(--f-body);letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}

@@ -164,14 +164,16 @@ function parseST(src) {
   const expectOp = (v) => { if (!isOp(v)) fail(`expected "${v}"${where()}`); p++; };
   const expectKw = (v) => { if (!isKw(v)) fail(`expected ${v}${where()}`); p++; };
 
-  // A tag: Name, Name.Member, or an array element Name[index] (index is an expression).
-  // Plain paths stay strings; an indexed one is { base, index, member }.
+  // A tag: Name, Name.Member, Name.Member.Sub (a timer inside a user-defined type), or an array
+  // element Name[index] with members after it (index is an expression).
+  // Plain paths stay strings; an indexed one is { base, index, member }, member "A" or "A.B".
   function path() {
     if (!at("id")) fail(`expected a tag name${where()}`);
     let name = toks[p++].v, index = null;
     if (isOp("[")) { p++; index = binary(0); expectOp("]"); }
-    let member = null;
-    if (isOp(".")) { p++; if (!at("id")) fail("expected a member name after ."); member = toks[p++].v; }
+    const members = [];
+    while (isOp(".")) { p++; if (!at("id")) fail("expected a member name after ."); members.push(toks[p++].v); }
+    const member = members.length ? members.join(".") : null;
     if (index) return { base: name, index, member };
     return member ? `${name}.${member}` : name;
   }
@@ -322,23 +324,51 @@ const NUMERIC_MEMBERS = new Set(["PRE", "ACC"]); // every other member is a bit
 const isNum = (s) => /^[-+]?\d+(\.\d+)?$/.test(String(s).trim());
 
 // Create a controller. opts.scanMs: simulated scan time (default 10 ms).
-// opts.types: { tagName: "BOOL" | "DINT" | "REAL" | "TIMER" | "COUNTER" } for tags the code
-// alone cannot type, e.g. a REAL analog input or a counter that is only read.
+// opts.types: { tagName: "BOOL" | "DINT" | "REAL" | "TIMER" | "COUNTER" | "<UDT>" | "<type>[n]" }
+// for tags the code alone cannot type, e.g. a REAL analog input or a counter that is only read.
+// opts.udts: { Machine_UDT: [[member, type, description], ...] }, user-defined types as in a
+// Studio 5000 Data Types folder. Members are BOOL, DINT, REAL, TIMER, COUNTER or FBD_TIMER.
+const UDT_MEMBER_TYPES = new Set(["BOOL", "DINT", "REAL", "TIMER", "COUNTER", "FBD_TIMER"]);
 function createPLC(opts = {}) {
   const scanMs = opts.scanMs || 10;
   const tags = Object.create(null);
   let rungs = [], now = 0, scans = 0;
   const listeners = [];
+  const UDT = Object.create(null);
+  for (const [name, members] of Object.entries(opts.udts || {})) {
+    if (!/^[A-Za-z_]\w*$/.test(name) || STRUCT[name] || ["BOOL", "DINT", "REAL"].includes(name)) throw new Error(`${name} cannot be the name of a user-defined type`);
+    if (!Array.isArray(members) || !members.length) throw new Error(`user-defined type ${name} needs at least one member`);
+    const m = Object.create(null);
+    for (const [mn, mt] of members) {
+      if (!/^[A-Za-z_]\w*$/.test(mn) || m[mn]) throw new Error(`${name}: member ${mn} is not a valid, unique name`);
+      if (!UDT_MEMBER_TYPES.has(mt)) throw new Error(`${name}.${mn}: members can be ${[...UDT_MEMBER_TYPES].join(", ")}, not ${mt}`);
+      m[mn] = mt;
+    }
+    UDT[name] = m;
+  }
+  const isStruct = (type) => !!(STRUCT[type] || UDT[type]);
+  // The type of member m of a structure type, or undefined.
+  const memberType = (type, m) => UDT[type] ? UDT[type][m] : STRUCT[type] && m in STRUCT[type]() ? (NUMERIC_MEMBERS.has(m) ? "DINT" : "BOOL") : undefined;
+  const makeValue = (type) => {
+    if (STRUCT[type]) return STRUCT[type]();
+    if (UDT[type]) { const o = {}; for (const [m, mt] of Object.entries(UDT[type])) o[m] = makeValue(mt); return o; }
+    return 0;
+  };
 
   function declare(name, type) {
-    const arr = /^(BOOL|DINT|REAL)\[(\d+)\]$/.exec(type);
+    const arr = /^([A-Za-z_]\w*)\[(\d+)\]$/.exec(type);
     if (arr) {
+      if (!["BOOL", "DINT", "REAL"].includes(arr[1]) && !UDT[arr[1]]) throw new Error(`${name}: arrays of ${arr[1]} are not supported`);
       if (tags[name]) throw new Error(`tag ${name} is declared as an array but is also used another way`);
-      tags[name] = { type: arr[1], dims: Number(arr[2]), v: new Array(Number(arr[2])).fill(0) };
+      tags[name] = { type: arr[1], dims: Number(arr[2]), v: Array.from({ length: Number(arr[2]) }, () => makeValue(arr[1])) };
       return;
     }
     const t = tags[name];
-    if (!t) { tags[name] = { type, v: STRUCT[type] ? STRUCT[type]() : 0 }; return; }
+    if (!t) {
+      if (/^[A-Za-z_]\w*$/.test(type) && !["BOOL", "DINT", "REAL"].includes(type) && !isStruct(type)) throw new Error(`${name}: type ${type} is not defined; add it to the scenario's udts`);
+      tags[name] = { type, v: makeValue(type) };
+      return;
+    }
     if (t.dims) throw new Error(`array ${name} is used without an index`);
     if (t.type === type) return;
     if (t.type === "DINT" && type === "REAL") { t.type = "REAL"; return; } // widen
@@ -347,9 +377,10 @@ function createPLC(opts = {}) {
   }
   function notify(path, value) { for (const f of listeners) f(path, value); }
 
-  // "Name", "Name.Member", "Name[3]" or "Name[3].Member" -> [name, member, index]
+  // "Name", "Name.Member", "Name[3]", "Name[3].Member" or "Name[3].Member.Sub" -> [name, member, index]
+  // (member may be "Member.Sub")
   function split(path) {
-    const s = String(path).trim(), m = /^([A-Za-z_]\w*)(?:\[(-?\d+)\])?(?:\.(\w+))?$/.exec(s);
+    const s = String(path).trim(), m = /^([A-Za-z_]\w*)(?:\[(-?\d+)\])?(?:\.(\w+(?:\.\w+)*))?$/.exec(s);
     if (m) return [m[1], m[3] || null, m[2] === undefined ? undefined : Number(m[2])];
     const k = s.indexOf(".");
     return k < 0 ? [s, null, undefined] : [s.slice(0, k), s.slice(k + 1), undefined];
@@ -361,19 +392,28 @@ function createPLC(opts = {}) {
     if (!Number.isInteger(i) || i < 0 || i >= t.dims) throw new Error(`${n}[${i}] is out of range 0 to ${t.dims - 1}: a Logix controller would stop with a major fault`);
     return i;
   }
-  function read(x) {
-    if (isNum(x)) return Number(x);
-    const [n, m, i] = split(x);
+  // Walk a path to where its value lives: { obj, key, type, path }, with obj[key] the value, type
+  // BOOL / DINT / REAL or a structure type, and path the canonical name ("Line[1].Jam_Timer.DN").
+  function locate(x) {
+    const [n, mem, i] = split(x);
     const t = tags[n];
     if (!t) throw new Error(`tag ${n} was never given a type`);
     const e = element(t, n, i);
-    if (e !== null) { if (m) throw new Error(`${n} holds ${t.type} values, which have no members`); return t.v[e]; }
-    if (m) {
-      if (!STRUCT[t.type] || !(m in t.v)) throw new Error(`${n} (${t.type}) has no member .${m}`);
-      return t.v[m];
+    let obj = e === null ? t : t.v, key = e === null ? "v" : e, type = t.type, at = e === null ? n : `${n}[${e}]`;
+    for (const m of mem ? mem.split(".") : []) {
+      if (!isStruct(type)) throw new Error(e !== null && at === `${n}[${e}]` ? `${n} holds ${type} values, which have no members` : `${at} is a ${type} and has no members`);
+      const mt = memberType(type, m);
+      if (!mt) throw new Error(`${at} (${type}) has no member .${m}`);
+      obj = obj[key]; key = m; type = mt; at = `${at}.${m}`;
     }
-    if (STRUCT[t.type]) throw new Error(`${n} is a ${t.type}; read a member such as ${n}.DN`);
-    return t.v;
+    return { obj, key, type, path: at };
+  }
+  const firstMember = (type) => (UDT[type] ? Object.keys(UDT[type])[0] : "DN");
+  function read(x) {
+    if (isNum(x)) return Number(x);
+    const l = locate(x);
+    if (isStruct(l.type)) throw new Error(`${l.path} is a ${l.type}; read a member such as ${l.path}.${firstMember(l.type)}`);
+    return l.obj[l.key];
   }
   function coerce(type, val, where) {
     if (type === "BOOL") return val ? 1 : 0;
@@ -384,24 +424,10 @@ function createPLC(opts = {}) {
     return val;
   }
   function write(path, val) {
-    const [n, m, i] = split(path);
-    const t = tags[n];
-    if (!t) throw new Error(`tag ${n} was never given a type`);
-    const e = element(t, n, i);
-    if (e !== null) {
-      const v = coerce(t.type, val, `${n}[${e}]`);
-      if (t.v[e] !== v) { t.v[e] = v; notify(`${n}[${e}]`, v); }
-      return;
-    }
-    if (m) {
-      if (!STRUCT[t.type] || !(m in t.v)) throw new Error(`${n} (${t.type}) has no member .${m}`);
-      const v = NUMERIC_MEMBERS.has(m) ? coerce("DINT", val, path) : (val ? 1 : 0);
-      if (t.v[m] !== v) { t.v[m] = v; notify(`${n}.${m}`, v); }
-      return;
-    }
-    if (STRUCT[t.type]) throw new Error(`cannot write a whole ${t.type} (${n})`);
-    const v = coerce(t.type, val, n);
-    if (t.v !== v) { t.v = v; notify(n, v); }
+    const l = locate(path);
+    if (isStruct(l.type)) throw new Error(`cannot write a whole ${l.type} (${l.path})`);
+    const v = coerce(l.type, val, l.path);
+    if (l.obj[l.key] !== v) { l.obj[l.key] = v; notify(l.path, v); }
   }
 
   // Give every tag a type, from how the instructions use it (docs: Tags).
@@ -413,6 +439,7 @@ function createPLC(opts = {}) {
     for (const it of all) {
       const a = it.args;
       if (["TON", "TOF", "RTO", "CTU", "CTD"].includes(it.op)) {
+        if (/[.[]/.test(a[0])) throw new Error(`${it.op}(${a[0]}): timers and counters inside a user-defined type run in Structured Text only, for now`);
         declare(a[0], it.op.startsWith("CT") ? "COUNTER" : "TIMER");
         const t = tags[a[0]];
         if (isNum(a[1])) t.v.PRE = Number(a[1]);
@@ -585,19 +612,26 @@ function createPLC(opts = {}) {
   };
   const BOOL_OPS = ["AND", "OR", "XOR", "=", "<>", "<", ">", "<=", ">="];
   function memberKind(path) {
-    const [n, m, i] = split(path), t = tags[n];
-    if (!t) return null;
-    if (t.dims) return i === undefined ? null : t.type === "BOOL" ? "bool" : t.type === "REAL" ? "real" : "int";
-    if (m) return NUMERIC_MEMBERS.has(m) ? "int" : "bool";
-    return t.type === "BOOL" ? "bool" : t.type === "REAL" ? "real" : STRUCT[t.type] ? null : "int";
+    if (!tags[split(path)[0]]) return null;
+    let l; try { l = locate(path); } catch (e) { return null; }
+    return l.type === "BOOL" ? "bool" : l.type === "REAL" ? "real" : l.type === "DINT" ? "int" : null;
   }
   // Give every tag a type: timer blocks from their call, then each tag from its context
   // (a condition or AND/OR/NOT operand is a BOOL, a compared or calculated value is a DINT),
   // then assignment targets from their value.
   function typeST(stmts) {
     for (const [n, ty] of Object.entries(opts.types || {})) declare(n, ty);
-    walkST(stmts, (s) => { if (s.fb) declare(s.tag, ST_FB[s.fb]); });
     const elemPath = (ip) => `${ip.base}[0]${ip.member ? "." + ip.member : ""}`;
+    // A timer block on a plain name declares it; on a member (Conv3.Jam_Timer, Line[i].Jam_Timer)
+    // the member must already be an FBD_TIMER in its user-defined type.
+    walkST(stmts, (s) => {
+      if (!s.fb) return;
+      if (typeof s.tag === "string" && !s.tag.includes(".")) { declare(s.tag, ST_FB[s.fb]); return; }
+      const pth = typeof s.tag === "string" ? s.tag : elemPath(s.tag), base = split(pth)[0];
+      if (!tags[base]) throw new Error(`line ${s.line}: ${base} needs a declared type (a user-defined type in the scenario)`);
+      const l = locate(pth);
+      if (l.type !== ST_FB[s.fb]) throw new Error(`line ${s.line}: ${s.fb}(${pth}) needs an ${ST_FB[s.fb]}, but it is ${l.type}`);
+    });
     const mark = (e, ctx) => {
       if (!e || e.num !== undefined) return;
       if (e.itag) { if (!tags[e.itag.base]) throw new Error(`array ${e.itag.base} needs a declared type, such as "REAL[5]"`); return mark(e.itag.index, "num"); }
@@ -702,8 +736,8 @@ function createPLC(opts = {}) {
     write(target, v);
   }
   // Timer blocks on FBD_TIMER: same timing rules as TON / TOF / RTO in ladder.
-  function fbTimer(kind, n) {
-    const t = tags[n].v, dt = scanMs, W = (m, v) => write(`${n}.${m}`, v);
+  function fbTimer(kind, path) {
+    const l = locate(path), n = l.path, t = l.obj[l.key], dt = scanMs, W = (m, v) => write(`${n}.${m}`, v);
     if (!t.EnableIn) return;
     if (t.Reset) { W("ACC", 0); W("EN", 0); W("TT", 0); W("DN", 0); return; }
     if (kind === "TOFR") {
@@ -734,7 +768,7 @@ function createPLC(opts = {}) {
       if (s.exit) return EXIT;
       if (s.set) assign(s.set, evalST(s.value), s.line);
       else if (s.iset) assign(resolve(s.iset, s.line), evalST(s.value), s.line);
-      else if (s.fb) fbTimer(s.fb, s.tag);
+      else if (s.fb) fbTimer(s.fb, typeof s.tag === "string" ? s.tag : resolve(s.tag, s.line));
       else if (s.ifArms) {
         const arm = s.ifArms.find((a) => cond(a.cond, s.line, "an IF condition"));
         if (execST(arm ? arm.body : s.otherwise) === EXIT) return EXIT;
@@ -790,6 +824,10 @@ function createPLC(opts = {}) {
     get power() { return power; },
     has: (name) => !!tags[split(name)[0]],
     typeOf: (name) => (tags[split(name)[0]] || {}).type,
+    // The type at a full path: "Conv3.Rate" -> "REAL", "Line[0]" -> "Machine_UDT"; null if none.
+    typeAt: (path) => { try { return locate(path).type; } catch (e) { return null; } },
+    // The user-defined types, as given: { name: [[member, type, description], ...] }.
+    udts: opts.udts || {},
     get time() { return now; },
     get scans() { return scans; },
     onChange(f) { listeners.push(f); },
@@ -812,10 +850,10 @@ function formatValue(v, type) {
 // Consecutive changes of the same tag show only the last value; a tag that ends where it
 // started within such a run is dropped.
 function runScenario(code, sim, lang = "ladder") {
-  const plc = createPLC({ scanMs: sim.scanMs, types: sim.types });
+  const plc = createPLC({ scanMs: sim.scanMs, types: sim.types, udts: sim.udts });
   plc.load(code, lang);
   for (const w of sim.watch) if (!plc.has(w)) throw new Error(`watched tag ${w} is not used by the code`);
-  const typeOf = (p) => { const t = plc.typeOf(p); return p.includes(".") ? (/(ACC|PRE)$/.test(p) ? "DINT" : "BOOL") : t; };
+  const typeOf = (p) => plc.typeAt(p);
   const setAll = (vals) => { for (const [k, v] of Object.entries(vals || {})) { if (!plc.has(k)) throw new Error(`scenario sets ${k}, which the code never uses`); plc.write(k, v); } };
   setAll(sim.start);
   plc.run(sim.settleMs === undefined ? 100 : sim.settleMs);

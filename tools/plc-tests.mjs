@@ -262,6 +262,62 @@ export function runPlcTests(P) {
   t("ST REAL array keeps 32-bit values", () => {
     const p = st("H[0] := 61.2;", { types: { H: "REAL[2]" } }); p.scan(); return eq(p, "H[0]", Math.fround(61.2));
   });
+
+  // ---------- User-defined types ----------
+  const M = { Machine_UDT: [["Auto", "BOOL", "Auto mode"], ["Eye_Blocked", "BOOL", "Photo eye"], ["Run", "BOOL", "Motor"], ["Jam_Fault", "BOOL", "Latched jam"], ["Barrels", "DINT", "Count"], ["Rate_Hr", "REAL", "Ideal rate"], ["Jam_Timer", "FBD_TIMER", "Jam timer"]] };
+  const udt = (code, types) => st(code, { udts: M, types });
+  t("UDT members read and write by name", () => {
+    const p = udt("Conv3.Run := Conv3.Auto AND NOT Conv3.Jam_Fault;", { Conv3: "Machine_UDT" });
+    p.write("Conv3.Auto", 1); p.scan(); const m1 = eq(p, "Conv3.Run", 1);
+    p.write("Conv3.Jam_Fault", 1); p.scan(); return all(m1, eq(p, "Conv3.Run", 0));
+  });
+  t("UDT members keep their declared types", () => {
+    const p = udt("Conv3.Rate_Hr := 60.5;\nConv3.Barrels := 352;", { Conv3: "Machine_UDT" }); p.scan();
+    return all(eq(p, "Conv3.Rate_Hr", 60.5), p.typeAt("Conv3.Rate_Hr") === "REAL" ? "" : "Rate_Hr not REAL", p.typeAt("Conv3.Barrels") === "DINT" ? "" : "Barrels not DINT", p.typeAt("Conv3") === "Machine_UDT" ? "" : "Conv3 type");
+  });
+  t("a DINT member refuses a fraction instead of guessing the rounding", () => {
+    const p = udt("Conv3.Barrels := 2.5;", { Conv3: "Machine_UDT" }); return throwsWith(() => p.scan(), "rounding");
+  });
+  t("a timer inside a UDT times like a plain FBD_TIMER", () => {
+    const code = (n) => `${n}.TimerEnable := ${n === "T" ? "E" : "Conv3.Eye_Blocked"};\n${n}.PRE := 4000;\nTONR(${n});`;
+    const a = udt(code("Conv3.Jam_Timer"), { Conv3: "Machine_UDT" }), b = st(code("T"));
+    a.write("Conv3.Eye_Blocked", 1); b.write("E", 1);
+    a.run(3990); b.run(3990); const m1 = all(eq(a, "Conv3.Jam_Timer.DN", b.read("T.DN")), eq(a, "Conv3.Jam_Timer.ACC", b.read("T.ACC")));
+    a.run(20); b.run(20);
+    return all(m1, eq(a, "Conv3.Jam_Timer.DN", 1), eq(b, "T.DN", 1));
+  });
+  t("an array of UDTs, indexed by a loop", () => {
+    const p = udt("Total := 0;\nFOR i := 0 TO 2 DO\n  Total := Total + Line[i].Barrels;\nEND_FOR;", { Line: "Machine_UDT[3]" });
+    p.write("Line[0].Barrels", 301); p.write("Line[1].Barrels", 352); p.write("Line[2].Barrels", 274); p.scan();
+    return eq(p, "Total", 927);
+  });
+  t("a timer inside an array element", () => {
+    const p = udt("FOR i := 0 TO 1 DO\n  Line[i].Jam_Timer.TimerEnable := Line[i].Eye_Blocked;\n  Line[i].Jam_Timer.PRE := 100;\n  TONR(Line[i].Jam_Timer);\nEND_FOR;", { Line: "Machine_UDT[2]" });
+    p.write("Line[1].Eye_Blocked", 1); p.run(200);
+    return all(eq(p, "Line[0].Jam_Timer.DN", 0), eq(p, "Line[1].Jam_Timer.DN", 1));
+  });
+  t("a change to a member reports its full path", () => {
+    const p = udt("Line[i].Run := 1;", { Line: "Machine_UDT[3]" }), seen = [];
+    p.onChange((path) => seen.push(path)); p.write("i", 2); p.scan();
+    return seen.includes("Line[2].Run") ? "" : seen.join();
+  });
+  t("an unknown member is refused", () => throwsWith(() => udt("Conv3.Speed := 1;", { Conv3: "Machine_UDT" }).scan(), "has no member .Speed"));
+  t("a whole UDT cannot be written", () => { const p = udt("X := 1;", { Conv3: "Machine_UDT" }); return throwsWith(() => p.write("Conv3", 1), "cannot write a whole Machine_UDT"); });
+  t("reading a whole UDT names a member to read instead", () => { const p = udt("X := 1;", { Conv3: "Machine_UDT" }); return throwsWith(() => p.read("Conv3"), "read a member such as Conv3.Auto"); });
+  t("an index past the array's end faults", () => throwsWith(() => { const p = udt("Line[3].Run := 1;", { Line: "Machine_UDT[3]" }); p.scan(); }, "out of range 0 to 2"));
+  t("a member of a BOOL member is refused", () => throwsWith(() => udt("Conv3.Run.DN := 1;", { Conv3: "Machine_UDT" }).scan(), "Conv3.Run is a BOOL and has no members"));
+  t("TONR on a member that is not a timer is refused", () => throwsWith(() => udt("TONR(Conv3.Run);", { Conv3: "Machine_UDT" }), "needs an FBD_TIMER, but it is BOOL"));
+  t("a tag of an undefined type is refused", () => throwsWith(() => st("X := 1;", { types: { Conv3: "Nope_UDT" } }), "type Nope_UDT is not defined"));
+  t("a UDT member of an unsupported type is refused", () => throwsWith(() => st("X := 1;", { udts: { Bad: [["S", "STRING", ""]] } }), "members can be"));
+  t("ladder reads and writes UDT members", () => {
+    const p = P.createPLC({ udts: M, types: { Conv3: "Machine_UDT" } }); p.load("XIC(Conv3.Auto) XIO(Conv3.Jam_Fault) OTE(Conv3.Run);");
+    p.write("Conv3.Auto", 1); p.scan(); return eq(p, "Conv3.Run", 1);
+  });
+  t("ladder timers inside a UDT are refused with a reason", () => throwsWith(() => P.createPLC({ udts: M, types: { Conv3: "Machine_UDT" } }).load("XIC(A) TON(Conv3.Jam_Timer,4000,0);"), "Structured Text only"));
+  t("a scenario prints REAL members as REALs", () => {
+    const out = P.runScenario("Conv3.Rate_Hr := Conv3.Rate_Hr + 0.1;", { udts: M, types: { Conv3: "Machine_UDT" }, watch: ["Conv3.Rate_Hr"], settleMs: 0, steps: [{ label: "one scan", runMs: 10 }] }, "st");
+    return out === "one scan  →  Conv3.Rate_Hr=0.1" ? "" : `got "${out}"`;
+  });
   return fails;
 }
 const seal = {

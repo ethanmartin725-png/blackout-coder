@@ -24,6 +24,7 @@ vm.runInContext(fs.readFileSync(path.join(SITE, "js/plc.js"), "utf8"), ctx);
 const fileOf = new Map();
 ctx.BC = {
   addLanguage() {},
+  addGlossary() {},
   addLane(l) { ctx.lanes.push(l); fileOf.set(l, ctx.current); },
   addTrack(t) { ctx.tracks.push(t); fileOf.set(t, ctx.current); },
 };

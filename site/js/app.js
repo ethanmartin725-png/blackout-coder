@@ -279,6 +279,11 @@ function renderRef(){
     viz.innerHTML=`<figure style="grid-column:1 / -1"><figcaption>Generated page</figcaption><div class="preview-host" id="prevO"></div></figure>`;
     preview($('prevO'),lesson.outHtml);
   }else{viz.hidden=true;viz.innerHTML='';}
+  // User-defined types live in the Data Types folder, not in the routine, so the lesson shows them.
+  const udts=lesson.sim&&lesson.sim.udts?Object.entries(lesson.sim.udts):[];
+  $('udtWrap').hidden=!udts.length;
+  $('udt').innerHTML=udts.map(([name,ms])=>`<div class="sm-scroll"><table class="udt-table"><caption>${esc(name)}</caption><thead><tr><th>Member</th><th>Data type</th><th>Description</th></tr></thead><tbody>${ms.map(([m,t,d])=>`<tr><td><code>${esc(m)}</code></td><td><code>${esc(t)}</code></td><td>${esc(d||'')}</td></tr>`).join('')}</tbody></table></div>`).join('')+
+    (udts.length&&lesson.sim.types?`<p class="udt-tags">Tags: ${Object.entries(lesson.sim.types).filter(([,t])=>udts.some(([n])=>t===n||t.startsWith(n+'['))).map(([n,t])=>`<code>${esc(n)}</code> is a <code>${esc(t)}</code>`).join(', ')}.</p>`:'');
   $('outWrap').hidden=!lesson.out;
   $('out').textContent=lesson.out||'';
   renderSimPanel();
@@ -491,7 +496,7 @@ function simCompare(){
 function simBuild(){
   const s=lesson.sim;
   try{
-    const plc=BCplc.createPLC({scanMs:s.scanMs||10,types:s.types});
+    const plc=BCplc.createPLC({scanMs:s.scanMs||10,types:s.types,udts:s.udts});
     plc.load(simCode(),ld.id);
     for(const [k,v] of Object.entries(s.start||{}))if(plc.has(k))plc.write(k,v);
     const scene=s.scene&&SCENES[s.scene]?SCENES[s.scene](plc):null;
@@ -500,7 +505,7 @@ function simBuild(){
   const drives=sim.scene?sim.scene.drives:[];
   const inputs=simInputs(s).filter(i=>sim.plc.has(i.tag)&&!drives.includes(i.tag));
   $('simInputs').innerHTML=inputs.map(i=>{
-    const t=sim.plc.typeOf(i.tag),num=i.tag.includes('.')||t==='DINT'||t==='REAL';
+    const t=sim.plc.typeAt(i.tag),num=t==='DINT'||t==='REAL';
     if(num)return `<label class="sim-num">${esc(i.tag)}<input type="number" step="any" data-tag="${esc(i.tag)}" value="${sim.plc.read(i.tag)}"></label>`;
     return `<button class="sim-in" data-tag="${esc(i.tag)}" data-mode="${i.momentary?'hold':'toggle'}" data-rest="${i.rest}" data-press="${i.press}" aria-pressed="false">${esc(i.tag)}<small>${i.momentary?'hold to press':'switch'}</small></button>`;
   }).join('')+(sim.scene?sim.scene.controls.map((c,k)=>`<button class="btn" data-ctl="${k}">${esc(c.label)}</button>`).join(''):'');
@@ -548,7 +553,7 @@ function simDraw(){
   const p=sim.plc;
   $('simClock').textContent=`t ${(p.time/1000).toFixed(1)} s`;
   document.querySelectorAll('#simWatch td[data-w]').forEach(td=>{
-    const w=td.dataset.w,ty=w.includes('.')?(/(ACC|PRE)$/.test(w)?'DINT':'BOOL'):p.typeOf(w),v=BCplc.formatValue(p.read(w),ty);
+    const w=td.dataset.w,ty=p.typeAt(w),v=BCplc.formatValue(p.read(w),ty);
     if(sim.prev[w]!==undefined&&sim.prev[w]!==v){td.classList.add('chg');clearTimeout(td._t);td._t=setTimeout(()=>td.classList.remove('chg'),600);}
     sim.prev[w]=v;td.textContent=v;
   });
