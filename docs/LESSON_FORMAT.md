@@ -60,7 +60,11 @@ sim: {
 - `runMs` is how long the step runs (default 1000); `repeat` runs it several times, for example once per barrel.
 - `types` declares tags the code alone cannot type, such as a REAL analog input (`{ Hoop1_Air_PSI: "REAL" }`) or a counter that is only read. `scanMs` sets the simulated scan time (default 10).
 - A track step runs together with the earlier steps in the same routine (same `file` and language).
-- `scene: "conveyor3"` shows the Conveyor 3 jam-cell machine in the simulator: barrels on the belt drive `Eye_Blocked`, and the scene reads `Conv_Run`, `Jam_Fault`, `Barrel_Count` and `Conv_State`. Use it only on steps that build that cell.
+- `scene` shows a machine in the simulator. Scenes live in `SCENES` in `app.js`; each declares the tags it drives, which are then not offered as manual inputs.
+  - `"conveyor3"`: Conveyor 3 jam cell. Barrels drive `Eye_Blocked`; reads `Conv_Run`, `Jam_Fault`, `Barrel_Count`, `Conv_State`. Buttons: jam a barrel, clear the jam.
+  - `"air1"`: Hoop Driver 1 air header. Drives `Hoop1_Air_PSI` (cylinder dips every 2.5 s while running); reads `Hoop1_Air_OK`, `Hoop1_Low_Air`, `Hoop1_Run`. Buttons: compressor trips, regulator sticks high, back to normal.
+  - `"char2"`: Char Station 2 burner and fan. Reads `Char2_Burner_On`, `Char2_Exhaust_Fan` and the timers `Purge_Timer`, `Post_Purge`, `Exhaust_Timer`; shows smoke building without the fan.
+- The simulator's "Compare with the reference" button runs the scenario on the learner's code and on the lesson's code and shows the first step where they differ, so logic written differently still passes if it behaves the same.
 - The simulator panel takes its inputs from the scenario: tags in `start`, `set` and `pulse`. Pulsed tags and tags named `*_PB` become hold-to-press buttons; other bits become switches; numbers become number boxes.
 - `sameAs: "<step title>"` marks a step that rewrites another one, such as ladder rewritten as Structured Text. The verifier fails if their traces ever differ.
 

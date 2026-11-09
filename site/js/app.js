@@ -300,12 +300,13 @@ $('terms').addEventListener('click',e=>{
 
 /* ---------- PLC simulator ---------- */
 // Runs the learner's own ladder or Structured Text in BCplc (js/plc.js), with inputs taken from
-// the lesson's scenario, a live tag table, energized paths on the ladder, and for the Conveyor 3
-// steps (sim.scene "conveyor3") a small machine. A teaching model, not a PLC: docs/PLC_INTERPRETER.md.
+// the lesson's scenario, a live tag table, energized paths on the ladder, and, where the scenario
+// names one (sim.scene), a small machine. A teaching model, not a PLC: docs/PLC_INTERPRETER.md.
 // Like the Plant Board's JavaScript, it only runs once the step is finished or Check is pressed.
 let sim=null;
 const isPlcLang=()=>ld&&(ld.id==='ladder'||ld.id==='st');
 const simCode=()=>joinPre(ta.value);
+const plcOn=(plc,t)=>plc.has(t)&&!!plc.read(t);
 const STATE_NAMES={1:'RUNNING',2:'FAULTED',3:'IDLE'};
 // Inputs the scenario drives. A pushbutton (pulsed, or named *_PB) is held while pressed and
 // springs back to its rest value: 1 for a normally closed Stop_PB, else 0. Anything else toggles.
@@ -320,50 +321,123 @@ function simInputs(s){
   for(const e of m.values())if(!e.pulsed&&/_PB$/.test(e.tag))e.press=e.rest?0:1;
   return [...m.values()].map(e=>({...e,momentary:e.pulsed||/_PB$/.test(e.tag)}));
 }
-// Conveyor 3 jam cell: barrels ride the belt while Conv_Run is on, and the photo eye drives
-// Eye_Blocked from where they are. "Jam a barrel" sticks the next barrel at the eye.
-function conveyorScene(plc){
-  const S={barrels:[],gap:999,jamNext:false,stuck:null,EYE:430,W:44,LEN:640,SPEED:120,blocked:false};
-  const on=t=>plc.has(t)&&!!plc.read(t);
-  S.step=dt=>{
-    if(on('Conv_Run')){
-      const d=S.SPEED*dt/1000;
-      S.gap+=d;
-      if(S.gap>=130){S.barrels.push({x:-S.W});S.gap=0;}
-      S.barrels.sort((a,b)=>b.x-a.x);
-      let limit=Infinity;
-      for(const b of S.barrels){
-        if(b!==S.stuck){
-          let nx=b.x+d;
-          if(S.jamNext&&!S.stuck&&b.x+S.W/2<S.EYE&&nx+S.W/2>=S.EYE){nx=S.EYE-S.W/2;S.stuck=b;S.jamNext=false;}
-          if(nx+S.W>limit)nx=limit-S.W;
-          b.x=Math.max(b.x,nx);
+const lamp=(cls,x,y,lit,label)=>`<circle class="sc-lamp ${cls}${lit?' on':''}" cx="${x}" cy="${y}" r="9"/>`+(label?`<text class="sc-label" x="${x+15}" y="${y+4}">${label}</text>`:'');
+// Scenes: small machines bound to tag names. A scene factory returns null when the routine
+// lacks the tags it needs; otherwise an object with drives (tags the scene writes, so they are
+// not offered as inputs), controls ([{label, run}] returning a message), step(dt), svg(), note().
+const SCENES={
+  // Conveyor 3 jam cell: barrels ride the belt while Conv_Run is on; the photo eye drives
+  // Eye_Blocked from where they are. "Jam a barrel" sticks the next barrel at the eye.
+  conveyor3(plc){
+    if(!plc.has('Conv_Run'))return null;
+    const S={barrels:[],gap:999,jamNext:false,stuck:null,EYE:430,W:44,LEN:640,SPEED:120,blocked:false,drives:['Eye_Blocked']};
+    S.controls=[
+      {label:'Jam a barrel at the eye',run(){S.jamNext=true;return 'The next barrel will stick at the eye.';}},
+      {label:'Clear the jam',run(){if(S.stuck)S.barrels=S.barrels.filter(b=>b!==S.stuck);S.stuck=null;S.jamNext=false;return 'Jam cleared from the belt. A latched fault stays latched until Reset_PB.';}},
+    ];
+    S.step=dt=>{
+      if(plcOn(plc,'Conv_Run')){
+        const d=S.SPEED*dt/1000;
+        S.gap+=d;
+        if(S.gap>=130){S.barrels.push({x:-S.W});S.gap=0;}
+        S.barrels.sort((a,b)=>b.x-a.x);
+        let limit=Infinity;
+        for(const b of S.barrels){
+          if(b!==S.stuck){
+            let nx=b.x+d;
+            if(S.jamNext&&!S.stuck&&b.x+S.W/2<S.EYE&&nx+S.W/2>=S.EYE){nx=S.EYE-S.W/2;S.stuck=b;S.jamNext=false;}
+            if(nx+S.W>limit)nx=limit-S.W;
+            b.x=Math.max(b.x,nx);
+          }
+          limit=b.x-4;
         }
-        limit=b.x-4;
+        S.barrels=S.barrels.filter(b=>b.x<S.LEN);
       }
-      S.barrels=S.barrels.filter(b=>b.x<S.LEN);
-    }
-    S.blocked=S.barrels.some(b=>b.x<=S.EYE&&b.x+S.W>=S.EYE);
-    if(plc.has('Eye_Blocked'))plc.write('Eye_Blocked',S.blocked?1:0);
-  };
-  S.clear=()=>{if(S.stuck)S.barrels=S.barrels.filter(b=>b!==S.stuck);S.stuck=null;S.jamNext=false;};
-  S.svg=()=>{
-    const run=on('Conv_Run'),jam=on('Jam_Fault'),o=[];
-    o.push('<rect class="sc-belt" x="0" y="110" width="640" height="14" rx="3"/>');
-    for(let x=20;x<640;x+=80)o.push(`<circle class="sc-roller" cx="${x}" cy="117" r="5"/>`);
-    for(const b of S.barrels){
-      o.push(`<g class="sc-barrel${b===S.stuck?' jam':''}"><rect x="${b.x.toFixed(1)}" y="66" width="${S.W}" height="44" rx="7"/><line x1="${b.x.toFixed(1)}" y1="78" x2="${(b.x+S.W).toFixed(1)}" y2="78"/><line x1="${b.x.toFixed(1)}" y1="98" x2="${(b.x+S.W).toFixed(1)}" y2="98"/></g>`);
-    }
-    o.push(`<rect class="sc-eye" x="${S.EYE-7}" y="22" width="14" height="18" rx="2"/><line class="sc-beam${S.blocked?' blocked':''}" x1="${S.EYE}" y1="40" x2="${S.EYE}" y2="110"/><text class="sc-label" x="${S.EYE+12}" y="34">Eye_Blocked ${S.blocked?1:0}</text>`);
-    o.push(`<rect class="sc-motor${run?' on':''}" x="6" y="130" width="46" height="30" rx="4"/><text class="sc-label dark" x="29" y="149" text-anchor="middle">M</text><text class="sc-label" x="60" y="150">Conv_Run ${run?1:0}</text>`);
-    const lamp=(c,y,lit)=>`<circle class="sc-lamp ${c}${lit?' on':''}" cx="612" cy="${y}" r="9"/>`;
-    o.push('<rect class="sc-pole" x="609" y="12" width="6" height="98"/>',lamp('r',22,jam),lamp('a',44,!run&&!jam),lamp('g',66,run));
-    if(plc.has('Barrel_Count'))o.push(`<text class="sc-lcd" x="8" y="24">BARRELS ${String(plc.read('Barrel_Count.ACC')).padStart(4,'0')}</text>`);
-    if(plc.has('Conv_State')){const v=plc.read('Conv_State');o.push(`<text class="sc-lcd" x="8" y="48">STATE ${v} ${STATE_NAMES[v]||''}</text>`);}
-    return `<svg viewBox="0 0 640 170" role="img" aria-label="Conveyor 3: barrels on the belt, photo eye, motor and stack light">${o.join('')}</svg>`;
-  };
-  return S;
-}
+      S.blocked=S.barrels.some(b=>b.x<=S.EYE&&b.x+S.W>=S.EYE);
+      if(plc.has('Eye_Blocked'))plc.write('Eye_Blocked',S.blocked?1:0);
+    };
+    S.note=()=>S.stuck?'A barrel is stuck at the eye. Watch whether your logic catches the jam.':null;
+    S.svg=()=>{
+      const run=plcOn(plc,'Conv_Run'),jam=plcOn(plc,'Jam_Fault'),o=[];
+      o.push('<rect class="sc-belt" x="0" y="110" width="640" height="14" rx="3"/>');
+      for(let x=20;x<640;x+=80)o.push(`<circle class="sc-roller" cx="${x}" cy="117" r="5"/>`);
+      for(const b of S.barrels){const x=b.x.toFixed(1),x2=(b.x+S.W).toFixed(1);o.push(`<g class="sc-barrel${b===S.stuck?' jam':''}"><rect x="${x}" y="66" width="${S.W}" height="44" rx="7"/><line x1="${x}" y1="78" x2="${x2}" y2="78"/><line x1="${x}" y1="98" x2="${x2}" y2="98"/></g>`);}
+      o.push(`<rect class="sc-eye" x="${S.EYE-7}" y="22" width="14" height="18" rx="2"/><line class="sc-beam${S.blocked?' blocked':''}" x1="${S.EYE}" y1="40" x2="${S.EYE}" y2="110"/><text class="sc-label" x="${S.EYE+12}" y="34">Eye_Blocked ${S.blocked?1:0}</text>`);
+      o.push(`<rect class="sc-motor${run?' on':''}" x="6" y="130" width="46" height="30" rx="4"/><text class="sc-label dark" x="29" y="149" text-anchor="middle">M</text><text class="sc-label" x="60" y="150">Conv_Run ${run?1:0}</text>`);
+      o.push('<rect class="sc-pole" x="609" y="12" width="6" height="98"/>',lamp('r',612,22,jam),lamp('a',612,44,!run&&!jam),lamp('g',612,66,run));
+      if(plc.has('Barrel_Count'))o.push(`<text class="sc-lcd" x="8" y="24">BARRELS ${String(plc.read('Barrel_Count.ACC')).padStart(4,'0')}</text>`);
+      if(plc.has('Conv_State')){const v=plc.read('Conv_State');o.push(`<text class="sc-lcd" x="8" y="48">STATE ${v} ${STATE_NAMES[v]||''}</text>`);}
+      return `<svg viewBox="0 0 640 170" role="img" aria-label="Conveyor 3: barrels on the belt, photo eye, motor and stack light">${o.join('')}</svg>`;
+    };
+    return S;
+  },
+  // Hoop Driver 1 air header: the scene drives Hoop1_Air_PSI. Pressure moves toward its target
+  // at 8 psi/s; while the machine runs (or always, without a Hoop1_Run tag) a cylinder fires
+  // every 2.5 s and dips the header 14 psi for 0.4 s. Illustrative numbers.
+  air1(plc){
+    if(!plc.has('Hoop1_Air_PSI'))return null;
+    const S={base:Number(plc.read('Hoop1_Air_PSI'))||92,target:92,mode:'Compressor OK',fireT:0,dip:0,drives:['Hoop1_Air_PSI']};
+    const running=()=>!plc.has('Hoop1_Run')||plcOn(plc,'Hoop1_Run');
+    S.controls=[
+      {label:'Compressor trips',run(){S.target=70;S.mode='Compressor tripped';return 'The compressor tripped. Header pressure falls toward 70 psi.';}},
+      {label:'Regulator sticks high',run(){S.target=115;S.mode='Regulator stuck high';return 'The regulator stuck. Pressure climbs toward 115 psi.';}},
+      {label:'Back to normal',run(){S.target=92;S.mode='Compressor OK';return 'Back to normal: the header returns to 92 psi.';}},
+    ];
+    S.step=dt=>{
+      const s=dt/1000,move=8*s;
+      S.base+=Math.max(-move,Math.min(move,S.target-S.base));
+      S.fireT+=s;
+      if(running()&&S.fireT>=2.5){S.fireT=0;S.dip=0.4;}
+      if(S.dip>0)S.dip=Math.max(0,S.dip-s);
+      plc.write('Hoop1_Air_PSI',Math.round((S.base-(S.dip>0?14:0))*10)/10);
+    };
+    S.note=()=>null;
+    S.svg=()=>{
+      const psi=plc.read('Hoop1_Air_PSI'),cx=120,cy=118,r=84,o=[];
+      const pt=(v,rr)=>{const a=Math.PI*(1-Math.max(0,Math.min(150,v))/150);return [cx+rr*Math.cos(a),cy-rr*Math.sin(a)];};
+      const arc=(v1,v2,cls)=>{const [x1,y1]=pt(v1,r),[x2,y2]=pt(v2,r);return `<path class="${cls}" d="M${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}"/>`;};
+      o.push(arc(0,150,'sc-dial'),arc(0,80,'sc-dial low'),arc(85,110,'sc-dial band'));
+      for(const v of [0,50,100,150]){const [x,y]=pt(v,r+14);o.push(`<text class="sc-label" x="${x.toFixed(1)}" y="${(y+4).toFixed(1)}" text-anchor="middle">${v}</text>`);}
+      const [nx,ny]=pt(psi,r-12);
+      o.push(`<line class="sc-needle" x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}"/><circle class="sc-hub" cx="${cx}" cy="${cy}" r="6"/>`);
+      o.push(`<text class="sc-lcd" x="${cx}" y="${cy+30}" text-anchor="middle">${Number(psi).toFixed(1)} PSI</text>`);
+      const firing=S.dip>0;
+      o.push(`<rect class="sc-cyl" x="268" y="58" width="110" height="34" rx="4"/><rect class="sc-rod${firing?' out':''}" x="378" y="69" width="${firing?70:18}" height="12" rx="2"/><text class="sc-label" x="268" y="50">Cylinder${firing?' firing':''}</text>`);
+      o.push(`<text class="sc-label" x="268" y="122">${S.mode}</text>`);
+      let y=22;const row=(cls,tag,label)=>{if(plc.has(tag)){o.push(lamp(cls,500,y,plcOn(plc,tag),label));y+=26;}};
+      row('g','Hoop1_Air_OK','AIR OK');row('r','Hoop1_Low_Air','LOW AIR');row('g','Hoop1_Run','RUN');
+      return `<svg viewBox="0 0 640 170" role="img" aria-label="Hoop Driver 1 air header: pressure gauge, cylinder and status lamps">${o.join('')}</svg>`;
+    };
+    return S;
+  },
+  // Char Station 2 burner and exhaust fan. The scene only reads tags. Smoke builds while the
+  // burner is on and clears only with the fan running. Illustrative numbers.
+  char2(plc){
+    if(!plc.has('Char2_Burner_On')&&!plc.has('Char2_Exhaust_Fan'))return null;
+    const S={smoke:0,angle:0,drives:[],controls:[]};
+    S.step=dt=>{
+      const s=dt/1000,burn=plcOn(plc,'Char2_Burner_On'),fan=plcOn(plc,'Char2_Exhaust_Fan');
+      S.smoke=Math.max(0,Math.min(100,S.smoke+(burn?12:0)*s-(fan?8:0.5)*s));
+      if(fan)S.angle=(S.angle+540*s)%360;
+    };
+    S.note=()=>plcOn(plc,'Char2_Burner_On')&&!plcOn(plc,'Char2_Exhaust_Fan')?'The burner is on with the fan off: smoke is building up.':null;
+    S.svg=()=>{
+      const burn=plcOn(plc,'Char2_Burner_On'),fan=plcOn(plc,'Char2_Exhaust_Fan'),o=[];
+      o.push('<path class="sc-hood" d="M210 18 L330 18 L360 52 L180 52 Z"/><rect class="sc-duct" x="255" y="4" width="30" height="16"/>');
+      o.push(`<g transform="rotate(${S.angle.toFixed(0)} 270 35)"><path class="sc-blade${fan?' on':''}" d="M270 35 L262 23 L278 23 Z M270 35 L282 43 L274 49 Z M270 35 L258 43 L266 49 Z"/></g><circle class="sc-hub" cx="270" cy="35" r="4"/>`);
+      o.push('<g class="sc-barrel"><rect x="236" y="70" width="68" height="70" rx="10"/><line x1="236" y1="88" x2="304" y2="88"/><line x1="236" y1="122" x2="304" y2="122"/></g><rect class="sc-belt" x="200" y="140" width="140" height="10" rx="3"/>');
+      if(burn)o.push('<path class="sc-flame" d="M256 138 Q262 110 270 96 Q278 110 284 138 Z"/>');
+      if(S.smoke>1)o.push(`<rect class="sc-smoke" x="214" y="56" width="112" height="${(S.smoke/100*12+2).toFixed(1)}" rx="3" opacity="${(0.25+S.smoke/140).toFixed(2)}"/>`);
+      o.push(`<text class="sc-lcd" x="8" y="24">SMOKE ${String(Math.round(S.smoke)).padStart(3,' ')}%</text>`);
+      const t=(tag,label)=>{if(plc.has(tag)&&plc.read(`${tag}.TT`)){const left=(plc.read(`${tag}.PRE`)-plc.read(`${tag}.ACC`))/1000;o.push(`<text class="sc-lcd" x="8" y="48">${label} ${left.toFixed(1)} S</text>`);}};
+      t('Purge_Timer','PURGE');t('Post_Purge','POST-PURGE');t('Exhaust_Timer','RUN-ON');
+      let y=22;const row=(cls,tag,label)=>{if(plc.has(tag)){o.push(lamp(cls,500,y,plcOn(plc,tag),label));y+=26;}};
+      row('a','Char2_Burner_On','BURNER');row('g','Char2_Exhaust_Fan','FAN');
+      return `<svg viewBox="0 0 640 170" role="img" aria-label="Char Station 2: burner, barrel, exhaust hood and fan">${o.join('')}</svg>`;
+    };
+    return S;
+  },
+};
 function stopSim(){if(sim&&sim.raf)cancelAnimationFrame(sim.raf);sim=null;}
 function simMsg(text,err){const m=$('simMsg');if(m){m.textContent=text;m.classList.toggle('err',!!err);}}
 // Build the panel for this lesson (or hide it). Called from renderRef.
@@ -373,22 +447,37 @@ function renderSimPanel(){
   if(!isPlcLang()||!lesson.sim){box.hidden=true;box.innerHTML='';return;}
   box.hidden=false;
   box.innerHTML=`<div class="sim-head"><div><b>Simulator</b><span class="sim-note">Runs your code with simulated ${lesson.sim.scanMs||10} ms scans. A teaching model, not a PLC.</span></div>
-<div class="sim-ctl"><button class="btn gold" id="simRun">Run your code</button><button class="btn" id="simStep" title="Run one scan">Step</button><select id="simSpeed" aria-label="Speed"><option value="1">1×</option><option value="5">5×</option><option value="20">20×</option></select><button class="btn" id="simReset">Reset</button><span class="sim-clock" id="simClock">t 0.0 s</span></div></div>
-<p class="sim-msg" id="simMsg"></p><div class="sim-scene" id="simScene" hidden></div>
+<div class="sim-ctl"><button class="btn gold" id="simRun">Run your code</button><button class="btn" id="simStep" title="Run one scan">Step</button><select id="simSpeed" aria-label="Speed"><option value="1">1×</option><option value="5">5×</option><option value="20">20×</option></select><button class="btn" id="simReset">Reset</button><button class="btn" id="simCmp" title="Run the lesson's scenario on your code and on the reference">Compare with the reference</button><span class="sim-clock" id="simClock">t 0.0 s</span></div></div>
+<p class="sim-msg" id="simMsg"></p><pre class="sim-cmp" id="simCmpOut" hidden></pre><div class="sim-scene" id="simScene" hidden></div>
 <div class="sim-body"><div class="sim-inputs" id="simInputs"></div><table class="sim-watch" id="simWatch"></table></div><div class="sim-lad" id="simLad"></div>`;
   $('simRun').addEventListener('click',()=>{if(!sim&&!simBuild())return;sim.running?simPause():simPlay();});
   $('simStep').addEventListener('click',()=>{if(!sim&&!simBuild())return;simPause();try{simScan();}catch(e){simFail(e);}simDraw();});
   $('simReset').addEventListener('click',()=>{stopSim();simBuild();});
   $('simSpeed').addEventListener('change',e=>{if(sim)sim.speed=+e.target.value;});
+  $('simCmp').addEventListener('click',simCompare);
   renderSimLock();
 }
 // Locked until the step is finished or checked, like the Plant Board's JavaScript.
 function renderSimLock(){
   if(!$('simRun')||!isPlcLang()||!lesson.sim)return;
   const ok=complete||checked;
-  ['simRun','simStep','simReset','simSpeed'].forEach(id=>$(id).disabled=!ok);
-  if(!ok){if(sim)stopSim();simMsg('Finish the step or press Check, then run your code here.');}
+  ['simRun','simStep','simReset','simSpeed','simCmp'].forEach(id=>$(id).disabled=!ok);
+  if(!ok){if(sim)stopSim();$('simCmpOut').hidden=true;simMsg('Finish the step or press Check, then run your code here.');}
   else if(!sim)simMsg('Press Run, then use the inputs to drive your logic.');
+}
+// Run the lesson's scenario on the learner's code and on the reference, and compare the traces.
+// Logic written differently from the reference still passes if it behaves the same.
+function simCompare(){
+  const box=$('simCmpOut'),n=lesson.sim.steps.length;
+  box.hidden=false;
+  let mine;
+  try{mine=BCplc.runScenario(simCode(),lesson.sim,ld.id);}
+  catch(e){box.className='sim-cmp err';box.textContent=`Your code could not run the scenario: ${e.message}`;return;}
+  const ref=BCplc.runScenario(joinPre(lesson.code),lesson.sim,ld.id);
+  if(mine===ref){box.className='sim-cmp ok';box.textContent=`Same behavior as the reference on all ${n} steps of the scenario.\n\n${mine}`;return;}
+  const a=mine.split('\n'),b=ref.split('\n'),i=a.findIndex((l,k)=>l!==b[k]);
+  box.className='sim-cmp err';
+  box.textContent=`Different behavior from step ${i+1} of ${n}.\n\nYours:\n${a[i]}\n\nReference:\n${b[i]}`;
 }
 function simBuild(){
   const s=lesson.sim;
@@ -396,20 +485,22 @@ function simBuild(){
     const plc=BCplc.createPLC({scanMs:s.scanMs||10,types:s.types});
     plc.load(simCode(),ld.id);
     for(const [k,v] of Object.entries(s.start||{}))if(plc.has(k))plc.write(k,v);
-    const scene=s.scene==='conveyor3'&&plc.has('Conv_Run')?conveyorScene(plc):null;
-    sim={plc,scene,running:false,raf:0,acc:0,last:null,speed:+$('simSpeed').value,sig:'',prev:{}};
+    const scene=s.scene&&SCENES[s.scene]?SCENES[s.scene](plc):null;
+    sim={plc,scene,running:false,raf:0,acc:0,last:null,speed:+$('simSpeed').value,sig:'',prev:{},note:null};
   }catch(e){sim=null;simMsg(`Your code does not run yet: ${e.message}`,true);return false;}
-  const inputs=simInputs(s).filter(i=>sim.plc.has(i.tag)&&!(sim.scene&&i.tag==='Eye_Blocked'));
+  const drives=sim.scene?sim.scene.drives:[];
+  const inputs=simInputs(s).filter(i=>sim.plc.has(i.tag)&&!drives.includes(i.tag));
   $('simInputs').innerHTML=inputs.map(i=>{
     const t=sim.plc.typeOf(i.tag),num=i.tag.includes('.')||t==='DINT'||t==='REAL';
     if(num)return `<label class="sim-num">${esc(i.tag)}<input type="number" step="any" data-tag="${esc(i.tag)}" value="${sim.plc.read(i.tag)}"></label>`;
     return `<button class="sim-in" data-tag="${esc(i.tag)}" data-mode="${i.momentary?'hold':'toggle'}" data-rest="${i.rest}" data-press="${i.press}" aria-pressed="false">${esc(i.tag)}<small>${i.momentary?'hold to press':'switch'}</small></button>`;
-  }).join('')+(sim.scene?'<button class="btn" id="simJam">Jam a barrel at the eye</button><button class="btn" id="simClear">Clear the jam</button>':'');
+  }).join('')+(sim.scene?sim.scene.controls.map((c,k)=>`<button class="btn" data-ctl="${k}">${esc(c.label)}</button>`).join(''):'');
   wireSimInputs();
   $('simWatch').innerHTML=`<caption>Tags</caption>`+s.watch.map(w=>`<tr><th scope="row">${esc(w)}</th><td data-w="${esc(w)}"></td></tr>`).join('');
   $('simScene').hidden=!sim.scene;
+  $('simCmpOut').hidden=true;
   if(ld.id==='st')$('simLad').innerHTML='<p class="viz-empty">Structured Text has no rung drawing; watch the tags.</p>';
-  simMsg(sim.scene?'Press Start_PB to run the conveyor, then jam a barrel and watch your logic respond.':'Use the inputs to drive your logic. Energized paths light up green.');
+  simMsg(sim.scene?'Press Run, use the inputs and the machine buttons, and watch your logic respond.':'Use the inputs to drive your logic. Energized paths light up green.');
   simDraw(); // show the starting state at once, not on the first animation frame
   return true;
 }
@@ -428,8 +519,7 @@ function wireSimInputs(){
     try{sim.plc.write(inp.dataset.tag,v);}catch(e){simMsg(e.message,true);inp.value=sim.plc.read(inp.dataset.tag);}
     simDraw();
   }));
-  if($('simJam'))$('simJam').addEventListener('click',()=>{if(sim&&sim.scene){sim.scene.jamNext=true;simMsg('The next barrel will stick at the eye.');}});
-  if($('simClear'))$('simClear').addEventListener('click',()=>{if(sim&&sim.scene){sim.scene.clear();sim.stuckNoted=false;simDraw();simMsg('Jam cleared from the belt. The fault stays latched until Reset_PB.');}});
+  box.querySelectorAll('[data-ctl]').forEach(b=>b.addEventListener('click',()=>{if(!sim||!sim.scene)return;simMsg(sim.scene.controls[+b.dataset.ctl].run());sim.note=null;simDraw();}));
 }
 function simScan(){if(sim.scene)sim.scene.step(sim.plc.scanMs);sim.plc.scan();}
 function simFail(e){simPause();simMsg(`Stopped: ${e.message}`,true);}
@@ -456,7 +546,9 @@ function simDraw(){
   document.querySelectorAll('#simInputs .sim-in').forEach(b=>b.setAttribute('aria-pressed',String(+p.read(b.dataset.tag)!==(b.dataset.mode==='hold'?+b.dataset.rest:0))));
   if(sim.scene){
     $('simScene').innerHTML=sim.scene.svg();
-    if(sim.scene.stuck&&!sim.stuckNoted){sim.stuckNoted=true;simMsg('A barrel is stuck at the eye. Watch whether your logic catches the jam.');}
+    const n=sim.scene.note();
+    if(n&&n!==sim.note)simMsg(n);
+    sim.note=n;
   }
   if(ld.id==='ladder'){
     let sig='';for(const v of p.power.values())sig+=(v[0]?1:0)+''+(v[1]?1:0);

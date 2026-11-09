@@ -109,7 +109,7 @@ XIC(Exhaust_Timer.DN) OTE(Char2_Exhaust_Fan);`,
         ["DN", ".DN on a TOF", "On while the rung is true, and for the preset time after it goes false."],
         ["30000", "30000", "30,000 ms is 30 seconds."],
       ],
-      sim: {"watch":["Exhaust_Timer.DN","Char2_Exhaust_Fan"],"steps":[{"label":"Burner on","set":{"Char2_Burner_On":1}},{"label":"Burner off, first 29 s","set":{"Char2_Burner_On":0},"runMs":29000},{"label":"1 s more","runMs":1100}]},
+      sim: {"watch":["Exhaust_Timer.DN","Char2_Exhaust_Fan"],"steps":[{"label":"Burner on","set":{"Char2_Burner_On":1}},{"label":"Burner off, first 29 s","set":{"Char2_Burner_On":0},"runMs":29000},{"label":"1 s more","runMs":1100}],"scene":"char2"},
       out: `Burner on               →  Exhaust_Timer.DN=1  →  Char2_Exhaust_Fan=1
 Burner off, first 29 s  →  no change
 1 s more                →  Exhaust_Timer.DN=0  →  Char2_Exhaust_Fan=0`,
@@ -144,7 +144,7 @@ XIC(Low_Air_Timer.DN) OTL(Hoop1_Low_Air);`,
         ["Hoop1_Air_PSI", "Analog value", "A REAL tag holding a measurement, not an on/off bit."],
         ["TON", "Debounce", "A timer after a compare makes the condition hold for a while before anything acts on it."],
       ],
-      sim: {"types":{"Hoop1_Air_PSI":"REAL"},"start":{"Hoop1_Air_PSI":92},"watch":["Low_Air_Timer.DN","Hoop1_Low_Air"],"steps":[{"label":"Cylinder fires: 76 psi for 0.5 s","pulse":{"Hoop1_Air_PSI":76},"pulseMs":500,"runMs":1000},{"label":"Header drops to 74 psi for 2.1 s","set":{"Hoop1_Air_PSI":74},"runMs":2100}]},
+      sim: {"types":{"Hoop1_Air_PSI":"REAL"},"start":{"Hoop1_Air_PSI":92},"watch":["Low_Air_Timer.DN","Hoop1_Low_Air"],"steps":[{"label":"Cylinder fires: 76 psi for 0.5 s","pulse":{"Hoop1_Air_PSI":76},"pulseMs":500,"runMs":1000},{"label":"Header drops to 74 psi for 2.1 s","set":{"Hoop1_Air_PSI":74},"runMs":2100}],"scene":"air1"},
       out: `Cylinder fires: 76 psi for 0.5 s  →  no change
 Header drops to 74 psi for 2.1 s  →  Low_Air_Timer.DN=1  →  Hoop1_Low_Air=1`,
     },
@@ -157,7 +157,7 @@ Header drops to 74 psi for 2.1 s  →  Low_Air_Timer.DN=1  →  Hoop1_Low_Air=1`
         ["LIM", "LIM(low,test,high)", "Limit Test. True when the test value is inside the band, ends included."],
         ["110", "Band limits", "Typed numbers here for clarity. Real programs usually use tags so the band can be changed from the HMI."],
       ],
-      sim: {"types":{"Hoop1_Air_PSI":"REAL"},"watch":["Hoop1_Air_OK"],"steps":[{"label":"Header comes up to 92 psi","set":{"Hoop1_Air_PSI":92}},{"label":"Drops to 84 psi","set":{"Hoop1_Air_PSI":84}},{"label":"Back to 85 psi, the low limit","set":{"Hoop1_Air_PSI":85}},{"label":"Rises to 112 psi","set":{"Hoop1_Air_PSI":112}}]},
+      sim: {"types":{"Hoop1_Air_PSI":"REAL"},"watch":["Hoop1_Air_OK"],"steps":[{"label":"Header comes up to 92 psi","set":{"Hoop1_Air_PSI":92}},{"label":"Drops to 84 psi","set":{"Hoop1_Air_PSI":84}},{"label":"Back to 85 psi, the low limit","set":{"Hoop1_Air_PSI":85}},{"label":"Rises to 112 psi","set":{"Hoop1_Air_PSI":112}}],"scene":"air1"},
       out: `Header comes up to 92 psi      →  Hoop1_Air_OK=1
 Drops to 84 psi                →  Hoop1_Air_OK=0
 Back to 85 psi, the low limit  →  Hoop1_Air_OK=1
@@ -225,6 +225,44 @@ XIC(Conv3_WIP.DN) BST OTE(Infeed_Hold) NXB OTE(Conv3_Full_Light) BND;`,
       sim: {"watch":["Conv3_WIP.ACC","Infeed_Hold","Conv3_Full_Light"],"steps":[{"label":"12 barrels enter","pulse":{"Entry_Eye":1},"runMs":600,"repeat":12},{"label":"1 barrel leaves","pulse":{"Exit_Eye":1},"runMs":600}]},
       out: `12 barrels enter  →  Conv3_WIP.ACC=12  →  Infeed_Hold=1  →  Conv3_Full_Light=1
 1 barrel leaves   →  Conv3_WIP.ACC=11  →  Infeed_Hold=0  →  Conv3_Full_Light=0`,
+    },
+    {
+      t: "Stop on low air",
+      goal: "Latch Hoop1_Low_Air when Hoop1_Air_PSI stays below 80 for 2 s (Low_Air_Timer). Let Reset_PB clear it only at 85 psi or more. Run Hoop1_Run only in Hoop1_Auto with no low-air fault.",
+      code: `LES(Hoop1_Air_PSI,80) TON(Low_Air_Timer,2000,0);
+XIC(Low_Air_Timer.DN) OTL(Hoop1_Low_Air);
+XIC(Reset_PB) GEQ(Hoop1_Air_PSI,85) OTU(Hoop1_Low_Air);
+XIC(Hoop1_Auto) XIO(Hoop1_Low_Air) OTE(Hoop1_Run);`,
+      about: "This puts the compare, timer and latch lessons together into the logic that protects Hoop Driver 1. A cylinder firing dips the header for a moment, which the 2-second timer ignores; a real loss of air latches the fault and stops the machine. The reset only works once pressure is back in the normal band, the same idea as the jam reset that refuses to clear while a barrel blocks the eye. In the simulator, trip the compressor, watch the machine stop, and try resetting before the pressure recovers.",
+      terms: [
+        ["GEQ", "GEQ(a,b)", "Greater Than or Equal. True when A is at least B."],
+        ["Hoop1_Run", "Run permissive", "The machine runs only in auto and with no latched low-air fault."],
+        ["Reset_PB", "Reset interlock", "The reset only works once the cause is gone: pressure back to 85 psi or more."],
+      ],
+      sim: {"types":{"Hoop1_Air_PSI":"REAL"},"start":{"Hoop1_Air_PSI":92,"Hoop1_Auto":1},"scene":"air1","watch":["Low_Air_Timer.DN","Hoop1_Low_Air","Hoop1_Run"],"steps":[{"label":"Cylinder fires: 78 psi for 0.4 s","pulse":{"Hoop1_Air_PSI":78},"pulseMs":400},{"label":"Compressor trips: 70 psi for 2.5 s","set":{"Hoop1_Air_PSI":70},"runMs":2500},{"label":"Reset_PB at 70 psi","pulse":{"Reset_PB":1}},{"label":"Air back to 92 psi, then Reset_PB","set":{"Hoop1_Air_PSI":92},"pulse":{"Reset_PB":1}}]},
+      out: `Cylinder fires: 78 psi for 0.4 s    →  no change
+Compressor trips: 70 psi for 2.5 s  →  Low_Air_Timer.DN=1  →  Hoop1_Low_Air=1  →  Hoop1_Run=0
+Reset_PB at 70 psi                  →  no change
+Air back to 92 psi, then Reset_PB   →  Low_Air_Timer.DN=0  →  Hoop1_Low_Air=0  →  Hoop1_Run=1`,
+    },
+    {
+      t: "Purge before and after the flame",
+      goal: "Char Station 2: with Char2_Start on, run Char2_Exhaust_Fan and light Char2_Burner_On only after a 5 s purge (Purge_Timer). After the burner goes out, keep the fan running 30 s (Post_Purge).",
+      code: `XIC(Char2_Start) TON(Purge_Timer,5000,0);
+XIC(Purge_Timer.DN) OTE(Char2_Burner_On);
+XIC(Char2_Burner_On) TOF(Post_Purge,30000,0);
+BST XIC(Char2_Start) NXB XIC(Post_Purge.DN) BND OTE(Char2_Exhaust_Fan);`,
+      about: "The fan runs before the burner lights, to clear anything that could ignite, and keeps running after it goes out, to clear heat and smoke. The fan rung is an OR: the start switch, or the post-purge timer still timing. The 5 and 30 seconds are illustrative. Real burner safety is handled by a certified burner management system built to the applicable safety standard, never by ordinary PLC rungs like these; this lesson is about timer logic, not burner safety.",
+      terms: [
+        ["Purge_Timer", "Pre-purge", "5 s of fan before the burner may light."],
+        ["TOF", "Post-purge", "Keeps the fan running 30 s after the burner goes out."],
+        ["BST", "Fan OR", "The fan runs for the start switch or the post-purge, whichever is on."],
+      ],
+      sim: {"scene":"char2","watch":["Char2_Exhaust_Fan","Char2_Burner_On"],"steps":[{"label":"Char2_Start on, first 4 s","set":{"Char2_Start":1},"runMs":4000},{"label":"1 s more","runMs":1100},{"label":"Char2_Start off, first 29 s","set":{"Char2_Start":0},"runMs":29000},{"label":"1 s more","runMs":1100}]},
+      out: `Char2_Start on, first 4 s    →  Char2_Exhaust_Fan=1
+1 s more                     →  Char2_Burner_On=1
+Char2_Start off, first 29 s  →  Char2_Burner_On=0
+1 s more                     →  Char2_Exhaust_Fan=0`,
     },
   ],
 });
