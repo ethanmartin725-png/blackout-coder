@@ -172,5 +172,19 @@ try:
 except pymssql.Error as e:
     print(f"SQL error: {e}", file=sys.stderr)
     sys.exit(1)
+
+# BC_SQL_AFTER: a check query run after the lesson in the same database (track tools use it to show
+# what a CREATE did). Its text is printed above its result, so the output says what was run.
+# A lesson that returned nothing reports "Commands completed successfully.", as SSMS does.
+after = os.environ.get("BC_SQL_AFTER", "").strip()
+if after:
+    if not blocks:
+        blocks.append("Commands completed successfully.")
+    try:
+        cur.execute(after)
+        blocks.append(after + "\n" + table(cur))
+    except pymssql.Error as e:
+        print(f"SQL error in the check query: {e}", file=sys.stderr)
+        sys.exit(1)
 conn.close()
 print("\n\n".join(blocks))

@@ -26,12 +26,16 @@ BC.addTrack({
       ],
       out: `Commands completed successfully.
 
-fault_log
-  fault_id   INT          identity, key
-  machine    VARCHAR(50)  required
-  fault      VARCHAR(50)  required
-  start_ts   DATETIME     default now
-  end_ts     DATETIME     empty until the fault clears`,
+SELECT COLUMN_NAME AS column_name, DATA_TYPE AS type, CHARACTER_MAXIMUM_LENGTH AS max_len,
+    IS_NULLABLE AS nullable, COLUMN_DEFAULT AS default_value,
+    COLUMNPROPERTY(OBJECT_ID('fault_log'), COLUMN_NAME, 'IsIdentity') AS is_identity
+FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'fault_log' ORDER BY ORDINAL_POSITION;
+column_name  type      max_len  nullable  default_value  is_identity
+fault_id     int       NULL     NO        NULL           1
+machine      varchar   50       NO        NULL           0
+fault        varchar   50       NO        NULL           0
+start_ts     datetime  NULL     NO        (getdate())    0
+end_ts       datetime  NULL     YES       NULL           0`,
     },
     {
       lang: "sql",
@@ -51,7 +55,18 @@ fault_log
         ["ts", "ts", "Short for timestamp. A naming habit worth keeping consistent across tables."],
         [null, "Snapshot table", "Stores readings at fixed times. To get activity between readings, compare each row with the one before it."],
       ],
-      out: `Commands completed successfully.`,
+      out: `Commands completed successfully.
+
+SELECT COLUMN_NAME AS column_name, DATA_TYPE AS type, CHARACTER_MAXIMUM_LENGTH AS max_len,
+    IS_NULLABLE AS nullable, COLUMN_DEFAULT AS default_value,
+    COLUMNPROPERTY(OBJECT_ID('count_log'), COLUMN_NAME, 'IsIdentity') AS is_identity
+FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'count_log' ORDER BY ORDINAL_POSITION;
+column_name  type      max_len  nullable  default_value  is_identity
+log_id       int       NULL     NO        NULL           1
+machine      varchar   50       NO        NULL           0
+barrels      int       NULL     NO        NULL           0
+state        int       NULL     NO        NULL           0
+ts           datetime  NULL     NO        (getdate())    0`,
     },
     {
       lang: "sql",
@@ -75,10 +90,13 @@ VALUES ('Conveyor 3', 'Assembly', 60, 42.50),
         ["INSERT", "INSERT INTO … VALUES", "Adds rows. Several rows can go in one statement, separated by commas."],
         ["dim_machine", "Dimension table", "One row per machine with its attributes. Fact tables join to it by key."],
       ],
-      out: `machine         area       ideal_rate_hr  margin_per_barrel
+      out: `Commands completed successfully.
+
+SELECT * FROM dim_machine ORDER BY machine;
+machine         area       ideal_rate_hr  margin_per_barrel
+Char Station 2  Finishing  50             42.50
 Conveyor 3      Assembly   60             42.50
-Hoop Driver 1   Assembly   55             42.50
-Char Station 2  Finishing  50             42.50`,
+Hoop Driver 1   Assembly   55             42.50`,
     },
     {
       lang: "sql",
@@ -102,38 +120,42 @@ Hoop Driver 1  Hoop misfeed  2026-11-07 10:09:40`,
       file: "fault_minutes.sql",
       t: "Fault durations",
       goal: "For the last 7 days, list each fault with its minutes. Count open faults up to now.",
-      code: `SELECT machine,
+      code: `DECLARE @now DATETIME = '2026-11-07 10:15';
+
+SELECT machine,
     fault,
     start_ts,
     end_ts,
-    DATEDIFF(SECOND, start_ts, ISNULL(end_ts, GETDATE())) / 60.0 AS minutes
+    DATEDIFF(SECOND, start_ts, ISNULL(end_ts, @now)) / 60.0 AS minutes
 FROM fault_log
-WHERE start_ts >= DATEADD(DAY, -7, GETDATE());`,
-      about: "DATEDIFF counts whole seconds between two times; dividing by 60.0 turns that into minutes with decimals. ISNULL swaps in the current time for faults still open, so they count instead of disappearing. Sample results assume \"now\" is 2026-11-07 10:15.",
+WHERE start_ts >= DATEADD(DAY, -7, @now);`,
+      about: "DATEDIFF counts whole seconds between two times; dividing by 60.0 turns that into minutes with decimals. ISNULL swaps in the current time for faults still open, so they count instead of disappearing. SQL Server keeps 6 decimals in the division; wrap it in CAST(… AS DECIMAL(8,2)) when the result is for display. @now stands in for GETDATE() so the results match the sample data, which ends at 2026-11-07 10:15; on a live server, use GETDATE().",
       terms: [
         ["DATEDIFF", "DATEDIFF(SECOND, a, b)", "Time between a and b in the unit you name."],
         ["ISNULL", "ISNULL(x, y)", "Returns x, or y when x is NULL."],
-        ["GETDATE", "GETDATE()", "The server's current date and time."],
+        ["@now", "@now", "The server's current date and time."],
         ["DATEADD", "DATEADD(DAY, -7, …)", "Shifts a date. Here: seven days back."],
         ["60.0", "/ 60.0", "Dividing by 60.0 instead of 60 keeps the decimals. Integer ÷ integer drops them."],
       ],
-      out: `machine        fault         start_ts             end_ts               minutes
-Hoop Driver 1  Hoop misfeed  2026-10-31 14:37:59  2026-10-31 14:43:41  5.70
-Conveyor 3     E-stop        2026-10-31 21:11:40  2026-10-31 21:14:59  3.32
-Hoop Driver 1  Hoop misfeed  2026-11-01 01:04:59  2026-11-01 01:09:01  4.03
-Conveyor 3     Jam           2026-11-01 01:36:12  2026-11-01 01:40:49  4.62
-… 47 rows`,
+      out: `machine         fault         start_ts             end_ts               minutes
+Hoop Driver 1   Hoop misfeed  2026-10-31 14:37:59  2026-10-31 14:43:41  5.700000
+Conveyor 3      E-stop        2026-10-31 21:11:40  2026-10-31 21:14:59  3.316666
+Hoop Driver 1   Hoop misfeed  2026-11-01 01:04:59  2026-11-01 01:09:01  4.033333
+Conveyor 3      Jam           2026-11-01 01:36:12  2026-11-01 01:40:49  4.616666
+… 47 rows in all`,
     },
     {
       lang: "sql",
       file: "pareto.sql",
       t: "Downtime Pareto",
       goal: "Total events and minutes per fault for the last 7 days, most minutes first.",
-      code: `SELECT fault,
+      code: `DECLARE @now DATETIME = '2026-11-07 10:15';
+
+SELECT fault,
     COUNT(*) AS events,
-    SUM(DATEDIFF(SECOND, start_ts, ISNULL(end_ts, GETDATE()))) / 60.0 AS minutes
+    SUM(DATEDIFF(SECOND, start_ts, ISNULL(end_ts, @now))) / 60.0 AS minutes
 FROM fault_log
-WHERE start_ts >= DATEADD(DAY, -7, GETDATE())
+WHERE start_ts >= DATEADD(DAY, -7, @now)
 GROUP BY fault
 ORDER BY minutes DESC;`,
       about: "Look at the two columns together. Jam happens most often, but Low air costs the most time. Ranking by events and ranking by minutes send you to different problems, so always show both.",
@@ -143,21 +165,23 @@ ORDER BY minutes DESC;`,
         ["GROUP", "GROUP BY fault", "One output row per fault type."],
       ],
       out: `fault         events  minutes
-Low air       5       87.4
-Char flare    8       70.0
-Hoop misfeed  12      66.6
-Jam           17      65.7
-E-stop        5       10.8`,
+Low air       5       87.433333
+Char flare    8       70.050000
+Hoop misfeed  12      66.566666
+Jam           17      65.733333
+E-stop        5       10.800000`,
     },
     {
       lang: "sql",
       file: "shift_summary.sql",
       t: "Bucket by shift",
       goal: "Using a CTE, tag each fault with shift A (06–13), B (14–21) or C (otherwise), then total events and minutes per shift.",
-      code: `WITH f AS (
+      code: `DECLARE @now DATETIME = '2026-11-07 10:15';
+
+WITH f AS (
     SELECT machine,
         fault,
-        DATEDIFF(SECOND, start_ts, ISNULL(end_ts, GETDATE())) / 60.0 AS minutes,
+        DATEDIFF(SECOND, start_ts, ISNULL(end_ts, @now)) / 60.0 AS minutes,
         CASE
             WHEN DATEPART(HOUR, start_ts) BETWEEN 6 AND 13 THEN 'A'
             WHEN DATEPART(HOUR, start_ts) BETWEEN 14 AND 21 THEN 'B'
@@ -177,38 +201,38 @@ ORDER BY shift;`,
         ["CASE", "CASE … END AS shift", "Builds the new shift column row by row."],
       ],
       out: `shift  events  minutes
-A      13      71.0
-B      18      105.6
-C      16      123.9`,
+A      13      71.016661
+B      18      105.633328
+C      16      123.933328`,
     },
     {
       lang: "sql",
       file: "downtime_dollars.sql",
       t: "Downtime in dollars",
       goal: "Join fault_log to dim_machine and show down hours and lost dollars (hours × ideal rate × margin) by area and machine, biggest first.",
-      code: `SELECT m.area,
+      code: `DECLARE @now DATETIME = '2026-11-07 10:15';
+
+SELECT m.area,
     f.machine,
-    SUM(DATEDIFF(SECOND, f.start_ts, ISNULL(f.end_ts, GETDATE()))) / 3600.0 AS down_hr,
-    SUM(DATEDIFF(SECOND, f.start_ts, ISNULL(f.end_ts, GETDATE()))) / 3600.0
+    SUM(DATEDIFF(SECOND, f.start_ts, ISNULL(f.end_ts, @now))) / 3600.0 AS down_hr,
+    SUM(DATEDIFF(SECOND, f.start_ts, ISNULL(f.end_ts, @now))) / 3600.0
         * m.ideal_rate_hr * m.margin_per_barrel AS lost_dollars
 FROM fault_log AS f
 JOIN dim_machine AS m
     ON m.machine = f.machine
 GROUP BY m.area, f.machine, m.ideal_rate_hr, m.margin_per_barrel
 ORDER BY lost_dollars DESC;`,
-      about: "This is where downtime becomes money: hours down × barrels per hour at ideal rate = barrels not made, × margin = dollars. Every non-summed column in SELECT has to appear in GROUP BY, which is why the rate and margin are listed there.",
+      about: "This is where downtime becomes money: hours down × barrels per hour at ideal rate = barrels not made, × margin = dollars. Every non-summed column in SELECT has to appear in GROUP BY, which is why the rate and margin are listed there. Round only at the end: the three rows rounded to cents add to $11,753.78, but the exact total, $11,753.785, rounds to $11,753.79, the figure the other tracks use.",
       terms: [
         ["JOIN", "JOIN … ON", "Pulls the rate and margin from the dimension for each fault row."],
         ["3600.0", "/ 3600.0", "Seconds to hours."],
         ["GROUP", "GROUP BY rule", "Any column you select without SUM/COUNT must be grouped."],
         ["lost_dollars", "Lost dollars", "Lost barrels × margin. Defensible because every input is visible in the query."],
       ],
-      out: `area       machine         down_hr  lost_dollars
-Assembly   Hoop Driver 1   1.90     4448.39
-Assembly   Conveyor 3      1.66     4222.37
-Finishing  Char Station 2  1.45     3083.02
-
-Rounded for display. The rows add to $11,753.78; the exact total, rounded once, is $11,753.79.`,
+      out: `area       machine         down_hr   lost_dollars
+Assembly   Hoop Driver 1   1.903055  4448.39106250
+Assembly   Conveyor 3      1.655833  4222.37415000
+Finishing  Char Station 2  1.450833  3083.02012500`,
     },
     {
       lang: "sql",
@@ -305,9 +329,11 @@ Hoop Driver 1   2026-11-07 10:00:00  35`,
       file: "pareto_cumulative.sql",
       t: "Cumulative Pareto",
       goal: "Total minutes per fault in a CTE, then add cum_pct: the running share of all downtime, largest first.",
-      code: `WITH p AS (
+      code: `DECLARE @now DATETIME = '2026-11-07 10:15';
+
+WITH p AS (
     SELECT fault,
-        SUM(DATEDIFF(SECOND, start_ts, ISNULL(end_ts, GETDATE()))) / 60.0 AS minutes
+        SUM(DATEDIFF(SECOND, start_ts, ISNULL(end_ts, @now))) / 60.0 AS minutes
     FROM fault_log
     GROUP BY fault
 )
@@ -323,12 +349,12 @@ ORDER BY minutes DESC;`,
         ["OVER", "OVER ()", "An empty window: the whole result set. Gives the grand total on every row."],
         ["cum_pct", "cum_pct", "Cumulative percent. Where it crosses 80% marks the vital few."],
       ],
-      out: `fault         minutes  cum_pct
-Low air       87.4     29.1
-Char flare    70.0     52.4
-Hoop misfeed  66.6     74.5
-Jam           65.7     96.4
-E-stop        10.8     100.0`,
+      out: `fault         minutes    cum_pct
+Low air       87.433333  29.087884
+Char flare    70.050000  52.392570
+Hoop misfeed  66.566666  74.538397
+Jam           65.733333  96.406986
+E-stop        10.800000  100.000000`,
     },
     {
       lang: "sql",
@@ -344,7 +370,7 @@ SELECT f.machine,
 FROM fault_log AS f
 JOIN dim_machine AS m
     ON m.machine = f.machine;`,
-      about: "You have typed the same DATEDIFF logic six times. A view saves the query under a name so Python, Power BI and anyone else get identical minutes. In SQL Server, CREATE VIEW must be the only statement in its batch, so it lives in its own file or after a GO.",
+      about: "You have typed the same DATEDIFF logic six times. A view saves the query under a name so Python, Power BI and anyone else get identical minutes. In SQL Server, CREATE VIEW must be the only statement in its batch, so it lives in its own file or after a GO. A view cannot use a variable, so it goes back to GETDATE(): open faults count up to the moment the view is queried.",
       terms: [
         ["VIEW", "CREATE VIEW … AS", "Saves a SELECT under a name. Query it like a table; it stores no data itself."],
         ["v_fault_minutes", "v_ prefix", "Naming habit that tells readers it is a view, not a table."],
@@ -352,11 +378,11 @@ JOIN dim_machine AS m
       ],
       out: `Commands completed successfully.
 
-SELECT TOP 3 * FROM v_fault_minutes;
+SELECT TOP 3 * FROM v_fault_minutes ORDER BY start_ts;
 machine        area      fault         start_ts             minutes
-Hoop Driver 1  Assembly  Hoop misfeed  2026-10-31 14:37:59  5.70
-Conveyor 3     Assembly  E-stop        2026-10-31 21:11:40  3.32
-Hoop Driver 1  Assembly  Hoop misfeed  2026-11-01 01:04:59  4.03`,
+Hoop Driver 1  Assembly  Hoop misfeed  2026-10-31 14:37:59  5.700000
+Conveyor 3     Assembly  E-stop        2026-10-31 21:11:40  3.316666
+Hoop Driver 1  Assembly  Hoop misfeed  2026-11-01 01:04:59  4.033333`,
     },
     {
       lang: "python",

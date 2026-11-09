@@ -24,7 +24,7 @@ Deployed from `site/` as plain static files: GitLab Pages via `.gitlab-ci.yml`, 
 - ERP Export track (Java): `node tools/output-checks/track10-erp/run.mjs`, the same approach as Eye Counter: each step compiled with the earlier steps, its test `main` and a closing brace.
 - Ignition outputs: `bash tools/output-checks/ignition/fetch.sh` once, then `node tools/output-checks/ignition/run.mjs` (`--check`, `--only=<title>`). Runs every Ignition script and expression lesson in real Jython 2.7 with a teaching model of `system.*`; database lessons need `BC_SQL_PASSWORD` and the SQL Server container. Scenarios are in `scenarios.mjs`. Semantics and limits: `docs/IGNITION_SIM.md`.
 - Plant Board track: `node tools/output-checks/track5-board/run.mjs`, the same Chromium approach as Downtime Entry, with the clock fixed at 2026-11-07 14:05 (UTC, en-US locale) and `fetch` rejected as in the app's preview.
-- DB Pulls & Analytics count_log steps: `node tools/output-checks/track2-db/sql_steps.mjs` runs them on SQL Server and writes their `out`.
+- DB Pulls & Analytics SQL steps: `node tools/output-checks/track2-db/sql_steps.mjs` runs every one on SQL Server and writes its `out` (`--check` for stale ones). CREATE steps get a check query, printed above its result; `BC_SQL_AFTER` in `sql_exec.py` runs it. The Python steps still come from `run.py`.
 - Downtime Entry track: `node tools/output-checks/track7-downtime/run.mjs` builds each JavaScript step's page in Chromium (Playwright), drives it with the scenarios in that file and writes its `out`; `--check` reports stale ones.
 
 ## Architecture
