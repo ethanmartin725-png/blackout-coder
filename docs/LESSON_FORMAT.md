@@ -67,6 +67,8 @@ BC.addLanguage("ignition", {
 });
 ```
 
+JavaScript has two modes. `js` previews a page and only makes sense in a track, where earlier HTML and CSS steps build the page it runs on. `jscon` has no preview: it is for console lessons whose output comes from running them in Node.
+
 ## Grading rules worth knowing when writing code
 
 - A line completes on an exact match, or when its tokens match ignoring whitespace. So `a=b` and `a = b` both pass, except where `py: true` makes leading indentation count.

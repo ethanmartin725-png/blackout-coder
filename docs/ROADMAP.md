@@ -17,7 +17,8 @@
 - [x] Foundations examples on the canonical machines in every lane. Python, C#, C++ and Java print the same numbers (OEE 72.9%, 41 fault minutes, quality 98.5%).
 - [x] Ladder Foundations gap: 8 lessons added (TOF, RTO hour meter, LES with debounce, LIM, MOV/EQU, ONS with ADD, CPT rate, CTU/CTD WIP with an output branch). The diagram draws RTO, LIM, CPT, GEQ/LEQ and SUB/MUL/DIV.
 - [x] Python Foundations gap: 6 lessons added (f-strings, list comprehensions, try/except, datetime, default arguments, a first pandas DataFrame), all on shift A sample data.
-- [ ] Close the remaining Foundations gaps before the tracks: new JavaScript and Structured Text lanes.
+- [x] JavaScript Foundations lane: 11 console lessons (`jscon` mode, run in Node) covering what the Plant Board track assumes: arrays of objects, map/filter/reduce, dates, JSON and try/catch.
+- [ ] Structured Text Foundations lane. Nothing here runs ST yet, so outputs need the PLC interpreter below (or would be hand-written, which the output rule forbids).
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
 - [ ] HMI design principles as their own steps: ISA-101 alarm colors, layout hierarchy, operator-first faceplates.
 - [ ] More Structured Text: CASE state machines, arrays, user-defined types.

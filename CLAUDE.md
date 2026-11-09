@@ -17,7 +17,7 @@ Deployed from `site/` as plain static files: GitLab Pages via `.gitlab-ci.yml`, 
 - Check every lesson: `node tools/verify.mjs` (must pass before any commit; CI runs it before deploy)
 - Run locally: `python3 -m http.server 8000 -d site`, or open `site/index.html` directly
 - Regenerate track outputs: see `tools/output-checks/` (needs pandas and openpyxl; track 6 needs the .NET 8 SDK)
-- Foundations outputs: `node tools/output-checks/foundations/run.mjs` runs every Python, C#, C++, Java and SQL Foundations lesson and writes its `out`; `--check` reports stale ones. Run it after editing any of those lessons. SQL runs on a real SQL Server 2022 (Docker container; set `BC_SQL_PASSWORD`, needs `pip install pymssql`) against a fresh copy of the canonical sample database each time; see `sql_exec.py`.
+- Foundations outputs: `node tools/output-checks/foundations/run.mjs` runs every Python, JavaScript, C#, C++, Java and SQL Foundations lesson and writes its `out`; `--check` reports stale ones. Run it after editing any of those lessons. SQL runs on a real SQL Server 2022 (Docker container; set `BC_SQL_PASSWORD`, needs `pip install pymssql`) against a fresh copy of the canonical sample database each time; see `sql_exec.py`.
 - MES Helper track: edit `tools/output-checks/track6-mes/lessons6.py`, then `python3 build6.py` there. It compiles and runs the C# and writes `site/data/tracks/06-mes.js`. Do not edit the JS file by hand.
 
 ## Architecture
@@ -46,6 +46,7 @@ Key engine behaviors:
 - **SQL**: T-SQL (SQL Server). Parameterized `?` placeholders when called from Python, named `@name` parameters from C#.
 - **C#**: .NET 8, top-level statements in `Program.cs`, nullable enabled, `Microsoft.Data.SqlClient` 7.1.1. Typed `SqlDbType` parameters, `using` on connections, writes inside a transaction. The verifier compiles every C# lesson; C++ (g++, C++17) and Java lessons are compiled too.
 - **Python**: pandas + pyodbc + openpyxl. Never paste values into SQL text; pass parameters.
+- **JavaScript**: two language modes. `js` is page JavaScript with a live preview (Plant Board track); `jscon` is console JavaScript run in Node, with `console.log` output (Foundations lane). Use `jscon` for anything that does not touch a page.
 - **Copy**: plain, direct sentences. Explain why, not just what. Call out assumptions a number depends on. No em-dash asides.
 - **Design**: dark navy with gold accents. Caladea display, Public Sans body, JetBrains Mono code, VT323 for the LCD stat readouts. Every color is a CSS token in `css/app.css`.
 - **Outputs**: every `out` or `outHtml` must come from actually running the code, never typed by hand. SQL that cannot run here is mirrored in pandas to produce its result.

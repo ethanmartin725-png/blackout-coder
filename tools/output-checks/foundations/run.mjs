@@ -4,7 +4,7 @@
 //   node tools/output-checks/foundations/run.mjs           write outputs into site/data/foundations/*.js
 //   node tools/output-checks/foundations/run.mjs --check   report lessons whose stored output is stale
 //
-// Toolchains: python3, dotnet (.NET 8), g++ (C++17), javac/java. A missing toolchain skips its lane.
+// Toolchains: node (JavaScript, always present), python3, dotnet (.NET 8), g++ (C++17), javac/java. A missing toolchain skips its lane.
 // SQL runs on a real SQL Server through sql_exec.py, against a fresh copy of the canonical sample database
 // (see that file for the server setup; without a reachable server the SQL lane is skipped).
 // Not run: ladder (drawn as a diagram), HTML (rendered as a preview). A lesson that prints nothing,
@@ -32,7 +32,7 @@ const sqlReady = () => {
   if (r.status !== 0) console.warn(`SQL Server not available: ${(r.stderr || "").trim()}`);
   return r.status === 0;
 };
-const tools = { python: has("python3"), csharp: has("dotnet"), cpp: has("g++"), java: has("javac", "-version"), sql: sqlReady() };
+const tools = { jscon: true, python: has("python3"), csharp: has("dotnet"), cpp: has("g++"), java: has("javac", "-version"), sql: sqlReady() };
 
 function sh(cmd, args, cwd) {
   const r = spawnSync(cmd, args, { cwd, env, encoding: "utf8", timeout: 120000 });
@@ -41,6 +41,12 @@ function sh(cmd, args, cwd) {
 
 // Each runner returns { out } or { skip: reason }; it throws on a real failure.
 const runners = {
+  jscon(code, d) {
+    fs.writeFileSync(path.join(d, "main.js"), code + "\n");
+    const r = sh(process.execPath, ["main.js"], d);
+    if (!r.ok || r.err) throw new Error(r.err || "exit code not 0");
+    return { out: r.out };
+  },
   python(code, d) {
     fs.writeFileSync(path.join(d, "main.py"), code + "\n");
     if (code.includes("shift_log.csv")) fs.copyFileSync(path.join(HERE, "shift_log.csv"), path.join(d, "shift_log.csv"));

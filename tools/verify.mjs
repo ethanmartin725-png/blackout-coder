@@ -81,7 +81,7 @@ for (const { kind, g } of groups) {
     const key = kind === "track" ? `${g.id}::${l.file}` : `${g.id}::${i}`;
     fileText[key] = (fileText[key] ? fileText[key] + "\n" : "") + l.code;
     if (ld.py) pyFiles.push({ where, code: fileText[key] });
-    if (langId === "js") jsFiles.push({ where, code: fileText[key] });
+    if (langId === "js" || langId === "jscon") jsFiles.push({ where, code: fileText[key] });
     if (langId === "cpp" || langId === "java") nativeFiles.push({ where, lang: langId, key, code: fileText[key] });
     if (langId === "csharp") {
       // One program per Foundations lesson; one project per track, built from each file's finished code

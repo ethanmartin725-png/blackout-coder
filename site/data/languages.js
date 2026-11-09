@@ -116,3 +116,11 @@ BC.addLanguage("css", {
   "preview": true,
   "note": "CSS: rules that style HTML. A selector picks elements; properties inside the braces set how they look."
 });
+BC.addLanguage("jscon", {
+  "name": "JavaScript",
+  "short": "JS",
+  "tab": 2,
+  "preview": false,
+  "kw": "const let var function return if else for of in new async await try catch throw true false null",
+  "note": "JavaScript run on its own, in Node.js or a browser's developer console. console.log prints a line. The Plant Board track uses the same language to change a web page."
+});
