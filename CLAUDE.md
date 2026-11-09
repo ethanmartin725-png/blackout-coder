@@ -23,6 +23,7 @@ Deployed from `site/` as plain static files: GitLab Pages via `.gitlab-ci.yml`, 
 - Eye Counter track (C++): `node tools/output-checks/track9-eye/run.mjs` compiles each step with all earlier steps and that step's test `main` (kept in the script), runs it and writes its `out`; `--check` reports stale ones.
 - ERP Export track (Java): `node tools/output-checks/track10-erp/run.mjs`, the same approach as Eye Counter: each step compiled with the earlier steps, its test `main` and a closing brace.
 - Ignition outputs: `bash tools/output-checks/ignition/fetch.sh` once, then `node tools/output-checks/ignition/run.mjs` (`--check`, `--only=<title>`). Runs every Ignition script and expression lesson in real Jython 2.7 with a teaching model of `system.*`; database lessons need `BC_SQL_PASSWORD` and the SQL Server container. Scenarios are in `scenarios.mjs`. Semantics and limits: `docs/IGNITION_SIM.md`.
+- Plant Board track: `node tools/output-checks/track5-board/run.mjs`, the same Chromium approach as Downtime Entry, with the clock fixed at 2026-11-07 14:05 (UTC, en-US locale) and `fetch` rejected as in the app's preview.
 - Downtime Entry track: `node tools/output-checks/track7-downtime/run.mjs` builds each JavaScript step's page in Chromium (Playwright), drives it with the scenarios in that file and writes its `out`; `--check` reports stale ones.
 
 ## Architecture

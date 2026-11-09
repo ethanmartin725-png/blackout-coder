@@ -225,7 +225,11 @@ body {
         ["[", "[ … ]", "An array: an ordered list."],
         [",", "Trailing comma", "Allowed after the last item. Makes adding rows cleaner."],
       ],
-      out: `Nothing visible yet. The data is loaded but nothing reads it.`,
+      out: `board.machines.length  →  3
+board.pareto.length    →  5
+board.notes.length     →  2
+Tiles on the page      →  0
+Header text            →  "Loading"`,
     },
     {
       lang: "js",
@@ -249,7 +253,11 @@ function renderHeader() {
         ["getElementById", "document.getElementById(\"…\")", "Finds the one element with that id."],
         ["textContent", ".textContent =", "Sets an element's text. Treats everything as plain text, never HTML."],
       ],
-      out: `Functions defined. They run in step 14.`,
+      out: `statusClass("DOWN")                        →  "bad"
+statusClass("BEHIND")                      →  "warn"
+statusClass("OK")                          →  "ok"
+Header before anything calls renderHeader  →  "Loading"
+renderHeader()                             →  "Shift A · Sat Nov 07, 06:00 to 14:00"`,
     },
     {
       lang: "js",
@@ -276,6 +284,10 @@ function renderHeader() {
         ["className", ".className =", "Sets the element's classes, which hooks it to the CSS."],
         ["toFixed", ".toFixed(1)", "Formats a number with 1 decimal place, as text."],
       ],
+      out: `renderTiles():
+    tile bad: Char Station 2 86.0% OEE this week · DOWN
+    tile ok: Conveyor 3 73.8% OEE this week · OK
+    tile warn: Hoop Driver 1 72.9% OEE this week · BEHIND`,
     },
     {
       lang: "js",
@@ -299,6 +311,8 @@ function renderHeader() {
         ["=>", "(a, b) => …", "An arrow function: a short way to write a small function."],
         ["?", "cond ? x : y", "Returns x if the condition is true, otherwise y."],
       ],
+      out: `renderTiles(); renderSummary(): the last tile
+                                              →  tile warn: Biggest gap to 85% 12.1 pts Hoop Driver 1`,
     },
     {
       lang: "js",
@@ -325,6 +339,12 @@ function renderHeader() {
         ["...", "Math.max(...list)", "Spread: passes each array item as a separate argument."],
         ["style", "style=\"width: …%\"", "An inline style. Here it sets each bar's length."],
       ],
+      out: `renderPareto():
+    Low air | bar 100% | 87 min
+    Char flare | bar 80.0915% | 70 min
+    Hoop misfeed | bar 76.2014% | 67 min
+    Jam | bar 75.1716% | 66 min
+    E-stop | bar 12.357% | 11 min`,
     },
     {
       lang: "js",
@@ -348,6 +368,9 @@ function renderHeader() {
         ["append", ".append(a, b)", "Adds elements or plain text to the end."],
         ["textContent", "textContent vs innerHTML", "User-typed text: textContent. Your own trusted markup: innerHTML."],
       ],
+      out: `renderNotes():
+    T. Nguyen: Burner B igniter sparking weak on Char Station 2.
+    J. Ruiz: Low air twice on Hoop Driver 1. Compressor tech called.`,
     },
     {
       lang: "js",
@@ -368,7 +391,7 @@ render();`,
         ["render", "render()", "The single entry point for drawing the page."],
         [null, "Order matters", "Summary runs after tiles because it appends to the tiles section that renderTiles just cleared."],
       ],
-      out: `Header, four tiles, five Pareto bars and two notes appear.`,
+      out: `After the script runs  →  header "Shift A · Sat Nov 07, 06:00 to 14:00", 4 tiles, 5 bars, 2 notes`,
     },
     {
       lang: "js",
@@ -383,12 +406,14 @@ render();`,
 
 tick();
 setInterval(tick, 30000);`,
-      about: "A clock on a board tells everyone the page is alive. If it freezes, the TV or the browser has stalled. setInterval repeats a function every N milliseconds.",
+      about: "A clock on a board tells everyone the page is alive. If it freezes, the TV or the browser has stalled. setInterval repeats a function every N milliseconds. toLocaleTimeString follows the viewer's locale: an en-US browser shows 02:05 PM, a UK one 14:05.",
       terms: [
         ["Date", "new Date()", "The current date and time."],
         ["toLocaleTimeString", ".toLocaleTimeString([], {…})", "Formats a time for the viewer's locale. The options pick hour and minute only."],
         ["setInterval", "setInterval(fn, 30000)", "Runs fn every 30,000 ms (30 seconds)."],
       ],
+      out: `Clock at 14:05 (en-US browser)  →  "02:05 PM"
+90 seconds later                →  "02:06 PM"`,
     },
     {
       lang: "js",
@@ -408,14 +433,17 @@ setInterval(tick, 30000);`,
 }
 
 setInterval(refresh, 60000);`,
-      about: "In production the board pulls fresh numbers from a small API that runs the SQL from the earlier tracks. The preview has no network, so this shows the failure path, which matters just as much: the board keeps its last numbers and says it is offline instead of going blank.",
+      about: "In production the board pulls fresh numbers from a small API that runs the SQL from the earlier tracks. The preview has no network, so this shows the failure path, which matters just as much: the board keeps its last numbers and says it is offline instead of going blank. The output also serves an illustrative /api/board reply with Char Station 2 back to OK, to show the success path redrawing the tiles.",
       terms: [
         ["async", "async / await", "Lets you wait for slow things like network calls without freezing the page."],
         ["fetch", "fetch(url)", "Requests data from a server."],
         ["try", "try { } catch (err) { }", "Runs the code and catches any error instead of crashing."],
         ["assign", "Object.assign(board, data)", "Copies the new values into the existing board object."],
       ],
-      out: `In the preview: header reads "Shift A · Sat Nov 07, 06:00 to 14:00 · offline" about a minute after load, when the first refresh fails.`,
+      out: `In the preview, at load                       →  "Shift A · Sat Nov 07, 06:00 to 14:00"
+In the preview, after 60 s (fetch fails)      →  "Shift A · Sat Nov 07, 06:00 to 14:00 · offline"
+Served /api/board with Char Station 2 back to OK, after 60 s
+                                              →  "Shift A · Sat Nov 07, 06:00 to 14:00"; tile ok: Char Station 2 86.0% OEE this week · OK`,
     },
   ],
 });
