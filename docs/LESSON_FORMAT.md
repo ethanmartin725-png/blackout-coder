@@ -39,6 +39,7 @@ Add `soon: true` with no lessons to show a greyed-out placeholder tab.
 | `file` | tracks | The file this step belongs to. Consecutive steps with the same `file` build on each other: earlier code shows as locked context. |
 | `out` | no | Plain-text result, shown under "What it produces". Must come from running the code. |
 | `outHtml` | no | A generated HTML page, rendered as a preview. |
+| `html` | CSS lane | The markup a CSS lesson in a lane styles. The learner types only the CSS; both previews render this markup with the target and the typed CSS, and the reference panel shows it under "The HTML this CSS styles". Required on CSS lane lessons and not allowed anywhere else. |
 | `sim` | no | Ladder and Structured Text: a scenario the PLC interpreter runs to generate `out`. See below. |
 
 ### PLC scenarios (`sim`)

@@ -69,6 +69,15 @@ for (const { kind, g } of groups) {
     const ld = BC.languages[langId];
     if (!ld) { fail(`${where}: unknown language "${langId}"`); return; }
     if (kind === "track" && !l.file) fail(`${where}: track steps need a file name`);
+    // A CSS lesson in a lane styles sample markup it carries in l.html; nothing else carries markup
+    if (kind === "lane" && langId === "css" && typeof l.html !== "string") fail(`${where}: a CSS lane lesson needs html (the markup it styles)`);
+    if (l.html !== undefined && !(kind === "lane" && langId === "css")) fail(`${where}: only CSS lane lessons take an html field`);
+    if (langId === "css") {
+      const bare = l.code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/"[^"]*"|'[^']*'/g, "");
+      let depth = 0;
+      for (const ch of bare) { if (ch === "{") depth++; else if (ch === "}" && --depth < 0) break; }
+      if (depth !== 0) fail(`${where}: CSS braces do not balance`);
+    }
     (l.terms || []).forEach((t, j) => {
       if (!Array.isArray(t) || t.length !== 3) fail(`${where}: term ${j + 1} must be [key, label, definition]`);
       else if (t[0] !== null && !l.code.includes(t[0])) warns.push(`${where}: term key "${t[0]}" not found in this step's code`);

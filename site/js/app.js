@@ -222,6 +222,8 @@ const joinPre=t=>pre?(pre+'\n'+t):t;
 
 /* ---------- html / css preview ---------- */
 function docs(u,runUser){
+  // A CSS lesson in a lane styles its own sample markup (lesson.html); the learner types only the CSS.
+  if(!inTrack()&&lesson.html!==undefined)return {t:{h:`<style>${lesson.code}</style>${lesson.html}`,j:''},u:{h:`<style>${u}</style>${lesson.html}`,j:''}};
   if(!inTrack())return {t:{h:lesson.code,j:''},u:{h:u,j:''}};
   let tH='',tC='',tJ='',uH='',uC='',uJ='';
   lane.lessons.slice(0,idx+1).forEach((l,i)=>{
@@ -270,7 +272,7 @@ function renderRef(){
     viz.innerHTML=`<figure><figcaption>Target routine</figcaption><div id="vizT">${svgLadder(joinPre(lesson.code))}</div></figure><figure><figcaption>Your routine</figcaption><div id="vizU"></div></figure>`;
   }else if(ld.preview){
     viz.hidden=false;
-    viz.innerHTML=`<figure><figcaption>Target page</figcaption><div class="preview-host" id="prevT"></div></figure><figure><figcaption>Your page${ld.id==='js'?' · script runs when you finish or press Check':''}</figcaption><div class="preview-host" id="prevU"></div></figure>`;
+    viz.innerHTML=`<figure><figcaption>Target page</figcaption><div class="preview-host" id="prevT"></div></figure><figure><figcaption>Your page${ld.id==='js'?' · script runs when you finish or press Check':''}</figcaption><div class="preview-host" id="prevU"></div></figure>${!inTrack()&&lesson.html!==undefined?`<details class="fixture"><summary>The HTML this CSS styles</summary><pre>${esc(lesson.html)}</pre></details>`:''}`;
     preview($('prevT'),docs('',false).t);
   }else if(lesson.outHtml){
     viz.hidden=false;
