@@ -15,7 +15,7 @@ Ignition scripts call `system.*`, which only exists inside an Ignition gateway, 
   - `system.date`: Java `Date`s on a fixed clock set by each scenario (default 2026-11-07 14:05, the handoff run time).
   - `system.dataset`: `toDataSet`, `toPyDataSet`, datasets and PyDataSets with the methods the lessons call.
   - `system.util`: loggers print `LEVEL [name] message`; `debug` prints nothing, as with Ignition's default level. `jsonEncode` sorts keys so outputs are repeatable; Ignition's own key order may differ.
-- **`sim/expr.py`** evaluates expressions: numbers, strings, `{tag}` references, `+ - * / %`, comparisons, `&& || !`, and `if`, `case`, `switch`, `numberFormat`, `dateFormat`, `dateDiff`, `now`, `toStr`, `toInt`, `coalesce`, `isNull`, `upper`, `lower`, `len`, `concat`, `abs`, `min`, `max`. Formats use Java's DecimalFormat and SimpleDateFormat, as Ignition does.
+- **`sim/expr.py`** evaluates expressions: numbers, strings, `{tag}` references, `+ - * / %`, comparisons, `&& || !`, and `if`, `case`, `switch`, `numberFormat`, `dateFormat`, `dateDiff`, `now`, `getHour24`, `getMinute`, `toStr`, `toInt`, `coalesce`, `isNull`, `upper`, `lower`, `len`, `concat`, `abs`, `min`, `max`. Formats use Java's DecimalFormat and SimpleDateFormat, as Ignition does.
 - **`scenarios.mjs`** gives each lesson its tags, clock, database setup and what to call afterwards (for example, firing `valueChanged` with qualified values).
 
 ## Not modeled

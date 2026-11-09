@@ -18,9 +18,16 @@ def set_clock(text):
     _state.clock.ms = SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(text).getTime()
 
 
+def tag_value(v):
+    """{"$date": "yyyy-MM-dd HH:mm:ss"} in a scenario becomes a java.util.Date tag value."""
+    if isinstance(v, dict) and "$date" in v:
+        return SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(v["$date"])
+    return v
+
+
 def load_tags(tags):
     for path, v in (tags or {}).items():
-        value, quality = (v[0], v[1]) if isinstance(v, list) else (v, "Good")
+        value, quality = (tag_value(v[0]), v[1]) if isinstance(v, list) else (tag_value(v), "Good")
         _state.tags[system.tag.normalize(path)] = [value, quality, _state.clock.now()]
 
 

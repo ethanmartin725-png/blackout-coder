@@ -105,4 +105,40 @@ print("shift change saved %d" % shiftChange())
 print("Jam_Count: %d" % system.tag.readBlocking([COUNT])[0].value)` },
   "ignition/Shift summary": { db: true, clock: "2026-11-07 14:00:00", after: `show("SELECT TOP 1 shift, author, note FROM handoff_note ORDER BY note_id DESC")` },
   // <<< lane
+  // >>> hmi
+  // ---------- Line Status Screen track ----------
+  "t-hmi/State text with switch": { cases: [{"label": "Conv_State = 1", "tags": {"Conveyor3/Conv_State": 1}}, {"label": "Conv_State = 2", "tags": {"Conveyor3/Conv_State": 2}}, {"label": "Conv_State = 3", "tags": {"Conveyor3/Conv_State": 3}}, {"label": "Conv_State = 0", "tags": {"Conveyor3/Conv_State": 0}}] },
+  "t-hmi/Banner color": { cases: [{"label": "Jam_Fault 0, state 1", "tags": {"Conveyor3/Jam_Fault": 0, "Conveyor3/Conv_State": 1}}, {"label": "Jam_Fault 0, state 3", "tags": {"Conveyor3/Jam_Fault": 0, "Conveyor3/Conv_State": 3}}, {"label": "Jam_Fault 1, state 1", "tags": {"Conveyor3/Jam_Fault": 1, "Conveyor3/Conv_State": 1}}, {"label": "Jam_Fault 0, state 2", "tags": {"Conveyor3/Jam_Fault": 0, "Conveyor3/Conv_State": 2}}] },
+  "t-hmi/OEE as a percent": { cases: [{"label": "OEE = 0.738", "tags": {"Conveyor3/OEE": 0.738}}, {"label": "OEE = 0.86", "tags": {"Conveyor3/OEE": 0.86}}, {"label": "OEE = 0.7", "tags": {"Conveyor3/OEE": 0.7}}] },
+  "t-hmi/Minutes since the last fault": { tags: {"Conveyor3/Last_Fault_End": {"$date": "2026-11-07 09:13:29"}}, cases: [{"label": "at 09:20", "clock": "2026-11-07 09:20:00"}, {"label": "at 11:45", "clock": "2026-11-07 11:45:00"}, {"label": "at 14:05", "clock": "2026-11-07 14:05:00"}] },
+  "t-hmi/Behind target": { cases: [{"label": "2 h: 116 of 120", "tags": {"Conveyor3/Barrel_Count/ACC": 116, "Conveyor3/Target_Now": 120}}, {"label": "4 h: 196 of 240", "tags": {"Conveyor3/Barrel_Count/ACC": 196, "Conveyor3/Target_Now": 240}}, {"label": "end: 352 of 450", "tags": {"Conveyor3/Barrel_Count/ACC": 352, "Conveyor3/Target_Now": 450}}] },
+  "t-hmi/Shift from the clock": { cases: [{"label": "at 05:59", "clock": "2026-11-07 05:59:00"}, {"label": "at 06:00", "clock": "2026-11-07 06:00:00"}, {"label": "at 14:05", "clock": "2026-11-07 14:05:00"}, {"label": "at 22:30", "clock": "2026-11-07 22:30:00"}] },
+  "t-hmi/Fallback for a missing value": { cases: [{"label": "Operator = J. Ruiz", "tags": {"Conveyor3/Operator": "J. Ruiz"}}, {"label": "Operator = null", "tags": {"Conveyor3/Operator": null}}] },
+  "t-hmi/Log the fault and keep its id": { db: true, clock: "2026-11-07 09:08:52", tags: {"Conveyor3/Open_Fault_Id": 0}, before: `system.db.runPrepUpdate("DELETE FROM fault_log WHERE start_ts >= '2026-11-07 09:08:52'", [])`, after: `valueChanged(None, "[default]Conveyor3/Jam_Fault", qv(False), qv(True), False, False)
+print("Open_Fault_Id: %d" % system.tag.readBlocking(["[default]Conveyor3/Open_Fault_Id"])[0].value)
+show("SELECT fault_id, machine, fault, start_ts, end_ts FROM fault_log WHERE start_ts >= '2026-11-07 09:00'")` },
+  "t-hmi/Close the fault by id": { db: true, clock: "2026-11-07 09:08:52", tags: {"Conveyor3/Open_Fault_Id": 0}, before: `system.db.runPrepUpdate("DELETE FROM fault_log WHERE start_ts >= '2026-11-07 09:08:52'", [])`, after: `p = "[default]Conveyor3/Jam_Fault"
+valueChanged(None, p, qv(False), qv(True), False, False)
+set_clock("2026-11-07 09:13:29")
+valueChanged(None, p, qv(True), qv(False), False, False)
+print("Open_Fault_Id: %d" % system.tag.readBlocking(["[default]Conveyor3/Open_Fault_Id"])[0].value)
+show("SELECT fault_id, machine, fault, start_ts, end_ts FROM fault_log WHERE start_ts >= '2026-11-07 09:00'")` },
+  "t-hmi/Reset button with an interlock": { tags: {"Conveyor3/Eye_Blocked": true, "Conveyor3/Reset_Request": false}, after: `print(runAction(None, None))
+set_tag("Conveyor3/Eye_Blocked", False)
+print(runAction(None, None))
+print("Reset_Request: %s" % system.tag.readBlocking(["[default]Conveyor3/Reset_Request"])[0].value)` },
+  "t-hmi/Setpoint with a range check": { after: `for v in [45, 75, 5.5, 60]:
+    print(setSpeed(v))
+print("Speed_SP: %.1f" % system.tag.readBlocking(["[default]Conveyor3/Speed_SP"])[0].value)` },
+  "t-hmi/Audit the operator's actions": { after: `changeSpeed("J. Ruiz", 55)
+changeSpeed("J. Ruiz", 72)` },
+  "t-hmi/Pareto query": { db: true, clock: "2026-11-07 10:15:00" },
+  "t-hmi/Hourly output with a rollover": { db: true, clock: "2026-11-07 07:00:00", tags: {"Conveyor3/Barrel_Count/ACC": 65500, "Conveyor3/Count_Last_Hour": 65453}, after: `set_clock("2026-11-07 08:00:00"); set_tag("Conveyor3/Barrel_Count/ACC", 11); rerun()
+set_clock("2026-11-07 09:00:00"); set_tag("Conveyor3/Barrel_Count/ACC", 58); rerun()
+show("SELECT machine, barrels, ts FROM count_log ORDER BY ts")` },
+  "t-hmi/Shift change": { db: true, clock: "2026-11-07 14:00:00", tags: {"Shift/Name": "A", "Shift/Reset_Counts": false}, after: `shiftChange("B")
+show("SELECT machine, barrels, state, ts FROM count_log ORDER BY machine")
+for qv, p in zip(system.tag.readBlocking(["[default]Shift/Name", "[default]Shift/Reset_Counts"]), ["Shift/Name", "Shift/Reset_Counts"]):
+    print("%s: %s" % (p, qv.value))` },
+  // <<< hmi
 };

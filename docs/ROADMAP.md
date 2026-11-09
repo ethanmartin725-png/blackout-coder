@@ -32,7 +32,8 @@
   - [x] HTML 50, CSS 50
   - [x] C++ 50
   - [x] Java 50
-  - [ ] Structured Text 48, Ignition 35 (Line Status Screen track next: +15)
+  - [x] Ignition 50
+  - [ ] Structured Text 48 (stage 3 waits on 1756-RM003)
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
 - [ ] HMI design principles as their own steps: ISA-101 alarm colors, layout hierarchy, operator-first faceplates.
 - [ ] More Structured Text: user-defined types.
@@ -52,6 +53,7 @@
 - [x] AM Checklist track: a daily Autonomous Maintenance sheet for Hoop Driver 1 (10 HTML, 12 CSS steps), with CSS-only check-off, out-of-range highlighting and a print stylesheet.
 - [x] HTML lane +27 lessons (page skeleton to inline SVG) and a new CSS lane of 28 lessons. CSS lane lessons carry the markup they style in an `html` field; the preview renders it with the target and the typed CSS.
 - [x] JavaScript to 50: 20 console lessons (truthiness, sorting numbers, `??` and `?.`, Map/Set, reduce grouping, parsing and NaN, floating point and cents, classes, closures, errors, async/await, Intl, JSON) and a new Downtime Entry track (4 HTML, 4 CSS, 10 JavaScript steps) whose outputs come from running each step's page in Chromium.
+- [x] Line Status Screen track (Ignition, 15 steps: 7 expressions, 8 scripts). Its Pareto query reproduces the DB track's canonical minutes on the real database.
 - [x] Ignition runtime and lane: real Jython 2.7.4 with a teaching model of `system.*` (tags, db over JDBC to SQL Server, date, dataset, util) and the expression language; the PLC track's 5 Ignition outputs are now generated, and a 30-lesson Ignition lane. The verifier refuses Jython-incompatible code.
 - [x] C# to 50: 28 Foundations lessons (format strings and culture, loops, arrays, switch expressions, TryParse, nullable, DateTime, decimal for money, collections and LINQ through a cumulative Pareto, enums, records, validation, interfaces, extension and generic methods, pattern matching, exceptions, files, JSON, async/await, banker's rounding), outputs from `dotnet run`.
 - [x] Ladder to 50: 29 Foundations lessons (bit patterns, timers, counters and math, compare and select, ladder state machines, two scene challenges). 9 are held identical to their Structured Text twins with `sameAs`. The on-delay lesson's tags became `No_Feed_Timer`/`No_Feed_Fault`: a starved belt is not a jam.

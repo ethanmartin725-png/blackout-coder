@@ -8,7 +8,7 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 
 **Foundations**: eleven single-language lanes (Python, PLC ladder, SQL, C#, C++, Java, HTML, JavaScript, Structured Text, CSS, Ignition), 355 lessons.
 
-**Projects**: ten tracks, 178 steps, that build one connected system for a sample cooperage line:
+**Projects**: eleven tracks, 193 steps, that build one connected system for a sample cooperage line:
 
 | Track | Steps | Builds |
 |---|---|---|
@@ -21,6 +21,7 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 | AM Checklist | 22 | A daily Autonomous Maintenance check sheet in HTML and CSS: CIL checklists, readings that flag out-of-range values, an abnormality tag, print styles |
 | Eye Counter | 20 | Firmware-style C++ for a barrel counter on Conveyor 3's photo-eye: debounce, edge counting, a cycle-time ring buffer, jam detection, status bits, a serial line |
 | ERP Export | 20 | A Java back-office job: shift counts to a fixed-width ERP file with header and trailer control totals, bad rows held back with reasons, safe to rerun |
+| Line Status Screen | 15 | The Ignition logic behind Conveyor 3's operator screen: expression bindings for state, color, OEE and shift; scripts for fault logging by id, an interlocked reset, setpoints, an audit trail, the Pareto query and the shift change |
 | Downtime Entry | 18 | An operator form for the stops the PLC never sees, in HTML, CSS and JavaScript: validation, a log table, totals and undo |
 
 Three clean runs (90%+ accuracy, no peeks) at a rank unlock the next one. Each lane and track keeps its own rank. Progress saves in the browser, per device.

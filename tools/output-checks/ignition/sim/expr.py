@@ -1,6 +1,6 @@
 # A teaching model of Ignition's expression language, for generating lesson outputs.
 # Covers: numbers, strings, {tag} references, + - * / %, comparisons (= == != <> < > <= >=),
-# && || !, and the functions in FUNCS below. Formatting uses Java's DecimalFormat and
+# && || !, and the functions in FUNCS below (including getHour24 and getMinute). Formatting uses Java's DecimalFormat and
 # SimpleDateFormat, as Ignition does. Anything else raises NotModeled. See docs/IGNITION_SIM.md.
 import re
 from java.text import DecimalFormat, SimpleDateFormat
@@ -181,6 +181,20 @@ def f_toInt(v):
     raise NotModeled("toInt(%r): rounding rules are not modeled" % (v,))
 
 
+def _hour(d):
+    from java.util import Calendar
+    c = Calendar.getInstance()
+    c.setTime(d)
+    return c.get(Calendar.HOUR_OF_DAY)
+
+
+def _minute(d):
+    from java.util import Calendar
+    c = Calendar.getInstance()
+    c.setTime(d)
+    return c.get(Calendar.MINUTE)
+
+
 FUNCS = {
     "case": f_case,
     "switch": f_switch,
@@ -198,6 +212,8 @@ FUNCS = {
     "len": lambda s: len(s),
     "concat": lambda *a: u"".join(text(x) for x in a),
     "abs": lambda x: abs(x),
+    "getHour24": lambda d: _hour(d),
+    "getMinute": lambda d: _minute(d),
     "min": lambda a, b: min(a, b),
     "max": lambda a, b: max(a, b),
 }
