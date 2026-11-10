@@ -35,6 +35,7 @@
   - [x] Java 50
   - [x] Ignition 50
   - [x] DAX 50: measures, filter context, CALCULATE patterns (ALL, ALLEXCEPT, KEEPFILTERS, FILTER), OEE and loss dollars, shift and date windows, RANKX, TOPN, CONCATENATEX; outputs from a teaching model, every lesson checked against a SQL twin
+  - [ ] Power Query M: 34 (9 track steps + 25 lane lessons, stage 1). Stage 2 to 50: Pivot and Unpivot, more Text and Date functions, parameters, type annotations
   - [x] Structured Text 52, with four user-defined type lessons; CTUD and REAL-to-DINT rounding (stage 3) still wait on 1756-RM003
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
 - [x] SPC and Control Charts track (14 steps): X-bar and R, Western Electric rules, signals traced to fault_log, Phase I limits from a clean baseline, Cp, Cpk and Ppk, an I-MR chart, a p-chart, an Excel chart and a reaction plan. Adds illustrative char_depth samples to PlantDB.

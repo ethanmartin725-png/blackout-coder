@@ -11,7 +11,7 @@ import { runProgressTests } from "./progress-tests.mjs";
 import { runExplainTests } from "./explain-tests.mjs";
 import { runDaxTests } from "./dax-tests.mjs";
 import { runPqTests } from "./pq-tests.mjs";
-import { trackOutputs as pbiOutputs } from "./output-checks/pq/lane.mjs";
+import { trackOutputs as pbiOutputs, laneOutputs as mLaneOutputs } from "./output-checks/pq/lane.mjs";
 import { lessonOutputs as daxOutputs } from "./output-checks/dax/lane.mjs";
 import { routineCode, PLC_LANGS } from "./output-checks/plc/lessons.mjs";
 
@@ -247,6 +247,14 @@ for (const tr of BC.tracks.filter((t) => t.lessons.some((l) => l.pq))) {
     const where = `${tr.id} "${r.t}"`;
     if (r.error) fail(`${where}: the M/DAX model refused it: ${r.error}`);
     else if (r.out !== tr.lessons.find((l) => l.t === r.t).out) fail(`${where}: stored output does not match the models. Run node tools/output-checks/pq/run.mjs`);
+  }
+}
+for (const lane of BC.lanes.filter((l) => l.lang === "m")) {
+  for (const r of mLaneOutputs(lane.lessons)) {
+    daxRun++;
+    const where = `${lane.id} "${r.t}"`;
+    if (r.error) fail(`${where}: the M model refused it: ${r.error}`);
+    else if (r.out !== lane.lessons.find((l) => l.t === r.t).out) fail(`${where}: stored output does not match the M model. Run node tools/output-checks/pq/run.mjs`);
   }
 }
 for (const lane of BC.lanes.filter((l) => l.lang === "dax")) {

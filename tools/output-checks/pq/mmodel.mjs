@@ -5,6 +5,8 @@
 // Anything outside the modeled subset throws NotModeled instead of guessing.
 
 export class NotModeled extends Error {}
+// An error M itself raises (a bad conversion, a missing row): try … otherwise catches these, not NotModeled.
+export class MError extends Error {}
 
 /* ---------- values ---------- */
 // date-times and dates are milliseconds since 1970 (UTC, no time zones); durations are milliseconds.
@@ -21,6 +23,7 @@ export const text = (v) => {
   if (v instanceof MDateTime) return new Date(v.ms).toISOString().slice(0, 19).replace("T", " ");
   if (v instanceof MDate) return new Date(v.ms).toISOString().slice(0, 10);
   if (typeof v === "number") return String(Number(v.toPrecision(12)));
+  if (v instanceof MDuration) { const t = Math.round(v.ms / 1000), a = Math.abs(t), p = (n) => String(n).padStart(2, "0"); return `${t < 0 ? "-" : ""}${Math.floor(a / 86400)}.${p(Math.floor(a / 3600) % 24)}:${p(Math.floor(a / 60) % 60)}:${p(a % 60)}`; }
   return String(v);
 };
 
@@ -40,7 +43,7 @@ function tokenize(src) {
   }
   return out;
 }
-const KW = new Set(["let", "in", "each", "if", "then", "else", "and", "or", "not", "null", "true", "false", "type"]);
+const KW = new Set(["let", "in", "each", "if", "then", "else", "and", "or", "not", "null", "true", "false", "type", "try", "otherwise"]);
 export function parse(src) {
   const t = tokenize(src); let p = 0;
   const isOp = (v) => t[p] && t[p].k === "op" && t[p].v === v, isKw = (v) => t[p] && t[p].k === "id" && t[p].v === v;
@@ -54,6 +57,7 @@ export function parse(src) {
       p++; return { let: binds, body: expr() };
     }
     if (isKw("each")) { p++; return { each: expr() }; }
+    if (isKw("try")) { p++; const a = expr(); if (!isKw("otherwise")) throw new Error("expected otherwise after try: the model handles try … otherwise"); p++; return { try: a, otherwise: expr() }; }
     if (isKw("if")) { p++; const c = expr(); if (!isKw("then")) throw new Error("expected then"); p++; const a = expr(); if (!isKw("else")) throw new Error("expected else: M's if always has one"); p++; return { if: c, then: a, else: expr() }; }
     return or();
   }
@@ -78,7 +82,13 @@ export function parse(src) {
     if (isKw("null")) { p++; return { lit: null }; }
     if (isKw("true") || isKw("false")) { p++; return { lit: k.v === "true" }; }
     if (isKw("type")) { p++; return { type: name() }; }
-    if (isOp("(")) { p++; const e = expr(); expect(")"); return e; }
+    if (isOp("(")) {
+      // (a, b) => body: a function with named parameters
+      let q = p + 1; const params = [];
+      while (t[q] && t[q].k === "id" && !KW.has(t[q].v)) { params.push(t[q].v); q++; if (t[q] && t[q].k === "op" && t[q].v === ",") q++; else break; }
+      if (t[q] && t[q].v === ")" && t[q + 1] && t[q + 1].v === "=>") { p = q + 2; return { params, body: expr() }; }
+      p++; const e = expr(); expect(")"); return e;
+    }
     if (isOp("{")) { p++; const items = []; if (!isOp("}")) { do { items.push(expr()); } while (isOp(",") && ++p); } expect("}"); return { list: items }; }
     if (isOp("[")) {
       p++;
@@ -157,9 +167,11 @@ export function createEngine(snapshot) {
       }));
     },
     "Table.NestedJoin": (a, ka, b, kb, n, kind) => {
-      if (kind !== "LeftOuter") throw new NotModeled(`JoinKind.${kind} is not modeled; use JoinKind.LeftOuter`);
+      if (!["LeftOuter", "Inner", "LeftAnti"].includes(kind)) throw new NotModeled(`JoinKind.${kind} is not modeled; use LeftOuter, Inner or LeftAnti`);
       ka.forEach((c) => col(a, c)); kb.forEach((c) => col(b, c));
-      return new MTable([...a.cols, n], a.rows.map((r) => ({ ...r, [n]: new MTable(b.cols, b.rows.filter((x) => ka.every((c, i) => text(r[c]) === text(x[kb[i]])))) })));
+      const joined = a.rows.map((r) => ({ ...r, [n]: new MTable(b.cols, b.rows.filter((x) => ka.every((c, i) => text(r[c]) === text(x[kb[i]])))) }));
+      const keep = kind === "Inner" ? (r) => r[n].rows.length > 0 : kind === "LeftAnti" ? (r) => r[n].rows.length === 0 : () => true;
+      return new MTable([...a.cols, n], joined.filter(keep));
     },
     "Table.ExpandTableColumn": (t, n, cs, names) => {
       const out = names || cs, keep = t.cols.filter((c) => c !== n), rows = [];
@@ -180,7 +192,33 @@ export function createEngine(snapshot) {
     "Time.Hour": (d) => (d === null ? null : new Date(d.ms).getUTCHours()),
     "Date.From": (d) => (d === null ? null : new MDate(Math.floor(d.ms / dayMs) * dayMs)),
     "Date.DayOfWeekName": (d) => (d === null ? null : new Date(d.ms).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" })),
-    "Number.Round": (x, d) => (x === null ? null : Number(num(x, "Number.Round").toFixed(d ?? 0))),
+    // M rounds half to even by default (RoundingMode.ToEven): 2.5 -> 2, 3.5 -> 4.
+    "Number.Round": (x, d) => {
+      if (x === null) return null;
+      const f = 10 ** (d ?? 0), y = num(x, "Number.Round") * f, lo = Math.floor(y), frac = y - lo;
+      const r = frac === 0.5 ? (lo % 2 === 0 ? lo : lo + 1) : Math.round(y);
+      return Number((r / f).toFixed(d ?? 0));
+    },
+    "Number.From": (v) => {
+      if (v === null || typeof v === "number") return v;
+      const x = typeof v === "string" && /^\s*-?\d+(\.\d+)?\s*$/.test(v) ? Number(v) : NaN;
+      if (Number.isNaN(x)) throw new MError(`We couldn't convert to Number: ${text(v)}`);
+      return x;
+    },
+    "Text.From": (v) => (v === null ? null : text(v)),
+    "Text.Upper": (v) => (v === null ? null : String(v).toUpperCase()),
+    "Text.Start": (v, n) => (v === null ? null : String(v).slice(0, n)),
+    "Date.Year": (d) => (d === null ? null : new Date(d.ms).getUTCFullYear()),
+    "Date.Month": (d) => (d === null ? null : new Date(d.ms).getUTCMonth() + 1),
+    "List.Count": (l) => l.length,
+    "List.Average": (l) => { const xs = l.filter((x) => x !== null); return xs.length ? xs.reduce((a, b) => a + num(b, "List.Average"), 0) / xs.length : null; },
+    "List.Max": (l) => { const xs = l.filter((x) => x !== null); return xs.length ? xs.reduce((a, b) => (compare(">", b, a) ? b : a)) : null; },
+    "List.Min": (l) => { const xs = l.filter((x) => x !== null); return xs.length ? xs.reduce((a, b) => (compare("<", b, a) ? b : a)) : null; },
+    "List.Distinct": (l) => { const seen = new Set(); return l.filter((x) => { const k = text(x); if (seen.has(k)) return false; seen.add(k); return true; }); },
+    "Table.FirstN": (t, n) => new MTable(t.cols, t.rows.slice(0, n)),
+    "Table.Distinct": (t) => { const seen = new Set(); return new MTable(t.cols, t.rows.filter((r) => { const k = JSON.stringify(t.cols.map((c) => text(r[c]))); if (seen.has(k)) return false; seen.add(k); return true; })); },
+    "Table.Combine": (ts) => { const cols = [...new Set(ts.flatMap((t) => t.cols))]; return new MTable(cols, ts.flatMap((t) => t.rows.map((r) => Object.fromEntries(cols.map((c) => [c, c in r ? r[c] : null]))))); },
+    "Table.FromRecords": (recs) => { const cols = [...new Set(recs.flatMap((r) => Object.keys(r)))]; return new MTable(cols, recs.map((r) => Object.fromEntries(cols.map((c) => [c, c in r ? r[c] : null])))); },
   };
   function convert(v, ty) {
     if (v === null) return null;
@@ -191,7 +229,7 @@ export function createEngine(snapshot) {
     if (ty === "datetime" && v instanceof MDateTime) return v;
     throw new NotModeled(`changing ${text(v)} to type ${ty} is not modeled`);
   }
-  const ENUMS = { "JoinKind.LeftOuter": "LeftOuter", "JoinKind.Inner": "Inner", "Order.Ascending": 0, "Order.Descending": 1, "Int64.Type": "Int64.Type" };
+  const ENUMS = { "JoinKind.LeftOuter": "LeftOuter", "JoinKind.Inner": "Inner", "JoinKind.LeftAnti": "LeftAnti", "JoinKind.RightOuter": "RightOuter", "JoinKind.FullOuter": "FullOuter", "JoinKind.RightAnti": "RightAnti", "Order.Ascending": 0, "Order.Descending": 1, "Int64.Type": "Int64.Type" };
 
   function ev(e, env) {
     if ("lit" in e) return e.lit;
@@ -200,6 +238,11 @@ export function createEngine(snapshot) {
     if (e.record) return Object.fromEntries(e.record.map(([n, x]) => [n, ev(x, env)]));
     if (e.let) { const scope = new Map(env); for (const [n, x] of e.let) scope.set(n, ev(x, scope)); return ev(e.body, scope); }
     if (e.each) return fn((arg) => ev(e.each, new Map([...env, ["_", arg]])));
+    if (e.params) return fn((...args) => {
+      if (args.length !== e.params.length) throw new MError(`the function takes ${e.params.length} argument(s), got ${args.length}`);
+      return ev(e.body, new Map([...env, ...e.params.map((n, i) => [n, args[i]])]));
+    });
+    if ("try" in e) { try { return ev(e.try, env); } catch (err) { if (err instanceof MError) return ev(e.otherwise, env); throw err; } }
     if (e.if) return truthy(ev(e.if, env)) ? ev(e.then, env) : ev(e.else, env);
     if (e.not) return !truthy(ev(e.not, env));
     if (e.neg) return -num(ev(e.neg, env), "-");
@@ -256,6 +299,8 @@ export function createEngine(snapshot) {
     // Add or replace a query by name (the lesson gives the name, as the Queries pane does).
     define(name, src) { queries.set(name, parse(src)); results.clear(); },
     run(name) { const v = result(name); if (!isTable(v)) throw new Error(`query ${name} returns ${text(v)}, not a table`); return v; },
+    // Any value, as the editor shows it: a table, a list, a record or a single value.
+    value(name) { const v = result(name); return v && v.rec ? v.row : v; },
     LIB,
   };
 }
@@ -269,5 +314,12 @@ export function preview(t, { top, format: fmt = {} } = {}, fmtNumber) {
   const right = t.cols.map((c) => rows.every((r) => typeof r[c] === "number" || r[c] === null));
   const body = cells.map((r) => r.map((s, i) => (right[i] ? s.padStart(w[i]) : s.padEnd(w[i]))).join("  ").trimEnd()).join("\n");
   return `${body}\n${t.rows.length} row${t.rows.length === 1 ? "" : "s"}${rows.length < t.rows.length ? `, first ${rows.length} shown` : ""}`;
+}
+// A list, record or single value as a one- or two-column table, the way the editor previews them.
+export function asTable(v) {
+  if (isTable(v)) return v;
+  if (Array.isArray(v)) return new MTable(["List"], v.map((x) => ({ List: x })));
+  if (v && typeof v === "object" && !(v instanceof MDateTime || v instanceof MDate || v instanceof MDuration)) return new MTable(["Field", "Value"], Object.entries(v).map(([k, x]) => ({ Field: k, Value: x })));
+  return new MTable(["Value"], [{ Value: v }]);
 }
 export const plainRows = (t) => t.rows.map((r) => t.cols.map((c) => (r[c] === null ? null : typeof r[c] === "object" ? text(r[c]) : r[c])));

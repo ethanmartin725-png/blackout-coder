@@ -1,15 +1,19 @@
 # Power Query M teaching model
 
-The OEE Report in Power BI track's M steps run in `tools/output-checks/pq/mmodel.mjs`, a model of a subset of Power Query M, over the same PlantDB snapshot the DAX model uses (`tools/output-checks/dax/plantdb.json`). M only runs inside Power BI and Excel, so the model is held to two checks, as the DAX model is:
+The Power Query M lane's lessons and the OEE Report in Power BI track's M steps run in `tools/output-checks/pq/mmodel.mjs`, a model of a subset of Power Query M, over the same PlantDB snapshot the DAX model uses (`tools/output-checks/dax/plantdb.json`). M only runs inside Power BI and Excel, so the model is held to two checks, as the DAX model is:
 
-1. **Its own tests** (`tools/pq-tests.mjs`, 16 tests, run by the verifier): one per rule below.
-2. **SQL twins** (`tools/output-checks/pq/twins.mjs`): every step, M and DAX, asks SQL Server the same question; `node tools/output-checks/pq/run.mjs` compares every row and column and fails on any difference.
+1. **Its own tests** (`tools/pq-tests.mjs`, 26 tests, run by the verifier): one per rule below.
+2. **SQL twins** (`tools/output-checks/pq/twins.mjs` for the track, `mtwins.mjs` for the lane): every step and lesson asks SQL Server the same question; `node tools/output-checks/pq/run.mjs` compares every row and column and fails on any difference.
 
 Anything outside the subset throws `NotModeled` with the reason.
 
 ## How the track runs
 
 Each M step is a named query (the step's `file` and `pq.query`), a complete `let … in` expression that may refer to earlier queries by name, as in the Queries pane. A query marked `pq.load: true` becomes a table of the DAX model the DAX steps run in (`tools/output-checks/pq/lane.mjs`), with relationships Faults, Barrels and Rejects to Machines on machine, and Faults[shift_date] to Dates[Date]. So the DAX steps measure exactly what the M steps shaped. An M step's output is a preview: the first rows (`pq.top`) and the row count.
+
+## How the lane runs
+
+Each lesson of the M lane (`site/data/foundations/13-m.js`) is one complete query named by `pq.query`, run on its own (`laneOutputs` in `tools/output-checks/pq/lane.mjs`). A lane query may return a table, a list, a record or a single value; the output is the editor's preview: a list as one column headed List, a record as Field and Value rows, a single value as Value.
 
 ## Semantics
 
@@ -19,13 +23,17 @@ Each M step is a named query (the step's `file` and `pq.query`), a complete `let
 - **Navigation**: `Sql.Database` returns a table of every table and view (Schema, Item, Data); `{[Schema = "dbo", Item = "…"]}` picks exactly one row and `[Data]` opens it.
 - **Operators**: arithmetic, `&` on text, comparisons, `and`, `or`, `not`, `if … then … else` (else is required). A date-time minus a date-time is a duration; a date-time plus or minus a duration is a date-time. Comparing values of different types, a date with a date-time, is refused, as M refuses it.
 - **null**: arithmetic with null is null; `=` and `<>` compare it; ordering comparisons with null give null.
-- **Functions**: `Table.SelectRows`, `AddColumn`, `SelectColumns`, `RemoveColumns`, `RenameColumns`, `Sort`, `TransformColumnTypes` (number, text, date, datetime, Int64), `Group`, `NestedJoin` (LeftOuter only), `ExpandTableColumn` (an unmatched row gives nulls), `FromList` (SplitByNothing), `RowCount`; `List.Sum`, `List.Dates`; `Duration.TotalMinutes`, `Time.Hour`, `Date.From`, `Date.DayOfWeekName` (English names); `Number.Round`.
+- **Functions**: `Table.SelectRows`, `AddColumn`, `SelectColumns`, `RemoveColumns`, `RenameColumns`, `Sort`, `TransformColumnTypes` (number, text, date, datetime, Int64), `Group`, `NestedJoin` (LeftOuter, Inner and LeftAnti), `ExpandTableColumn` (an unmatched row gives nulls), `FromList` (SplitByNothing), `FromRecords`, `FirstN`, `Distinct`, `Combine` (a missing column gives null), `RowCount`; `List.Sum`, `Count`, `Average`, `Max`, `Min`, `Distinct` (first-seen order), `Dates`; `Duration.TotalMinutes`, `Time.Hour`, `Date.From`, `Date.Year`, `Date.Month`, `Date.DayOfWeekName` (English names); `Text.From`, `Text.Upper`, `Text.Start`; `Number.From`, `Number.Round`.
+- **Number.Round** rounds half to even, M's default (`RoundingMode.ToEven`): it scales by the power of ten and rounds an exact half to the even neighbour, as .NET does. A value whose scaled double is not exactly a half rounds normally. Whether Power Query's own result differs from this for decimals like 2.675 has not been checked against Power BI, so the lessons avoid them.
+- **Functions with parameters**: `(a, b) => body`; calling one with the wrong number of arguments is an M error. Type annotations (`a as number`) are not modeled.
+- **Errors**: `try x otherwise y` gives `y` when `x` raises an M error: a failed conversion (`Number.From("n/a")`) or a function called with the wrong arguments. It does not hide a `NotModeled` refusal, which is the model's limit, not M's.
+- **Values shown**: a duration as days.hours:minutes:seconds (`0.00:07:30`); a logical as true or false.
 - **Types** written after a column (`type number`) are accepted and not enforced; `Table.TransformColumnTypes` does convert.
 - **Table.Group** keeps groups in the order their key first appears.
 
 ## Refused
 
-Other join kinds, query folding and anything about the source's own SQL (the model reads the snapshot), `Table.Pivot`, custom functions with parameters, error handling (`try … otherwise`), and any library function not listed above.
+Other join kinds (RightOuter, FullOuter, RightAnti), query folding and anything about the source's own SQL (the model reads the snapshot), `Table.Pivot` and `Unpivot`, type annotations, `error` records, `try` without `otherwise`, a record's fields referring to each other, and any library function not listed above.
 
 ## DAX additions for this track
 

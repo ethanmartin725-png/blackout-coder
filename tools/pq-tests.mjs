@@ -1,6 +1,6 @@
 // Tests for the Power Query M teaching model (tools/output-checks/pq/mmodel.mjs), one per rule.
 // Run by tools/verify.mjs; also runnable alone: node tools/pq-tests.mjs
-import { createEngine, text, NotModeled } from "./output-checks/pq/mmodel.mjs";
+import { createEngine, text, NotModeled, asTable } from "./output-checks/pq/mmodel.mjs";
 
 export function runPqTests() {
   const fails = [];
@@ -42,7 +42,42 @@ export function runPqTests() {
     const got = rows(run({ ...F, g: 'let G = Table.Group(f, {"m"}, {{"s", each List.Sum([mins])}}), J = Table.NestedJoin(Table.SelectColumns(Sql.Database("s", "db"){[Schema = "dbo", Item = "d"]}[Data], {"m"}), {"m"}, G, {"m"}, "x", JoinKind.LeftOuter), E = Table.ExpandTableColumn(J, "x", {"s"}) in E' }, "g"));
     return got === "A:10 B:11 C:null" ? "" : got;
   });
-  t("other join kinds are refused", () => throws(() => run({ ...F, g: 'let J = Table.NestedJoin(f, {"m"}, f, {"m"}, "x", JoinKind.Inner) in J' }, "g"), "not modeled", NotModeled));
+  t("other join kinds are refused", () => throws(() => run({ ...F, g: 'let J = Table.NestedJoin(f, {"m"}, f, {"m"}, "x", JoinKind.FullOuter) in J' }, "g"), "not modeled", NotModeled));
+  const D = 'Table.SelectColumns(Sql.Database("s", "db"){[Schema = "dbo", Item = "d"]}[Data], {"m"})';
+  t("an inner join keeps only rows with a match", () => {
+    const got = run({ ...F, g: `let J = Table.NestedJoin(${D}, {"m"}, f, {"m"}, "x", JoinKind.Inner) in Table.SelectColumns(J, {"m"})` }, "g").rows.map((r) => r.m).join();
+    return got === "A,B" ? "" : got;
+  });
+  t("a left anti join keeps only rows with no match", () => {
+    const got = run({ ...F, g: `let J = Table.NestedJoin(${D}, {"m"}, f, {"m"}, "x", JoinKind.LeftAnti) in Table.SelectColumns(J, {"m"})` }, "g").rows.map((r) => r.m).join();
+    return got === "C" ? "" : got;
+  });
+  const val = (src) => { const e = createEngine(snap); e.define("q", src); return e.value("q"); };
+  t("Number.Round rounds half to even, as M does by default", () => {
+    const got = val("let L = {Number.Round(0.5), Number.Round(1.5), Number.Round(2.5), Number.Round(3.5), Number.Round(87.049997, 2)} in L").join();
+    return got === "0,2,2,4,87.05" ? "" : got;
+  });
+  t("a function with named parameters", () => (val("let Price = (rate, minutes) => minutes / 60 * rate, P = Price(60, 30) in P") === 30 ? "" : "wrong value"));
+  t("calling a function with the wrong number of arguments is an M error", () => (val("let F = (a, b) => a + b, R = try F(1) otherwise -1 in R") === -1 ? "" : "not caught"));
+  t("try … otherwise catches an M error", () => (val('let R = try Number.From("n/a") otherwise null, S = try Number.From("7.5") otherwise null in {R, S}').map(text).join() === "null,7.5" ? "" : "wrong"));
+  t("try does not hide something the model cannot do", () => throws(() => val("let R = try Table.Pivot(1) otherwise 0 in R"), "not in this model", NotModeled));
+  t("List.Count, Sum, Average, Max, Min and Distinct", () => {
+    const got = val('let L = {3, 1, null, 3, 5} in {List.Count(L), List.Sum(L), List.Average(L), List.Max(L), List.Min(L), List.Count(List.Distinct(L))}').map(text).join();
+    return got === "5,12,3,5,1,4" ? "" : got;
+  });
+  t("Table.FirstN, Distinct and Combine", () => {
+    const a = run({ ...F, g: 'let S = Table.FirstN(Table.Distinct(Table.SelectColumns(f, {"m"})), 1), C = Table.Combine({S, Table.SelectColumns(f, {"id"})}) in C' }, "g");
+    return a.cols.join() === "m,id" && a.rows.length === 5 && a.rows[0].m === "A" && a.rows[1].m === null ? "" : JSON.stringify(a.rows);
+  });
+  t("text and date functions", () => {
+    const got = val('let D = #datetime(2026, 11, 7, 10, 9, 40) in {Text.Upper("jam"), Text.Start("Hoop Driver 1", 4), Text.From(87.05), Date.Year(D), Date.Month(D)}').map(text).join();
+    return got === "JAM,Hoop,87.05,2026,11" ? "" : got;
+  });
+  t("a record previews as fields and a duration as d.hh:mm:ss", () => {
+    const tb = asTable(val("let R = [Rate = 55, Down = #datetime(2026, 11, 7, 10, 17, 10) - #datetime(2026, 11, 7, 10, 9, 40)] in R"));
+    const got = tb.rows.map((r) => r.Field + "=" + text(r.Value)).join();
+    return got === "Rate=55,Down=0.00:07:30" ? "" : got;
+  });
   t("List.Dates, Table.FromList and the day name", () => {
     const got = rows(run({ g: 'let L = List.Dates(#date(2026, 10, 31), 3, #duration(1, 0, 0, 0)), T = Table.FromList(L, Splitter.SplitByNothing(), {"Date"}), Y = Table.TransformColumnTypes(T, {{"Date", type date}}), N = Table.AddColumn(Y, "day", each Date.DayOfWeekName([Date])) in N' }, "g"));
     return got === "2026-10-31:Saturday 2026-11-01:Sunday 2026-11-02:Monday" ? "" : got;
