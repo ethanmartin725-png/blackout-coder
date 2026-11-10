@@ -12,6 +12,7 @@
 #   - purchasing tables (supplier, item, contract_price, po_line, invoice_line) for the Procurement
 #     Spend track: PURCHASING_DDL and seeded_purchasing() below, all illustrative
 #   - machine_event for the Automated Capture track: seeded_events() below, partly illustrative
+#   - work_order for the Maintenance / CMMS track: WORK_ORDER_DDL and seeded_work_orders() below, illustrative
 #   - char_depth for the SPC track: CHAR_DEPTH_DDL and seeded_char_depth() below, illustrative
 # A lesson that itself creates a table runs against an empty database instead.
 #
@@ -249,6 +250,77 @@ def seeded_events():
     return [("Conveyor 3", tag, value, q, D(ts), D(logged) if logged else D(ts) + lag) for tag, value, q, ts, logged in ev]
 
 
+# Work orders for the Maintenance / CMMS track. The track's first step types this same CREATE
+# (build21.py checks they match). No foreign key to fault_log: a CMMS is its own system. Illustrative.
+WORK_ORDER_DDL = """CREATE TABLE work_order (
+    wo_id INT IDENTITY(1,1) PRIMARY KEY,
+    machine VARCHAR(50) NOT NULL,
+    wo_type VARCHAR(12) NOT NULL,
+    description VARCHAR(100) NOT NULL,
+    failure_mode VARCHAR(30) NULL,
+    fault_id INT NULL,
+    priority TINYINT NOT NULL,
+    created_ts DATETIME NOT NULL,
+    due_ts DATETIME NULL,
+    done_ts DATETIME NULL,
+    est_hours DECIMAL(5,2) NULL,
+    act_hours DECIMAL(5,2) NULL,
+    parts_cost DECIMAL(8,2) NOT NULL DEFAULT 0
+);"""
+
+
+def seeded_work_orders():
+    """Work orders for the three machines, as of 2026-11-07 06:00 (the end of the OEE week). All illustrative.
+      - Weekly PMs due Tuesdays 14:00 (10-13 to 11-03) and a monthly PM due 11-02 14:00, done in the
+        breaks between paid time, so they do not touch the 9,450 planned minutes. Conveyor 3's 10-20
+        PM is done two days late; Hoop Driver 1's 11-03 PM is never done.
+      - A corrective order for every breakdown (5 min or more) in fault_log, opened 2 minutes after
+        the stop and closed 15 minutes after it, with the downtime plus 15 minutes as labour, except
+        faults 14 and 37, which nobody wrote up. Fault 29's repair used a $104 photo eye.
+      - Improvements and corrective follow-ups, some still open; the oldest was opened 2026-09-18.
+        The Burner B igniter order is the one the 05:52 handoff note says was opened.
+    Hoop misfeeds have corrective work only: no PM or improvement targets them."""
+    D = lambda t: datetime.datetime.strptime(t, "%Y-%m-%d %H:%M")
+    M = ("Char Station 2", "Conveyor 3", "Hoop Driver 1")
+    rows = []
+    def wo(machine, typ, desc, fm, fault_id, pri, created, due, done, est, act, parts=0.0):
+        rows.append((machine, typ, desc, fm, fault_id, pri, created, due, done, est, act, parts))
+    for due in ("2026-10-13", "2026-10-20", "2026-10-27", "2026-11-03"):
+        d = D(due + " 14:00")
+        for m in M:
+            if m == "Conveyor 3" and due == "2026-10-20":
+                done, act = D("2026-10-22 10:00"), 0.75
+            elif m == "Hoop Driver 1" and due == "2026-11-03":
+                done, act = None, None
+            else:
+                done, act = d - datetime.timedelta(hours=4), 0.5
+            wo(m, "PM", "Weekly PM: inspect, clean, lubricate", None, None, 3, d - datetime.timedelta(days=7), d, done, 0.5, act)
+    for m, desc, fm, act in (("Char Station 2", "Monthly PM: burner inspection", "Char flare", 1.75),
+                             ("Conveyor 3", "Monthly PM: eye and guide check", "Jam", 1.5),
+                             ("Hoop Driver 1", "Monthly PM: press and air check", "Low air", 1.5)):
+        wo(m, "PM", desc, fm, None, 3, D("2026-10-03 14:00"), D("2026-11-02 14:00"), D("2026-11-02 10:00"), 1.5, act)
+    action = {"Char flare": "relit and checked burner", "Low air": "reset regulator, checked header",
+              "Hoop misfeed": "cleared feed", "Jam": "cleared belt"}
+    for fault_id, (machine, fault, start, end) in enumerate(seeded_faults(), start=1):
+        secs = (end - start).total_seconds() if end else 0
+        if end is None or secs < 300 or fault_id in (14, 37):
+            continue
+        desc, parts = f"{fault}: {action[fault]}", 0.0
+        if fault_id == 29:
+            desc, parts = "Jam: replaced photo eye", 104.0
+        hours = round((secs / 60 + 15) / 60, 2)
+        wo(machine, "Corrective", desc, fault, fault_id, 2, start + datetime.timedelta(minutes=2), None,
+           end + datetime.timedelta(minutes=15), hours, hours, parts)
+    wo("Conveyor 3", "Corrective", "Replace photo eye bracket", "Jam", None, 4, D("2026-09-18 09:30"), D("2026-10-02 14:00"), None, 3.0, None)
+    wo("Char Station 2", "Improvement", "Gas train pressure switch calibration", "Char flare", None, 3, D("2026-10-21 08:00"), D("2026-11-04 14:00"), None, 3.0, None)
+    wo("Conveyor 3", "Improvement", "Fit quick-release guide clamps", None, None, 3, D("2026-10-23 08:00"), D("2026-11-06 14:00"), D("2026-11-02 10:00"), 2.0, 2.5, 336.0)
+    wo("Hoop Driver 1", "Improvement", "Feed rail realignment", "Jam", None, 3, D("2026-10-28 08:00"), D("2026-11-11 14:00"), None, 6.0, None)
+    wo("Conveyor 3", "Improvement", "Air header leak survey", "Low air", None, 3, D("2026-11-02 08:00"), D("2026-11-16 14:00"), None, 8.0, None)
+    wo("Hoop Driver 1", "Corrective", "Misfeed sensor rebuild", "Hoop misfeed", None, 2, D("2026-11-04 19:00"), D("2026-11-11 14:00"), None, 4.0, None)
+    wo("Char Station 2", "Corrective", "Burner B igniter replacement", "Char flare", None, 2, D("2026-11-07 05:52"), D("2026-11-08 14:00"), None, 2.5, None)
+    return sorted(rows, key=lambda r: r[6])
+
+
 def statements(sql):
     """Split on a semicolon at the end of a line. Fine for these lessons; not a general SQL parser."""
     return [s.strip() for s in re.split(r";[ \t]*(?:\n|$)", sql) if s.strip()]
@@ -298,6 +370,8 @@ if not creates_table:
     cur.executemany("INSERT INTO count_log (machine, barrels, state, ts) VALUES (%s, %s, %s, %s)", seeded_counts())
     cur.executemany("INSERT INTO reject_log (machine, reason, qty, ts) VALUES (%s, %s, %s, %s)", seeded_rejects())
     cur.executemany("INSERT INTO machine_event (machine, tag, value, quality, ts, logged_ts) VALUES (%s, %s, %s, %s, %s, %s)", seeded_events())
+    cur.execute(WORK_ORDER_DDL)
+    cur.executemany("INSERT INTO work_order (machine, wo_type, description, failure_mode, fault_id, priority, created_ts, due_ts, done_ts, est_hours, act_hours, parts_cost) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", seeded_work_orders())
     cur.execute(CHAR_DEPTH_DDL)
     cur.executemany("INSERT INTO char_depth VALUES (%s, %s, %s)", seeded_char_depth())
     for s in statements(PURCHASING_DDL):
