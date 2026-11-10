@@ -11,6 +11,7 @@
 #   - reject_log rows: rejects from seeded_rejects() below (table from OEE Loss Report's CREATE step)
 #   - purchasing tables (supplier, item, contract_price, po_line, invoice_line) for the Procurement
 #     Spend track: PURCHASING_DDL and seeded_purchasing() below, all illustrative
+#   - char_depth for the SPC track: CHAR_DEPTH_DDL and seeded_char_depth() below, illustrative
 # A lesson that itself creates a table runs against an empty database instead.
 #
 # Server: a local SQL Server 2022, e.g.
@@ -196,6 +197,34 @@ def seeded_purchasing():
     return [("supplier", suppliers), ("item", items), ("contract_price", contracts), ("po_line", po), ("invoice_line", inv)]
 
 
+# Char depth samples for the SPC track. Not created by any lesson, so defined here. Illustrative.
+CHAR_DEPTH_DDL = "CREATE TABLE char_depth (sample_ts DATETIME NOT NULL, barrel_seq INT NOT NULL, depth_mm DECIMAL(4,2) NOT NULL)"
+
+
+def seeded_char_depth():
+    """Char Station 2 measures the char depth of 5 barrels mid-shift, every shift of the OEE week
+    (2026-10-31 06:00 to 2026-11-07 06:00), 21 shifts, 105 rows. Illustrative: the process runs at
+    3.50 mm with a spread of 0.12 mm (seeded noise, the same on every rebuild). In a shift where
+    fault_log records a char flare on Char Station 2, the barrels run deep: 0.30 mm for the first
+    flare and 0.10 mm for each more. The shifts are read from the seeded faults, not typed in, so
+    the SPC track's signals line up with real fault_log rows."""
+    import random
+    start = datetime.datetime(2026, 10, 31, 6)
+    flares = {}
+    for machine, fault, ts, _ in seeded_faults():
+        k = int((ts - start).total_seconds() // (8 * 3600))
+        if machine == "Char Station 2" and fault == "Char flare" and 0 <= k < 21:
+            flares[k] = flares.get(k, 0) + 1
+    rng = random.Random(2026)
+    rows = []
+    for k in range(21):
+        shift_mean = 3.50 + (0.30 + 0.10 * (flares[k] - 1) if k in flares else 0)
+        for i in range(5):
+            ts = start + datetime.timedelta(hours=8 * k + 4, minutes=10 * i)
+            rows.append((ts, i + 1, round(shift_mean + rng.gauss(0, 0.12), 2)))
+    return rows
+
+
 def statements(sql):
     """Split on a semicolon at the end of a line. Fine for these lessons; not a general SQL parser."""
     return [s.strip() for s in re.split(r";[ \t]*(?:\n|$)", sql) if s.strip()]
@@ -241,6 +270,8 @@ if not creates_table:
     cur.executemany("INSERT INTO fault_log (machine, fault, start_ts, end_ts) VALUES (%s, %s, %s, %s)", seeded_faults())
     cur.executemany("INSERT INTO count_log (machine, barrels, state, ts) VALUES (%s, %s, %s, %s)", seeded_counts())
     cur.executemany("INSERT INTO reject_log (machine, reason, qty, ts) VALUES (%s, %s, %s, %s)", seeded_rejects())
+    cur.execute(CHAR_DEPTH_DDL)
+    cur.executemany("INSERT INTO char_depth VALUES (%s, %s, %s)", seeded_char_depth())
     for s in statements(PURCHASING_DDL):
         cur.execute(s)
     for name, rows in seeded_purchasing():
