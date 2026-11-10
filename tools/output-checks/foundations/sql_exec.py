@@ -11,6 +11,7 @@
 #   - reject_log rows: rejects from seeded_rejects() below (table from OEE Loss Report's CREATE step)
 #   - purchasing tables (supplier, item, contract_price, po_line, invoice_line) for the Procurement
 #     Spend track: PURCHASING_DDL and seeded_purchasing() below, all illustrative
+#   - machine_event for the Automated Capture track: seeded_events() below, partly illustrative
 #   - char_depth for the SPC track: CHAR_DEPTH_DDL and seeded_char_depth() below, illustrative
 # A lesson that itself creates a table runs against an empty database instead.
 #
@@ -51,9 +52,9 @@ def canonical_ddl():
     js = r"""
 const fs=require('fs'),vm=require('vm'),c={T:{}};
 c.BC={addLanguage(){},addLane(){},addTrack(t){c.T[t.id]=t}};vm.createContext(c);
-for(const f of ['02-db','03-oee','04-handoff'])vm.runInContext(fs.readFileSync(process.argv[1]+'/site/data/tracks/'+f+'.js','utf8'),c);
+for(const f of ['02-db','03-oee','04-handoff','20-capture'])vm.runInContext(fs.readFileSync(process.argv[1]+'/site/data/tracks/'+f+'.js','utf8'),c);
 const pick=(id,t)=>{const l=c.T[id].lessons.find(x=>x.t===t);if(!l)throw new Error('missing '+t);return l.code};
-console.log(JSON.stringify([pick('t-db','Create fault_log'),pick('t-db','Create count_log'),pick('t-db','Machine dimension'),pick('t-oee','Create reject_log'),pick('t-handoff','Create handoff_note')]));
+console.log(JSON.stringify([pick('t-db','Create fault_log'),pick('t-db','Create count_log'),pick('t-db','Machine dimension'),pick('t-oee','Create reject_log'),pick('t-handoff','Create handoff_note'),pick('t-capture','Create the capture tables')]));
 """
     r = subprocess.run(["node", "-e", js, str(ROOT)], capture_output=True, text=True, check=True)
     return json.loads(r.stdout)
@@ -225,6 +226,29 @@ def seeded_char_depth():
     return rows
 
 
+def seeded_events():
+    """machine_event for the Automated Capture track: Conveyor 3, shift A on 2026-11-07 up to the DB
+    track's "now", 10:15, as tag-change scripts would log it. The real facts are canonical: running
+    from 06:00, the jam 09:08:52 to 09:13:29 (fault_log), counter readings 336 / 47 / 94 / 141 / 184
+    on the hour (count_log: 336 is shift C's total, read just before the 06:00 reset). Illustrative and planted for the track to find: a 999 glitch half a
+    second after 08:00, a bad-quality 0 at 08:35:12, the 09:00 reading arriving late at 09:42:07,
+    and the jam start written twice. logged_ts is 0.4 s after ts unless noted."""
+    D = lambda t: datetime.datetime.strptime("2026-11-07 " + t, "%Y-%m-%d %H:%M:%S.%f")
+    lag = datetime.timedelta(milliseconds=400)
+    ev = [("State", 1, "Good", "06:00:00.000", None),
+          ("Barrel_Count", 336, "Good", "06:00:00.000", None),
+          ("Barrel_Count", 47, "Good", "07:00:00.000", None),
+          ("Barrel_Count", 94, "Good", "08:00:00.000", None),
+          ("Barrel_Count", 999, "Good", "08:00:00.500", None),
+          ("Barrel_Count", 0, "Bad_Disconnected", "08:35:12.000", None),
+          ("Barrel_Count", 141, "Good", "09:00:00.000", "09:42:07.000"),
+          ("State", 2, "Good", "09:08:52.000", None),
+          ("State", 2, "Good", "09:08:52.000", "09:08:52.650"),
+          ("State", 1, "Good", "09:13:29.000", None),
+          ("Barrel_Count", 184, "Good", "10:00:00.000", None)]
+    return [("Conveyor 3", tag, value, q, D(ts), D(logged) if logged else D(ts) + lag) for tag, value, q, ts, logged in ev]
+
+
 def statements(sql):
     """Split on a semicolon at the end of a line. Fine for these lessons; not a general SQL parser."""
     return [s.strip() for s in re.split(r";[ \t]*(?:\n|$)", sql) if s.strip()]
@@ -234,11 +258,14 @@ def fmt(v):
     if v is None:
         return "NULL"
     if isinstance(v, datetime.datetime):
-        return v.strftime("%Y-%m-%d %H:%M:%S")
+        # Milliseconds only when there are some (DATETIME2(3) columns), as SSMS shows them.
+        return v.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3] if v.microsecond else v.strftime("%Y-%m-%d %H:%M:%S")
     if isinstance(v, datetime.date):
         return v.strftime("%Y-%m-%d")
     if isinstance(v, decimal.Decimal):
         return format(v, "f")
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))  # SSMS shows a whole FLOAT without ".0"
     return str(v)
 
 
@@ -270,6 +297,7 @@ if not creates_table:
     cur.executemany("INSERT INTO fault_log (machine, fault, start_ts, end_ts) VALUES (%s, %s, %s, %s)", seeded_faults())
     cur.executemany("INSERT INTO count_log (machine, barrels, state, ts) VALUES (%s, %s, %s, %s)", seeded_counts())
     cur.executemany("INSERT INTO reject_log (machine, reason, qty, ts) VALUES (%s, %s, %s, %s)", seeded_rejects())
+    cur.executemany("INSERT INTO machine_event (machine, tag, value, quality, ts, logged_ts) VALUES (%s, %s, %s, %s, %s, %s)", seeded_events())
     cur.execute(CHAR_DEPTH_DDL)
     cur.executemany("INSERT INTO char_depth VALUES (%s, %s, %s)", seeded_char_depth())
     for s in statements(PURCHASING_DDL):
@@ -295,7 +323,8 @@ try:
     batches = []
     for batch in re.split(r"^\s*GO\s*$", lesson, flags=re.I | re.M):
         if batch.strip():
-            batches += [batch.strip()] if WHOLE.search(batch) else statements(batch)
+            # T-SQL requires MERGE to end with a semicolon, which statements() strips
+            batches += [batch.strip()] if WHOLE.search(batch) else [x + ";" if re.match(r"MERGE\b", x, re.I) else x for x in statements(batch)]
     for b in batches:
         cur.execute(b)
         while True:

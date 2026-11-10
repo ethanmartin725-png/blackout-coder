@@ -24,6 +24,12 @@ export const BASE_TAGS = {
 const BEFORE_JAM = `system.db.runPrepUpdate("DELETE FROM fault_log WHERE start_ts >= '2026-11-07 09:08:52'", [])`;
 const JAM_ROWS = `show("SELECT machine, fault, start_ts, end_ts FROM fault_log WHERE start_ts >= '2026-11-07 09:00' ORDER BY start_ts")`;
 
+// Automated Capture helpers
+const CLEAR_EVENTS = `system.db.runPrepUpdate("DELETE FROM machine_event", [])`;
+const EV = `def ev(t, v, q="Good"):
+    return system.tag.QualifiedValue(v, system.tag.QualityCode(q), system.date.parse("2026-11-07 " + t))`;
+const SHOW_EVENTS = `show("SELECT tag, value, quality, ts, logged_ts FROM machine_event ORDER BY ts, event_id")`;
+
 export const SCENARIOS = {
   // ---------- PLC & HMI track ----------
   "t-plc/Log a fault start": {
@@ -141,4 +147,53 @@ show("SELECT machine, barrels, state, ts FROM count_log WHERE ts = '2026-11-07 1
 for qv, p in zip(system.tag.readBlocking(["[default]Shift/Name", "[default]Shift/Reset_Counts"]), ["Shift/Name", "Shift/Reset_Counts"]):
     print("%s: %s" % (p, qv.value))` },
   // <<< hmi
+  // ---------- Automated Capture track ----------
+  // The canonical database already holds shift A's capture rows; each scenario clears them and logs them live.
+  // The PLC times are canonical; the gateway running a second behind is illustrative.
+  "t-capture/Log state changes": {
+    db: true, clock: "2026-11-07 05:50:00", before: CLEAR_EVENTS,
+    after: `${EV}
+p = "[default]Conveyor3/State"
+valueChanged(None, p, None, ev("05:50:00", 0), True, False)
+set_clock("2026-11-07 06:00:01")
+valueChanged(None, p, ev("05:50:00", 0), ev("06:00:00", 1), False, False)
+set_clock("2026-11-07 09:08:53")
+valueChanged(None, p, ev("06:00:00", 1), ev("09:08:52", 2), False, False)
+set_clock("2026-11-07 09:11:00")
+valueChanged(None, p, ev("09:08:52", 2), ev("09:11:00", 0, "Bad_Disconnected"), False, False)
+set_clock("2026-11-07 09:13:30")
+valueChanged(None, p, ev("09:11:00", 0, "Bad_Disconnected"), ev("09:13:29", 1), False, False)
+${SHOW_EVENTS}`,
+  },
+  "t-capture/Log the counter every hour": {
+    db: true, clock: "2026-11-07 06:00:00", tags: { "Conveyor3/Barrel_Count/ACC": 336 }, before: CLEAR_EVENTS,
+    after: `for t, v in [("07", 47), ("08", 94), ("09", 141), ("10", 184)]:
+    set_clock("2026-11-07 %s:00:00" % t)
+    set_tag("Conveyor3/Barrel_Count/ACC", v)
+    rerun()
+set_tag("Conveyor3/Barrel_Count/ACC", 0, "Bad_Disconnected")
+rerun()
+${SHOW_EVENTS}`,
+  },
+  "t-capture/Store and forward": {
+    db: true, clock: "2026-11-07 09:08:53", before: CLEAR_EVENTS,
+    after: `${EV}
+log_event("Conveyor 3", "State", ev("09:08:52", 2))
+system.db.runPrepUpdate("EXEC sp_rename 'machine_event', 'machine_event_offline'", [])
+set_clock("2026-11-07 09:13:30")
+log_event("Conveyor 3", "State", ev("09:13:29", 1))
+set_clock("2026-11-07 10:00:01")
+log_event("Conveyor 3", "Barrel_Count", ev("10:00:00", 184))
+system.db.runPrepUpdate("EXEC sp_rename 'machine_event_offline', 'machine_event'", [])
+set_clock("2026-11-07 10:01:00")
+flush()
+print("Held after flush: %d" % len(pending))
+${SHOW_EVENTS}`,
+  },
+  "t-capture/A stale-data watchdog": {
+    db: true, clock: "2026-11-07 10:15:00", tags: { "Conveyor3/Data_Stale": false },
+    after: `set_clock("2026-11-07 10:20:00")
+rerun()
+print("Data_Stale tag: %s" % system.tag.readBlocking(["[default]Conveyor3/Data_Stale"])[0].value)`,
+  },
 };
