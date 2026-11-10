@@ -37,6 +37,7 @@
   - [x] DAX 50: measures, filter context, CALCULATE patterns (ALL, ALLEXCEPT, KEEPFILTERS, FILTER), OEE and loss dollars, shift and date windows, RANKX, TOPN, CONCATENATEX; outputs from a teaching model, every lesson checked against a SQL twin
   - [x] Structured Text 52, with four user-defined type lessons; CTUD and REAL-to-DINT rounding (stage 3) still wait on 1756-RM003
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
+- [x] Changeover / SMED track (14 steps): time study, internal vs external, the waterfall to 6 minutes, dollars, the Savings Tracker tie-out, a changeover matrix, operator variation, sequencing, batch size and standard work.
 - [x] Takt and Line Balance track (14 steps): takt, ideal and actual cycles, bottleneck, balance efficiency, a Yamazumi chart in Excel, rebalancing with a precedence check, minimum stations, dollars.
 - [x] Savings Tracker track (15 steps, Python and Excel): baselines from PlantDB, weekly actuals, annualizing, hard vs soft, double-counting and impossible-claim checks, stage gates, a reconciling workbook.
 - [x] Phone layout for the simulator scenes: below 600px each scene draws a compact 440-wide layout (the conveyor shows the belt from the eye on), so nothing scrolls sideways. Drawing only; the scene physics are the same at every width.
