@@ -15,6 +15,7 @@
 #   - work_order for the Maintenance / CMMS track: WORK_ORDER_DDL and seeded_work_orders() below, illustrative
 #   - stock_move for the Inventory / WIP track: STOCK_MOVE_DDL and seeded_stock() below, illustrative
 #   - misfeed_event for the Kaizen / A3 track: MISFEED_DDL and seeded_misfeeds() below, illustrative
+#   - energy_log for the Energy / Utilities track: ENERGY_DDL and seeded_energy() below, illustrative
 #   - char_depth for the SPC track: CHAR_DEPTH_DDL and seeded_char_depth() below, illustrative
 # A lesson that itself creates a table runs against an empty database instead.
 #
@@ -23,7 +24,8 @@
 #     mcr.microsoft.com/mssql/server:2022-latest
 # Settings: BC_SQL_PASSWORD (required), BC_SQL_SERVER (default localhost), BC_SQL_PORT (1433), BC_SQL_USER (sa).
 # Needs: pip install pymssql pandas.  Exit code 3 means the server or driver is not available.
-import datetime, decimal, json, os, re, subprocess, sys, tempfile
+import datetime
+import functools, decimal, json, os, re, subprocess, sys, tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -63,6 +65,7 @@ console.log(JSON.stringify([pick('t-db','Create fault_log'),pick('t-db','Create 
     return json.loads(r.stdout)
 
 
+@functools.lru_cache(maxsize=None)
 def seeded_faults():
     """The 47 faults from track2-db/gen.py, oldest first."""
     import pandas as pd
@@ -70,9 +73,10 @@ def seeded_faults():
         src = (ROOT / "tools/output-checks/track2-db/gen.py").read_text()
         subprocess.run([sys.executable, "-c", src], cwd=d, capture_output=True, check=True)
         df = pd.read_pickle(Path(d) / "faults.pkl").sort_values("start_ts")
-    return [(r.machine, r.fault, r.start_ts.to_pydatetime(), None if pd.isna(r.end_ts) else r.end_ts.to_pydatetime()) for r in df.itertuples()]
+    return tuple((r.machine, r.fault, r.start_ts.to_pydatetime(), None if pd.isna(r.end_ts) else r.end_ts.to_pydatetime()) for r in df.itertuples())
 
 
+@functools.lru_cache(maxsize=None)
 def seeded_counts():
     """Hourly count_log readings for the three machines, 2026-10-31 06:00 to 2026-11-07 10:00.
 
@@ -101,7 +105,7 @@ def seeded_counts():
                 count = 0  # the counter reset just after the previous reading
             count += n
             rows.append((machine, count, 1, t))
-    return rows
+    return tuple(rows)
 
 
 def seeded_rejects():
@@ -456,6 +460,81 @@ def seeded_misfeeds():
     return sorted(rows, key=lambda r: r[1])
 
 
+# Hourly energy log for the Energy / Utilities track. The track's first step types this same CREATE
+# (build24.py checks they match). Illustrative except the stops and barrels, which are canonical.
+ENERGY_DDL = """CREATE TABLE energy_log (
+    hour_end DATETIME NOT NULL PRIMARY KEY,
+    kwh DECIMAL(7,2) NOT NULL,
+    air_scf INT NOT NULL,
+    avg_psi DECIMAL(5,1) NOT NULL,
+    min_psi DECIMAL(5,1) NOT NULL,
+    propane_gal DECIMAL(7,2) NOT NULL,
+    run_c3 DECIMAL(4,1) NOT NULL,
+    run_hd1 DECIMAL(4,1) NOT NULL,
+    run_cs2 DECIMAL(4,1) NOT NULL
+);"""
+AIR_DEMAND_SCFM = {"Conveyor 3": 35.0, "Hoop Driver 1": 120.0, "Char Station 2": 45.0}
+LEAK_BEFORE, LEAK_AFTER, REPAIRED = 85.0, 44.6, datetime.datetime(2026, 11, 9, 6)
+
+
+def seeded_energy():
+    """One row per hour, 2026-10-31 06:00 to 11-14 06:00, stamped at the hour's end like count_log.
+    Canonical: each machine's running minutes in the OEE week (60 less its fault_log stops in the
+    hour), shift A's stops on 11-07 from the Shift Handoff, the low-air hours, and Char Station 2's
+    barrels for propane. Illustrative: everything else. Air is each running machine's demand (Conveyor 3
+    35, Hoop Driver 1 120, Char Station 2 45 scfm) plus leaks, 85 scfm until the leak repairs finish
+    at 06:00 on 11-09 and 44.6 after, with 2% noise. The compressor draws 22 kW plus 0.16 kW per scfm.
+    Header pressure averages about 104 psi and dips under 85 in an hour where a low-air stop starts.
+    Propane is 0.46 gal per Char Station 2 barrel plus 0.5 gal per minute of char flare. After 11-07
+    10:15 the stops come from the Shift Handoff to 14:00, then illustrative short stops."""
+    import random
+    D = datetime.datetime
+    start, end = D(2026, 10, 31, 6), D(2026, 11, 14, 6)
+    stops = [(m, f, s, e) for m, f, s, e in seeded_faults() if e is not None]
+    stops += [("Hoop Driver 1", "Hoop misfeed", D(2026, 11, 7, 10, 9, 40), D(2026, 11, 7, 10, 17, 10)),
+              ("Hoop Driver 1", "Low air", D(2026, 11, 7, 11, 31), D(2026, 11, 7, 11, 49, 30)),
+              ("Hoop Driver 1", "Low air", D(2026, 11, 7, 12, 22), D(2026, 11, 7, 12, 37)),
+              ("Char Station 2", "Char flare", D(2026, 11, 7, 13, 41, 15), D(2026, 11, 7, 14, 5)),
+              ("Conveyor 3", "Low air", D(2026, 11, 10, 14, 10), D(2026, 11, 10, 14, 16, 30))]
+    rng = random.Random(2026)
+    later = D(2026, 11, 7, 14)
+    t = later
+    while t < end:
+        for m in AIR_DEMAND_SCFM:
+            if rng.random() < 0.05:
+                s = t + datetime.timedelta(minutes=rng.randint(0, 50))
+                stops.append((m, "Jam", s, s + datetime.timedelta(minutes=rng.randint(2, 9))))
+        t += datetime.timedelta(hours=1)
+    char = {}
+    prev = {}
+    for machine, barrels, _state, ts in sorted(seeded_counts(), key=lambda r: (r[0], r[3])):
+        if machine == "Char Station 2":
+            char[ts] = 0 if machine not in prev else (barrels if barrels < prev[machine] else barrels - prev[machine])
+            prev[machine] = barrels
+    rows = []
+    h = start
+    while h < end:
+        h_end = h + datetime.timedelta(hours=1)
+        run, flare, low_air = {m: 60.0 for m in AIR_DEMAND_SCFM}, 0.0, False
+        for m, f, s, e in stops:
+            overlap = (min(e, h_end) - max(s, h)).total_seconds() / 60
+            if overlap > 0:
+                run[m] -= overlap
+                flare += overlap if f == "Char flare" else 0
+            low_air = low_air or (f == "Low air" and h <= s < h_end)
+        leak = LEAK_BEFORE if h < REPAIRED else LEAK_AFTER
+        scfm = (leak + sum(AIR_DEMAND_SCFM[m] * run[m] / 60 for m in run)) * rng.gauss(1, 0.02)
+        kw = 22 + 0.16 * scfm + rng.gauss(0, 1.2)
+        avg_psi = round(rng.gauss(104, 1.0), 1)
+        min_psi = round(rng.uniform(79, 84), 1) if low_air else round(avg_psi - rng.uniform(3, 7), 1)
+        barrels = char.get(h_end, round(rng.gauss(41.5, 1.5)))
+        propane = 0.46 * barrels + 0.5 * flare
+        rows.append((h_end, round(kw, 2), round(scfm * 60), avg_psi, min_psi, round(propane, 2),
+                     round(run["Conveyor 3"], 1), round(run["Hoop Driver 1"], 1), round(run["Char Station 2"], 1)))
+        h = h_end
+    return rows
+
+
 def statements(sql):
     """Split on a semicolon at the end of a line. Fine for these lessons; not a general SQL parser."""
     return [s.strip() for s in re.split(r";[ \t]*(?:\n|$)", sql) if s.strip()]
@@ -509,6 +588,8 @@ if not creates_table:
     cur.executemany("INSERT INTO work_order (machine, wo_type, description, failure_mode, fault_id, priority, created_ts, due_ts, done_ts, est_hours, act_hours, parts_cost) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", seeded_work_orders())
     cur.execute(MISFEED_DDL)
     cur.executemany("INSERT INTO misfeed_event (fault_id, start_ts, end_ts, hoop_size, cause, phase) VALUES (%s, %s, %s, %s, %s, %s)", seeded_misfeeds())
+    cur.execute(ENERGY_DDL)
+    cur.executemany("INSERT INTO energy_log VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)", seeded_energy())
     cur.execute(CHAR_DEPTH_DDL)
     cur.executemany("INSERT INTO char_depth VALUES (%s, %s, %s)", seeded_char_depth())
     for s in statements(PURCHASING_DDL):
