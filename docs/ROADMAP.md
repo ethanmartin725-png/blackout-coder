@@ -37,6 +37,7 @@
   - [x] DAX 50: measures, filter context, CALCULATE patterns (ALL, ALLEXCEPT, KEEPFILTERS, FILTER), OEE and loss dollars, shift and date windows, RANKX, TOPN, CONCATENATEX; outputs from a teaching model, every lesson checked against a SQL twin
   - [x] Structured Text 52, with four user-defined type lessons; CTUD and REAL-to-DINT rounding (stage 3) still wait on 1756-RM003
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
+- [x] Savings Tracker track (15 steps, Python and Excel): baselines from PlantDB, weekly actuals, annualizing, hard vs soft, double-counting and impossible-claim checks, stage gates, a reconciling workbook.
 - [x] Phone layout for the simulator scenes: below 600px each scene draws a compact 440-wide layout (the conveyor shows the belt from the eye on), so nothing scrolls sideways. Drawing only; the scene physics are the same at every width.
 - [x] HMI design principles as their own steps: the High-Performance HMI track (18 steps). ISA-101 display hierarchy, grey for normal with color reserved for alarms (high-performance HMI practice; ISA-101 itself sets no colors), analog indicators with a normal band, ISA-18.2 alarm priority, acknowledge and return-to-normal.
 - [x] Structured Text user-defined types: defined in the scenario (`sim.udts`), members up to two deep (`Line[i].Jam_Timer.DN`), timers inside a UDT, arrays of UDTs, a data-type table under the lesson. Four lessons.
