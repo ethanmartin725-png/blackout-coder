@@ -244,6 +244,10 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
 .sc-rod.jam{fill:var(--bad)}
 .sc-jam{stroke:var(--bad);stroke-width:2.5;fill:none}
 .sc-blade.on{fill:var(--ok)}
+.sc-stave{fill:var(--wood);stroke:var(--wood-dark);stroke-width:1.5}
+.sc-stave.jam{stroke:var(--bad);stroke-width:3}
+.sc-guard{fill:none;stroke:var(--ink-2);stroke-width:3}
+.sc-guard.open{stroke:var(--bad);stroke-dasharray:6 4}
 .sc-flame{fill:var(--warn);stroke:var(--bad);stroke-width:2}
 .sc-smoke{fill:var(--muted)}
 .sim-cmp{margin:0;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);font:12.5px/1.5 var(--f-code);white-space:pre-wrap;overflow-x:auto}

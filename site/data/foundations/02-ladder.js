@@ -853,5 +853,215 @@ Hoop fed; Reset_PB                  →  Hoop_Misfeed=0  →  Step=20  →  Pres
 Press leaves the top                →  no change
 Press reaches the bottom            →  Step=30  →  Press_Extend=0`,
     },
+    {
+      t: "Three jams lock out",
+      goal: "Conveyor 3: run with Start_PB and Stop_PB (normally closed), latch Jam_Fault after 4 s of a blocked eye, clear it with Reset_PB once the eye is clear. Count jams with Jam_Count; three inside 10 minutes latch Jam_Lockout, which blocks running until Super_Reset_PB. The 10-minute Jam_Window starts at the first jam and clears the count when it ends.",
+      code: `BST XIC(Start_PB) NXB XIC(Conv_Run) BND XIC(Stop_PB) XIO(Jam_Fault) XIO(Jam_Lockout) OTE(Conv_Run);
+XIC(Conv_Run) XIC(Eye_Blocked) TON(Jam_Timer,4000,0);
+XIC(Jam_Timer.DN) OTL(Jam_Fault);
+XIC(Reset_PB) XIO(Eye_Blocked) OTU(Jam_Fault);
+XIC(Jam_Fault) CTU(Jam_Count,3,0);
+GRT(Jam_Count.ACC,0) XIO(Jam_Lockout) TON(Jam_Window,600000,0);
+XIC(Jam_Window.DN) RES(Jam_Count);
+XIC(Jam_Count.DN) OTL(Jam_Lockout);
+XIC(Super_Reset_PB) BST OTU(Jam_Lockout) NXB RES(Jam_Count) BND;`,
+      about: "A jam that keeps coming back is not fixed by the operator pressing reset again; it needs someone to find the cause. Three jams inside ten minutes lock the cell out until a supervisor resets it. The window matters: without it, the third jam of the whole shift would lock the line, which is why the output waits ten minutes after the first jam and then counts from zero. CTU counts on the rising edge of Jam_Fault, so a fault that stays latched counts once. The 3 and 10 minutes are illustrative; the 4 s jam rule is the PLC track's.",
+      terms: [
+        ["Jam_Count", "Jam counter", "Counts each new jam; done at 3."],
+        ["Jam_Window", "Ten-minute window", "Starts at the first jam; clears the count when it ends."],
+        ["Super_Reset_PB", "Supervisor reset", "The only way out of the lockout."],
+      ],
+      sim: {"scanMs": 100, "start": {"Stop_PB": 1}, "types": {"Jam_Fault": "BOOL", "Jam_Lockout": "BOOL"}, "scene": "conveyor3", "watch": ["Conv_Run", "Jam_Fault", "Jam_Lockout"], "steps": [{"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}, {"label": "Eye blocked 4.5 s: a jam", "set": {"Eye_Blocked": 1}, "runMs": 4500}, {"label": "Eye cleared, Reset_PB", "set": {"Eye_Blocked": 0}, "pulse": {"Reset_PB": 1}}, {"label": "Ten minutes later", "runMs": 600100}, {"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}, {"label": "Eye blocked 4.5 s: a jam", "set": {"Eye_Blocked": 1}, "runMs": 4500}, {"label": "Eye cleared, Reset_PB", "set": {"Eye_Blocked": 0}, "pulse": {"Reset_PB": 1}}, {"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}, {"label": "Eye blocked 4.5 s: a jam", "set": {"Eye_Blocked": 1}, "runMs": 4500}, {"label": "Eye cleared, Reset_PB", "set": {"Eye_Blocked": 0}, "pulse": {"Reset_PB": 1}}, {"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}, {"label": "Eye blocked 4.5 s: a jam", "set": {"Eye_Blocked": 1}, "runMs": 4500}, {"label": "Eye cleared, Reset_PB", "set": {"Eye_Blocked": 0}, "pulse": {"Reset_PB": 1}}, {"label": "Start_PB while locked out", "pulse": {"Start_PB": 1}}, {"label": "Supervisor resets", "pulse": {"Super_Reset_PB": 1}}, {"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}]},
+      out: `Press and release Start_PB  →  Conv_Run=1
+Eye blocked 4.5 s: a jam    →  Jam_Fault=1  →  Conv_Run=0
+Eye cleared, Reset_PB       →  Jam_Fault=0
+Ten minutes later           →  no change
+Press and release Start_PB  →  Conv_Run=1
+Eye blocked 4.5 s: a jam    →  Jam_Fault=1  →  Conv_Run=0
+Eye cleared, Reset_PB       →  Jam_Fault=0
+Press and release Start_PB  →  Conv_Run=1
+Eye blocked 4.5 s: a jam    →  Jam_Fault=1  →  Conv_Run=0
+Eye cleared, Reset_PB       →  Jam_Fault=0
+Press and release Start_PB  →  Conv_Run=1
+Eye blocked 4.5 s: a jam    →  Jam_Fault=1  →  Jam_Lockout=1  →  Conv_Run=0
+Eye cleared, Reset_PB       →  Jam_Fault=0
+Start_PB while locked out   →  no change
+Supervisor resets           →  Jam_Lockout=0
+Press and release Start_PB  →  Conv_Run=1`,
+    },
+    {
+      t: "Behind the shift target",
+      goal: "Conveyor 3: count barrels in Barrel_Count while running, reset it at Shift_Change, and time the shift with Shift_Timer (7.5 h). Behind_Line is 70% of a barrel a minute so far; light Behind while the count is below it.",
+      code: `BST XIC(Start_PB) NXB XIC(Conv_Run) BND XIC(Stop_PB) OTE(Conv_Run);
+XIC(Conv_Run) XIC(Eye_Blocked) CTU(Barrel_Count,450,0);
+XIC(Shift_Change) RES(Barrel_Count);
+XIO(Shift_Change) TON(Shift_Timer,27000000,0);
+CPT(Behind_Line,Shift_Timer.ACC * 0.7 / 60000.0);
+LES(Barrel_Count.ACC,Behind_Line) OTE(Behind);`,
+      about: "Conveyor 3's shift target is 450 barrels, 60 an hour for 7.5 paid hours: one a minute. Behind_Line grows with the shift at 70% of that pace, the same 70% line the Shift Handoff and HMI tracks use for BEHIND, so the lamp lights while the shift is happening rather than in the report afterwards. Thirty barrels in thirty minutes is on pace; after the belt stops, the line catches up with the count about 43 minutes in. The shift change resets both the count and the timer. Behind_Line is a REAL so the 0.7 and the division stay exact.",
+      terms: [
+        ["Shift_Timer", "Shift clock", "27,000,000 ms is 7.5 hours."],
+        ["Behind_Line", "Pace line", "70% of one barrel a minute, so far this shift."],
+        ["RES(Barrel_Count)", "Shift reset", "The count starts again at the shift change."],
+      ],
+      sim: {"scanMs": 1000, "start": {"Stop_PB": 1}, "types": {"Behind_Line": "REAL", "Behind": "BOOL"}, "scene": "conveyor3", "watch": ["Conv_Run", "Behind"], "steps": [{"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}, "pulseMs": 1000}, {"label": "30 barrels, one a minute", "pulse": {"Eye_Blocked": 1}, "pulseMs": 1000, "runMs": 60000, "repeat": 30}, {"label": "Belt stopped for 20 minutes", "pulse": {"Stop_PB": 0}, "pulseMs": 1000, "runMs": 1200000}, {"label": "Shift change", "pulse": {"Shift_Change": 1}, "pulseMs": 1000}]},
+      out: `Press and release Start_PB   →  Conv_Run=1
+30 barrels, one a minute     →  no change
+Belt stopped for 20 minutes  →  Conv_Run=0  →  Behind=1
+Shift change                 →  Behind=0`,
+    },
+    {
+      t: "Warn, then trip",
+      goal: "Hoop Driver 1's air: latch Air_Warn after 1 s below 88 psi and clear it at 90 psi or more. Latch Hoop1_Low_Air after 3 s below 85 psi; Reset_PB clears it only at 90 psi or more. Hoop1_Run needs Hoop1_Auto and no low air.",
+      code: `LES(Hoop1_Air_PSI,88.0) TON(Warn_Timer,1000,0);
+XIC(Warn_Timer.DN) OTL(Air_Warn);
+GEQ(Hoop1_Air_PSI,90.0) OTU(Air_Warn);
+LES(Hoop1_Air_PSI,85.0) TON(Low_Air_Timer,3000,0);
+XIC(Low_Air_Timer.DN) OTL(Hoop1_Low_Air);
+XIC(Reset_PB) GEQ(Hoop1_Air_PSI,90.0) OTU(Hoop1_Low_Air);
+XIC(Hoop1_Auto) XIO(Hoop1_Low_Air) OTE(Hoop1_Run);`,
+      about: "A warning before the trip gives someone time to act. Two details stop it crying wolf: a 1 s delay, because every press stroke dips the header for 0.4 s, and hysteresis, because air hovering at 88 to 89 psi would otherwise switch the warning on and off every scan. The warning sets below 88 and clears only at 90; the trip clears only at 90 too, so a reset at 88 does nothing. 85 psi is the bottom of Hoop Driver 1's canonical 85 to 110 band; the 88 and 90 psi lines and the delays are illustrative.",
+      terms: [
+        ["Warn_Timer", "Warning delay", "Ignores dips shorter than 1 s."],
+        ["GEQ(Hoop1_Air_PSI,90.0)", "Hysteresis", "Clears at 90, two psi above where it set."],
+        ["Low_Air_Timer", "Trip delay", "3 s below 85 psi."],
+      ],
+      sim: {"types": {"Hoop1_Air_PSI": "REAL", "Air_Warn": "BOOL", "Hoop1_Low_Air": "BOOL"}, "start": {"Hoop1_Air_PSI": 92, "Hoop1_Auto": 1}, "scene": "air1", "watch": ["Air_Warn", "Hoop1_Low_Air", "Hoop1_Run"], "steps": [{"label": "Cylinder fires: 78 psi for 0.4 s", "pulse": {"Hoop1_Air_PSI": 78}, "pulseMs": 400}, {"label": "Header sags to 87 psi for 1.1 s", "set": {"Hoop1_Air_PSI": 87}, "runMs": 1100}, {"label": "Recovers to 89 psi", "set": {"Hoop1_Air_PSI": 89}}, {"label": "Back to 91 psi", "set": {"Hoop1_Air_PSI": 91}}, {"label": "Falls to 84 psi for 2 s", "set": {"Hoop1_Air_PSI": 84}, "runMs": 2000}, {"label": "84 psi for 1.1 s more", "runMs": 1100}, {"label": "Reset_PB at 88 psi", "set": {"Hoop1_Air_PSI": 88}, "pulse": {"Reset_PB": 1}}, {"label": "Air at 92 psi, then Reset_PB", "set": {"Hoop1_Air_PSI": 92}, "pulse": {"Reset_PB": 1}}]},
+      out: `Cylinder fires: 78 psi for 0.4 s  →  no change
+Header sags to 87 psi for 1.1 s   →  Air_Warn=1
+Recovers to 89 psi                →  no change
+Back to 91 psi                    →  Air_Warn=0
+Falls to 84 psi for 2 s           →  Air_Warn=1
+84 psi for 1.1 s more             →  Hoop1_Low_Air=1  →  Hoop1_Run=0
+Reset_PB at 88 psi                →  no change
+Air at 92 psi, then Reset_PB      →  Air_Warn=0  →  Hoop1_Low_Air=0  →  Hoop1_Run=1`,
+    },
+    {
+      t: "Two trips need maintenance",
+      goal: "Hoop Driver 1: latch Hoop1_Low_Air after 2 s below 85 psi; Reset_PB clears it at 85 psi or more unless Maint_Lock is on. Count trips in Trip_Count; a second trip inside an hour (Trip_Window) latches Maint_Lock, which only Maint_Reset_PB clears, with the air back.",
+      code: `LES(Hoop1_Air_PSI,85.0) TON(Low_Air_Timer,2000,0);
+XIC(Low_Air_Timer.DN) OTL(Hoop1_Low_Air);
+XIC(Reset_PB) GEQ(Hoop1_Air_PSI,85.0) XIO(Maint_Lock) OTU(Hoop1_Low_Air);
+XIC(Hoop1_Low_Air) CTU(Trip_Count,2,0);
+GRT(Trip_Count.ACC,0) TON(Trip_Window,3600000,0);
+XIC(Trip_Window.DN) RES(Trip_Count);
+XIC(Trip_Count.DN) OTL(Maint_Lock);
+XIC(Maint_Reset_PB) GEQ(Hoop1_Air_PSI,85.0) BST OTU(Maint_Lock) NXB OTU(Hoop1_Low_Air) NXB RES(Trip_Count) BND;
+XIC(Hoop1_Auto) XIO(Hoop1_Low_Air) OTE(Hoop1_Run);`,
+      about: "One low-air trip can be a blip; two inside an hour mean the air system has a problem, a leak or a failing compressor, and restarting again just waits for the third. So the second trip locks the reset until maintenance has looked. The Energy track found 30% of the compressed air leaking, which is exactly how trips start to repeat. The output shows a trip an hour after the first counting from zero again. The hour and the count are illustrative.",
+      terms: [
+        ["Trip_Count", "Trip counter", "Done at the second trip."],
+        ["Trip_Window", "One hour", "Clears the count an hour after the first trip."],
+        ["XIO(Maint_Lock)", "Reset blocked", "The operator's reset does nothing while locked."],
+      ],
+      sim: {"scanMs": 100, "types": {"Hoop1_Air_PSI": "REAL", "Hoop1_Low_Air": "BOOL", "Maint_Lock": "BOOL"}, "start": {"Hoop1_Air_PSI": 92, "Hoop1_Auto": 1}, "scene": "air1", "watch": ["Hoop1_Low_Air", "Maint_Lock", "Hoop1_Run"], "steps": [{"label": "Compressor trips: 70 psi for 2.1 s", "set": {"Hoop1_Air_PSI": 70}, "runMs": 2100}, {"label": "Air back to 92 psi, Reset_PB", "set": {"Hoop1_Air_PSI": 92}, "pulse": {"Reset_PB": 1}}, {"label": "An hour later", "runMs": 3600500}, {"label": "Compressor trips: 70 psi for 2.1 s", "set": {"Hoop1_Air_PSI": 70}, "runMs": 2100}, {"label": "Air back to 92 psi, Reset_PB", "set": {"Hoop1_Air_PSI": 92}, "pulse": {"Reset_PB": 1}}, {"label": "Compressor trips: 70 psi for 2.1 s", "set": {"Hoop1_Air_PSI": 70}, "runMs": 2100}, {"label": "Air back to 92 psi, Reset_PB", "set": {"Hoop1_Air_PSI": 92}, "pulse": {"Reset_PB": 1}}, {"label": "Maintenance resets", "pulse": {"Maint_Reset_PB": 1}}]},
+      out: `Compressor trips: 70 psi for 2.1 s  →  Hoop1_Low_Air=1  →  Hoop1_Run=0
+Air back to 92 psi, Reset_PB        →  Hoop1_Low_Air=0  →  Hoop1_Run=1
+An hour later                       →  no change
+Compressor trips: 70 psi for 2.1 s  →  Hoop1_Low_Air=1  →  Hoop1_Run=0
+Air back to 92 psi, Reset_PB        →  Hoop1_Low_Air=0  →  Hoop1_Run=1
+Compressor trips: 70 psi for 2.1 s  →  Hoop1_Low_Air=1  →  Maint_Lock=1  →  Hoop1_Run=0
+Air back to 92 psi, Reset_PB        →  no change
+Maintenance resets                  →  Maint_Lock=0  →  Hoop1_Low_Air=0  →  Hoop1_Run=1`,
+    },
+    {
+      t: "One relight, then lockout",
+      goal: "Char Station 2: purge 5 s before Char2_Burner_On. The first flame failure (Flame_OK off 1 s while burning) sets Retry_Used and drops the burner for a fresh purge and relight; a failure with Retry_Used on latches Flame_Lockout. 60 s of steady flame clears Retry_Used. Reset needs Char2_Start off. Run the fan while started, during the 30 s post-purge, and in a lockout.",
+      code: `XIC(Char2_Start) XIO(Flame_Lockout) XIO(Flame_Fail_Timer.DN) TON(Purge_Timer,5000,0);
+XIC(Purge_Timer.DN) OTE(Char2_Burner_On);
+XIC(Char2_Burner_On) XIO(Flame_OK) TON(Flame_Fail_Timer,1000,0);
+XIC(Flame_Fail_Timer.DN) XIC(Retry_Used) OTL(Flame_Lockout);
+XIC(Flame_Fail_Timer.DN) OTL(Retry_Used);
+XIC(Char2_Burner_On) XIC(Flame_OK) TON(Stable_Timer,60000,0);
+XIC(Stable_Timer.DN) OTU(Retry_Used);
+XIC(Reset_PB) XIO(Char2_Start) BST OTU(Flame_Lockout) NXB OTU(Retry_Used) BND;
+XIC(Char2_Burner_On) TOF(Post_Purge,30000,0);
+BST XIC(Char2_Start) NXB XIC(Post_Purge.DN) NXB XIC(Flame_Lockout) BND OTE(Char2_Exhaust_Fan);`,
+      about: "A single flame-out is often a gust or a slug of wet gas; one automatic relight, after a full purge, saves a call to the operator. A second failure soon after is a real problem and locks out. The lockout rung comes before the rung that sets Retry_Used, so the first failure only uses up the retry. Sixty seconds of steady flame earns the retry back, which is why the failure after the steady burn relights again instead of locking out. All the times are illustrative, and real burners are protected by a certified burner management system, not by a teaching rung.",
+      terms: [
+        ["Retry_Used", "Retry spent", "Set by the first failure; cleared by 60 s of steady flame or a reset."],
+        ["XIO(Flame_Fail_Timer.DN)", "Re-purge", "A failure drops the purge timer, so the relight starts with a full purge."],
+        ["Stable_Timer", "Earn the retry back", "60 s burning with flame."],
+      ],
+      sim: {"start": {"Flame_OK": 1}, "types": {"Retry_Used": "BOOL", "Flame_Lockout": "BOOL"}, "scene": "char2", "watch": ["Char2_Burner_On", "Retry_Used", "Flame_Lockout"], "steps": [{"label": "Char2_Start on, 5 s purge", "set": {"Char2_Start": 1}, "runMs": 5100}, {"label": "Flame lost for 1 s", "set": {"Flame_OK": 0}, "runMs": 1100}, {"label": "Flame back; 5 s purge", "set": {"Flame_OK": 1}, "runMs": 5100}, {"label": "Burns steadily for 60 s", "runMs": 60100}, {"label": "Flame lost for 1 s", "set": {"Flame_OK": 0}, "runMs": 1100}, {"label": "Flame back; 5 s purge", "set": {"Flame_OK": 1}, "runMs": 5100}, {"label": "Flame lost for 1 s", "set": {"Flame_OK": 0}, "runMs": 1100}, {"label": "Reset_PB with Start on", "pulse": {"Reset_PB": 1}}, {"label": "Start off, then Reset_PB", "set": {"Char2_Start": 0}, "pulse": {"Reset_PB": 1}}]},
+      out: `Char2_Start on, 5 s purge  →  Char2_Burner_On=1
+Flame lost for 1 s         →  Retry_Used=1  →  Char2_Burner_On=0
+Flame back; 5 s purge      →  Char2_Burner_On=1
+Burns steadily for 60 s    →  Retry_Used=0
+Flame lost for 1 s         →  Retry_Used=1  →  Char2_Burner_On=0
+Flame back; 5 s purge      →  Char2_Burner_On=1
+Flame lost for 1 s         →  Flame_Lockout=1  →  Char2_Burner_On=0
+Reset_PB with Start on     →  no change
+Start off, then Reset_PB   →  Flame_Lockout=0  →  Retry_Used=0`,
+    },
+    {
+      t: "Time the press cycle",
+      goal: "Hoop Driver 1: find the rising edge of Barrel_In_Place in Barrel_Edge (with Barrel_Prev), copy Cycle_Timer.ACC into Last_Cycle_ms on the edge, run Cycle_Timer in Auto except on the edge scan so it restarts from 0, and light Slow_Cycle when the last cycle took over 72 s.",
+      code: `XIC(Barrel_In_Place) XIO(Barrel_Prev) OTE(Barrel_Edge);
+XIC(Barrel_In_Place) OTE(Barrel_Prev);
+XIC(Barrel_Edge) MOV(Cycle_Timer.ACC,Last_Cycle_ms);
+XIC(Auto) XIO(Barrel_Edge) TON(Cycle_Timer,600000,0);
+GRT(Last_Cycle_ms,72000) OTE(Slow_Cycle);`,
+      about: "A cycle runs from one barrel arriving to the next. Copying the timer on the arrival edge and restarting it on that same scan measures each cycle without a second timer. The Takt track's ideal cycle for Hoop Driver 1 is 65.45 s (55 an hour) and its OEE-week actual 87.44 s; the 72 s slow line, 10% over ideal, is illustrative. The measured cycles read 65,980 and 79,980 ms, not 66,000 and 80,000: each is two 10 ms scans short, because the arrival scan resets the timer and a timer adds no time on the scan it starts. The first arrival reads 0 because nothing was being timed yet.",
+      terms: [
+        ["Barrel_Edge", "Arrival edge", "On for one scan when a barrel arrives."],
+        ["MOV(Cycle_Timer.ACC,Last_Cycle_ms)", "Capture", "Copies the cycle time before the restart."],
+        ["72000", "Slow line", "10% over the 65.45 s ideal (illustrative)."],
+      ],
+      sim: {"types": {"Last_Cycle_ms": "DINT", "Slow_Cycle": "BOOL"}, "watch": ["Last_Cycle_ms", "Slow_Cycle"], "steps": [{"label": "Auto on; first barrel arrives, clamped 60 s", "set": {"Auto": 1, "Barrel_In_Place": 1}, "runMs": 60000}, {"label": "Hooped barrel leaves; 6 s gap", "set": {"Barrel_In_Place": 0}, "runMs": 6000}, {"label": "Next barrel arrives, clamped 70 s", "set": {"Barrel_In_Place": 1}, "runMs": 70000}, {"label": "Barrel leaves; 10 s gap", "set": {"Barrel_In_Place": 0}, "runMs": 10000}, {"label": "Next barrel arrives", "set": {"Barrel_In_Place": 1}}]},
+      out: `Auto on; first barrel arrives, clamped 60 s  →  no change
+Hooped barrel leaves; 6 s gap                →  no change
+Next barrel arrives, clamped 70 s            →  Last_Cycle_ms=65980
+Barrel leaves; 10 s gap                      →  no change
+Next barrel arrives                          →  Last_Cycle_ms=79980  →  Slow_Cycle=1`,
+    },
+    {
+      t: "Guard interlock and rundown",
+      goal: "Stave Jointer 1: Saw_Run seals in from Start_PB with Stop_PB (normally closed) and Guard_Closed. Keep Guard_Lock on while the saw runs and for 5 s after (Rundown, an off-delay), and light Guard_Open_Lamp while the guard is open.",
+      code: `BST XIC(Start_PB) NXB XIC(Saw_Run) BND XIC(Stop_PB) XIC(Guard_Closed) OTE(Saw_Run);
+XIC(Saw_Run) TOF(Rundown,5000,0);
+XIC(Rundown.DN) OTE(Guard_Lock);
+XIO(Guard_Closed) OTE(Guard_Open_Lamp);`,
+      about: "A saw blade keeps turning after the motor stops, so the guard stays locked through the 5 s rundown; the off-delay timer's done bit is on while the saw runs and for 5 s after. Opening the guard drops the seal-in, and closing it again does not restart the saw: someone has to press Start, knowing the guard is shut. The last step forces the guard open while running, as a failed lock would, and the saw still stops. Stave Jointer 1 is a stave-mill machine outside the sample plant; its times are illustrative. Real machine guarding uses safety-rated devices and logic designed to ISO 13849, not a standard PLC rung.",
+      terms: [
+        ["Guard_Closed", "Guard switch", "In the seal-in rung: opening it stops the saw."],
+        ["Rundown", "Off-delay", "Done for 5 s after the saw stops."],
+        ["Guard_Lock", "Guard lock", "Held until the blade has stopped."],
+      ],
+      sim: {"start": {"Stop_PB": 1, "Guard_Closed": 1}, "types": {"Saw_Run": "BOOL"}, "scene": "jointer1", "watch": ["Saw_Run", "Guard_Lock", "Guard_Open_Lamp"], "steps": [{"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}, {"label": "Press and release Stop_PB", "pulse": {"Stop_PB": 0}}, {"label": "Blade runs down 5.1 s", "runMs": 5100}, {"label": "Guard opened", "set": {"Guard_Closed": 0}}, {"label": "Start_PB with the guard open", "pulse": {"Start_PB": 1}}, {"label": "Guard closed", "set": {"Guard_Closed": 1}}, {"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}, {"label": "Guard forced open while running", "set": {"Guard_Closed": 0}}]},
+      out: `Press and release Start_PB       →  Saw_Run=1  →  Guard_Lock=1
+Press and release Stop_PB        →  Saw_Run=0
+Blade runs down 5.1 s            →  Guard_Lock=0
+Guard opened                     →  Guard_Open_Lamp=1
+Start_PB with the guard open     →  no change
+Guard closed                     →  Guard_Open_Lamp=0
+Press and release Start_PB       →  Saw_Run=1  →  Guard_Lock=1
+Guard forced open while running  →  Saw_Run=0  →  Guard_Open_Lamp=1`,
+    },
+    {
+      t: "Feed after spin-up",
+      goal: "Stave Jointer 1: run the saw as in the guard lesson. Feed_Run only after Saw_Run has been on 3 s (Spinup_Timer) and with no Feed_Jam. A stave on the infeed sensor for 2 s while feeding latches Feed_Jam; Reset_PB clears it once the sensor is clear. Count staves into Stave_Count as they reach the sensor.",
+      code: `BST XIC(Start_PB) NXB XIC(Saw_Run) BND XIC(Stop_PB) XIC(Guard_Closed) OTE(Saw_Run);
+XIC(Saw_Run) TON(Spinup_Timer,3000,0);
+XIC(Spinup_Timer.DN) XIO(Feed_Jam) OTE(Feed_Run);
+XIC(Feed_Run) XIC(Stave_At_Infeed) TON(Infeed_Timer,2000,0);
+XIC(Infeed_Timer.DN) OTL(Feed_Jam);
+XIC(Reset_PB) XIO(Stave_At_Infeed) OTU(Feed_Jam);
+XIC(Feed_Run) XIC(Stave_At_Infeed) CTU(Stave_Count,9999,0);`,
+      about: "Feeding wood into a blade that is still spinning up stalls it or throws the stave back, so the feed waits 3 s for full speed. A stave that sits on the sensor too long means it has caught on something; latching the jam stops the feed before the next stave rides up behind it. Opening the guard stops the saw, which resets the spin-up timer, which stops the feed: one interlock covers both motors. The 3 s and 2 s are illustrative.",
+      terms: [
+        ["Spinup_Timer", "Spin-up", "3 s of saw running before the feed starts."],
+        ["Infeed_Timer", "Stuck stave", "2 s on the sensor while feeding is a jam."],
+        ["Stave_Count", "Stave counter", "One count per stave reaching the sensor."],
+      ],
+      sim: {"start": {"Stop_PB": 1, "Guard_Closed": 1}, "types": {"Feed_Jam": "BOOL"}, "scene": "jointer1", "watch": ["Saw_Run", "Feed_Run", "Feed_Jam"], "steps": [{"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}, {"label": "Saw spins up 3.1 s", "runMs": 3100}, {"label": "A stave passes the sensor in 1 s", "pulse": {"Stave_At_Infeed": 1}, "pulseMs": 1000}, {"label": "A stave sticks on the sensor 2.1 s", "set": {"Stave_At_Infeed": 1}, "runMs": 2100}, {"label": "Reset_PB with the stave still there", "pulse": {"Reset_PB": 1}}, {"label": "Stave cleared, then Reset_PB", "set": {"Stave_At_Infeed": 0}, "pulse": {"Reset_PB": 1}}, {"label": "Guard opened", "set": {"Guard_Closed": 0}}]},
+      out: `Press and release Start_PB           →  Saw_Run=1
+Saw spins up 3.1 s                   →  Feed_Run=1
+A stave passes the sensor in 1 s     →  no change
+A stave sticks on the sensor 2.1 s   →  Feed_Jam=1  →  Feed_Run=0
+Reset_PB with the stave still there  →  no change
+Stave cleared, then Reset_PB         →  Feed_Jam=0  →  Feed_Run=1
+Guard opened                         →  Saw_Run=0  →  Feed_Run=0`,
+    },
   ],
 });

@@ -1101,5 +1101,297 @@ END_IF;`,
 Eye blocked 4 s             →  Jam_Fault=1  →  Conv_State=2  →  Conv_Run=0
 Eye cleared, then Reset_PB  →  Jam_Fault=0  →  Conv_State=3`,
     },
+    {
+      t: "Three jams lock out",
+      goal: "The ladder challenge in Structured Text, with no counter instruction: count jams in the DINT Jam_Count on the rising edge of Jam_Fault (Jam_Fault_Prev), clear it when the FBD_TIMER Jam_Window is done, and latch Jam_Lockout at 3.",
+      code: `Conv_Run := (Start_PB OR Conv_Run) AND Stop_PB AND NOT Jam_Fault AND NOT Jam_Lockout;
+Jam_Timer.PRE := 4000;
+Jam_Timer.TimerEnable := Conv_Run AND Eye_Blocked;
+TONR(Jam_Timer);
+IF Jam_Timer.DN THEN
+    Jam_Fault := 1;
+END_IF;
+IF Reset_PB AND NOT Eye_Blocked THEN
+    Jam_Fault := 0;
+END_IF;
+IF Jam_Fault AND NOT Jam_Fault_Prev THEN
+    Jam_Count := Jam_Count + 1;
+END_IF;
+Jam_Fault_Prev := Jam_Fault;
+Jam_Window.PRE := 600000;
+Jam_Window.TimerEnable := Jam_Count > 0 AND NOT Jam_Lockout;
+TONR(Jam_Window);
+IF Jam_Window.DN THEN
+    Jam_Count := 0;
+END_IF;
+IF Jam_Count >= 3 THEN
+    Jam_Lockout := 1;
+END_IF;
+IF Super_Reset_PB THEN
+    Jam_Lockout := 0;
+    Jam_Count := 0;
+END_IF;`,
+      about: "The same lockout with a plain DINT for the count: an edge check adds one per new jam, as the ladder CTU does. Counters in Structured Text (CTUD) are left out of this lane until their Logix behaviour is confirmed, so counting by hand is also the honest choice. The output matches the ladder version exactly.",
+      terms: [
+        ["Jam_Fault_Prev", "Previous value", "Last scan's Jam_Fault, for the rising edge."],
+        ["Jam_Count >= 3", "Lockout", "Three jams inside the window."],
+      ],
+      sim: {"scanMs": 100, "start": {"Stop_PB": 1}, "types": {"Jam_Fault": "BOOL", "Jam_Lockout": "BOOL"}, "scene": "conveyor3", "watch": ["Conv_Run", "Jam_Fault", "Jam_Lockout"], "steps": [{"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}, {"label": "Eye blocked 4.5 s: a jam", "set": {"Eye_Blocked": 1}, "runMs": 4500}, {"label": "Eye cleared, Reset_PB", "set": {"Eye_Blocked": 0}, "pulse": {"Reset_PB": 1}}, {"label": "Ten minutes later", "runMs": 600100}, {"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}, {"label": "Eye blocked 4.5 s: a jam", "set": {"Eye_Blocked": 1}, "runMs": 4500}, {"label": "Eye cleared, Reset_PB", "set": {"Eye_Blocked": 0}, "pulse": {"Reset_PB": 1}}, {"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}, {"label": "Eye blocked 4.5 s: a jam", "set": {"Eye_Blocked": 1}, "runMs": 4500}, {"label": "Eye cleared, Reset_PB", "set": {"Eye_Blocked": 0}, "pulse": {"Reset_PB": 1}}, {"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}, {"label": "Eye blocked 4.5 s: a jam", "set": {"Eye_Blocked": 1}, "runMs": 4500}, {"label": "Eye cleared, Reset_PB", "set": {"Eye_Blocked": 0}, "pulse": {"Reset_PB": 1}}, {"label": "Start_PB while locked out", "pulse": {"Start_PB": 1}}, {"label": "Supervisor resets", "pulse": {"Super_Reset_PB": 1}}, {"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}], "sameAs": "ladder/Three jams lock out"},
+      out: `Press and release Start_PB  →  Conv_Run=1
+Eye blocked 4.5 s: a jam    →  Jam_Fault=1  →  Conv_Run=0
+Eye cleared, Reset_PB       →  Jam_Fault=0
+Ten minutes later           →  no change
+Press and release Start_PB  →  Conv_Run=1
+Eye blocked 4.5 s: a jam    →  Jam_Fault=1  →  Conv_Run=0
+Eye cleared, Reset_PB       →  Jam_Fault=0
+Press and release Start_PB  →  Conv_Run=1
+Eye blocked 4.5 s: a jam    →  Jam_Fault=1  →  Conv_Run=0
+Eye cleared, Reset_PB       →  Jam_Fault=0
+Press and release Start_PB  →  Conv_Run=1
+Eye blocked 4.5 s: a jam    →  Jam_Fault=1  →  Jam_Lockout=1  →  Conv_Run=0
+Eye cleared, Reset_PB       →  Jam_Fault=0
+Start_PB while locked out   →  no change
+Supervisor resets           →  Jam_Lockout=0
+Press and release Start_PB  →  Conv_Run=1`,
+    },
+    {
+      t: "Behind the shift target",
+      goal: "The ladder challenge in Structured Text: count barrels in the DINT Barrel_Count on the rising edge of a running, blocked eye (Eye_Prev), reset it at Shift_Change, and compare it with Behind_Line from the FBD_TIMER Shift_Timer.",
+      code: `Conv_Run := (Start_PB OR Conv_Run) AND Stop_PB;
+IF Conv_Run AND Eye_Blocked AND NOT Eye_Prev THEN
+    Barrel_Count := Barrel_Count + 1;
+END_IF;
+Eye_Prev := Conv_Run AND Eye_Blocked;
+IF Shift_Change THEN
+    Barrel_Count := 0;
+END_IF;
+Shift_Timer.PRE := 27000000;
+Shift_Timer.TimerEnable := NOT Shift_Change;
+TONR(Shift_Timer);
+Behind_Line := Shift_Timer.ACC * 0.7 / 60000.0;
+Behind := Barrel_Count < Behind_Line;`,
+      about: "Eye_Prev remembers the whole condition the ladder CTU counts on, running and blocked, so a barrel that blocks the eye while the belt is stopped is not counted twice when it restarts. Writing 0.7 and 60000.0 as REALs keeps the division in REAL, as the ladder CPT does. The output matches the ladder version exactly.",
+      terms: [
+        ["Eye_Prev", "Previous condition", "Running and blocked, last scan."],
+        ["Barrel_Count < Behind_Line", "Behind", "Below the 70% pace line."],
+      ],
+      sim: {"scanMs": 1000, "start": {"Stop_PB": 1}, "types": {"Behind_Line": "REAL", "Behind": "BOOL"}, "scene": "conveyor3", "watch": ["Conv_Run", "Behind"], "steps": [{"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}, "pulseMs": 1000}, {"label": "30 barrels, one a minute", "pulse": {"Eye_Blocked": 1}, "pulseMs": 1000, "runMs": 60000, "repeat": 30}, {"label": "Belt stopped for 20 minutes", "pulse": {"Stop_PB": 0}, "pulseMs": 1000, "runMs": 1200000}, {"label": "Shift change", "pulse": {"Shift_Change": 1}, "pulseMs": 1000}], "sameAs": "ladder/Behind the shift target"},
+      out: `Press and release Start_PB   →  Conv_Run=1
+30 barrels, one a minute     →  no change
+Belt stopped for 20 minutes  →  Conv_Run=0  →  Behind=1
+Shift change                 →  Behind=0`,
+    },
+    {
+      t: "Warn, then trip",
+      goal: "The ladder challenge in Structured Text: the warning and the trip each with an FBD_TIMER delay, set and clear lines two psi apart, and the run permissive.",
+      code: `Warn_Timer.PRE := 1000;
+Warn_Timer.TimerEnable := Hoop1_Air_PSI < 88.0;
+TONR(Warn_Timer);
+IF Warn_Timer.DN THEN
+    Air_Warn := 1;
+END_IF;
+IF Hoop1_Air_PSI >= 90.0 THEN
+    Air_Warn := 0;
+END_IF;
+Low_Air_Timer.PRE := 3000;
+Low_Air_Timer.TimerEnable := Hoop1_Air_PSI < 85.0;
+TONR(Low_Air_Timer);
+IF Low_Air_Timer.DN THEN
+    Hoop1_Low_Air := 1;
+END_IF;
+IF Reset_PB AND Hoop1_Air_PSI >= 90.0 THEN
+    Hoop1_Low_Air := 0;
+END_IF;
+Hoop1_Run := Hoop1_Auto AND NOT Hoop1_Low_Air;`,
+      about: "Set and clear are separate IFs, each with its own line, which is how hysteresis reads in Structured Text: nothing happens between 88 and 90 psi, so the last state holds. The output matches the ladder version exactly.",
+      terms: [
+        ["Hoop1_Air_PSI < 88.0", "Warn line", "Below 88 psi starts the delay."],
+        [">= 90.0", "Clear line", "Two psi above the warn line."],
+      ],
+      sim: {"types": {"Hoop1_Air_PSI": "REAL", "Air_Warn": "BOOL", "Hoop1_Low_Air": "BOOL"}, "start": {"Hoop1_Air_PSI": 92, "Hoop1_Auto": 1}, "scene": "air1", "watch": ["Air_Warn", "Hoop1_Low_Air", "Hoop1_Run"], "steps": [{"label": "Cylinder fires: 78 psi for 0.4 s", "pulse": {"Hoop1_Air_PSI": 78}, "pulseMs": 400}, {"label": "Header sags to 87 psi for 1.1 s", "set": {"Hoop1_Air_PSI": 87}, "runMs": 1100}, {"label": "Recovers to 89 psi", "set": {"Hoop1_Air_PSI": 89}}, {"label": "Back to 91 psi", "set": {"Hoop1_Air_PSI": 91}}, {"label": "Falls to 84 psi for 2 s", "set": {"Hoop1_Air_PSI": 84}, "runMs": 2000}, {"label": "84 psi for 1.1 s more", "runMs": 1100}, {"label": "Reset_PB at 88 psi", "set": {"Hoop1_Air_PSI": 88}, "pulse": {"Reset_PB": 1}}, {"label": "Air at 92 psi, then Reset_PB", "set": {"Hoop1_Air_PSI": 92}, "pulse": {"Reset_PB": 1}}], "sameAs": "ladder/Warn, then trip"},
+      out: `Cylinder fires: 78 psi for 0.4 s  →  no change
+Header sags to 87 psi for 1.1 s   →  Air_Warn=1
+Recovers to 89 psi                →  no change
+Back to 91 psi                    →  Air_Warn=0
+Falls to 84 psi for 2 s           →  Air_Warn=1
+84 psi for 1.1 s more             →  Hoop1_Low_Air=1  →  Hoop1_Run=0
+Reset_PB at 88 psi                →  no change
+Air at 92 psi, then Reset_PB      →  Air_Warn=0  →  Hoop1_Low_Air=0  →  Hoop1_Run=1`,
+    },
+    {
+      t: "Two trips need maintenance",
+      goal: "The ladder challenge in Structured Text: count trips in the DINT Trip_Count on the rising edge of Hoop1_Low_Air, clear it after the one-hour FBD_TIMER Trip_Window, and lock the reset at two trips.",
+      code: `Low_Air_Timer.PRE := 2000;
+Low_Air_Timer.TimerEnable := Hoop1_Air_PSI < 85.0;
+TONR(Low_Air_Timer);
+IF Low_Air_Timer.DN THEN
+    Hoop1_Low_Air := 1;
+END_IF;
+IF Reset_PB AND Hoop1_Air_PSI >= 85.0 AND NOT Maint_Lock THEN
+    Hoop1_Low_Air := 0;
+END_IF;
+IF Hoop1_Low_Air AND NOT Low_Air_Prev THEN
+    Trip_Count := Trip_Count + 1;
+END_IF;
+Low_Air_Prev := Hoop1_Low_Air;
+Trip_Window.PRE := 3600000;
+Trip_Window.TimerEnable := Trip_Count > 0;
+TONR(Trip_Window);
+IF Trip_Window.DN THEN
+    Trip_Count := 0;
+END_IF;
+IF Trip_Count >= 2 THEN
+    Maint_Lock := 1;
+END_IF;
+IF Maint_Reset_PB AND Hoop1_Air_PSI >= 85.0 THEN
+    Maint_Lock := 0;
+    Hoop1_Low_Air := 0;
+    Trip_Count := 0;
+END_IF;
+Hoop1_Run := Hoop1_Auto AND NOT Hoop1_Low_Air;`,
+      about: "The pattern is the same as the jam lockout: an edge to count events, a window to forget old ones, a lock that only a different person can clear. Once you have written it twice it is worth turning into a reusable block. The output matches the ladder version exactly.",
+      terms: [
+        ["Low_Air_Prev", "Previous value", "Last scan's Hoop1_Low_Air, for the rising edge."],
+        ["Maint_Reset_PB", "Maintenance reset", "Clears the lock, the trip and the count."],
+      ],
+      sim: {"scanMs": 100, "types": {"Hoop1_Air_PSI": "REAL", "Hoop1_Low_Air": "BOOL", "Maint_Lock": "BOOL"}, "start": {"Hoop1_Air_PSI": 92, "Hoop1_Auto": 1}, "scene": "air1", "watch": ["Hoop1_Low_Air", "Maint_Lock", "Hoop1_Run"], "steps": [{"label": "Compressor trips: 70 psi for 2.1 s", "set": {"Hoop1_Air_PSI": 70}, "runMs": 2100}, {"label": "Air back to 92 psi, Reset_PB", "set": {"Hoop1_Air_PSI": 92}, "pulse": {"Reset_PB": 1}}, {"label": "An hour later", "runMs": 3600500}, {"label": "Compressor trips: 70 psi for 2.1 s", "set": {"Hoop1_Air_PSI": 70}, "runMs": 2100}, {"label": "Air back to 92 psi, Reset_PB", "set": {"Hoop1_Air_PSI": 92}, "pulse": {"Reset_PB": 1}}, {"label": "Compressor trips: 70 psi for 2.1 s", "set": {"Hoop1_Air_PSI": 70}, "runMs": 2100}, {"label": "Air back to 92 psi, Reset_PB", "set": {"Hoop1_Air_PSI": 92}, "pulse": {"Reset_PB": 1}}, {"label": "Maintenance resets", "pulse": {"Maint_Reset_PB": 1}}], "sameAs": "ladder/Two trips need maintenance"},
+      out: `Compressor trips: 70 psi for 2.1 s  →  Hoop1_Low_Air=1  →  Hoop1_Run=0
+Air back to 92 psi, Reset_PB        →  Hoop1_Low_Air=0  →  Hoop1_Run=1
+An hour later                       →  no change
+Compressor trips: 70 psi for 2.1 s  →  Hoop1_Low_Air=1  →  Hoop1_Run=0
+Air back to 92 psi, Reset_PB        →  Hoop1_Low_Air=0  →  Hoop1_Run=1
+Compressor trips: 70 psi for 2.1 s  →  Hoop1_Low_Air=1  →  Maint_Lock=1  →  Hoop1_Run=0
+Air back to 92 psi, Reset_PB        →  no change
+Maintenance resets                  →  Maint_Lock=0  →  Hoop1_Low_Air=0  →  Hoop1_Run=1`,
+    },
+    {
+      t: "One relight, then lockout",
+      goal: "The ladder challenge in Structured Text, rung for statement, keeping the lockout check before the line that spends the retry.",
+      code: `Purge_Timer.PRE := 5000;
+Purge_Timer.TimerEnable := Char2_Start AND NOT Flame_Lockout AND NOT Flame_Fail_Timer.DN;
+TONR(Purge_Timer);
+Char2_Burner_On := Purge_Timer.DN;
+Flame_Fail_Timer.PRE := 1000;
+Flame_Fail_Timer.TimerEnable := Char2_Burner_On AND NOT Flame_OK;
+TONR(Flame_Fail_Timer);
+IF Flame_Fail_Timer.DN AND Retry_Used THEN
+    Flame_Lockout := 1;
+END_IF;
+IF Flame_Fail_Timer.DN THEN
+    Retry_Used := 1;
+END_IF;
+Stable_Timer.PRE := 60000;
+Stable_Timer.TimerEnable := Char2_Burner_On AND Flame_OK;
+TONR(Stable_Timer);
+IF Stable_Timer.DN THEN
+    Retry_Used := 0;
+END_IF;
+IF Reset_PB AND NOT Char2_Start THEN
+    Flame_Lockout := 0;
+    Retry_Used := 0;
+END_IF;
+Post_Purge.PRE := 30000;
+Post_Purge.TimerEnable := Char2_Burner_On;
+TOFR(Post_Purge);
+Char2_Exhaust_Fan := Char2_Start OR Post_Purge.DN OR Flame_Lockout;`,
+      about: "Order is the whole lesson: swap the two IFs and the first failure would set Retry_Used and then lock out in the same scan. TOFR keeps the fan running for the 30 s post-purge. The output matches the ladder version exactly.",
+      terms: [
+        ["Flame_Fail_Timer.DN AND Retry_Used", "Second failure", "Locks out only once the retry is spent."],
+        ["TOFR", "Post-purge", "Off-delay: the fan runs on for 30 s."],
+      ],
+      sim: {"start": {"Flame_OK": 1}, "types": {"Retry_Used": "BOOL", "Flame_Lockout": "BOOL"}, "scene": "char2", "watch": ["Char2_Burner_On", "Retry_Used", "Flame_Lockout"], "steps": [{"label": "Char2_Start on, 5 s purge", "set": {"Char2_Start": 1}, "runMs": 5100}, {"label": "Flame lost for 1 s", "set": {"Flame_OK": 0}, "runMs": 1100}, {"label": "Flame back; 5 s purge", "set": {"Flame_OK": 1}, "runMs": 5100}, {"label": "Burns steadily for 60 s", "runMs": 60100}, {"label": "Flame lost for 1 s", "set": {"Flame_OK": 0}, "runMs": 1100}, {"label": "Flame back; 5 s purge", "set": {"Flame_OK": 1}, "runMs": 5100}, {"label": "Flame lost for 1 s", "set": {"Flame_OK": 0}, "runMs": 1100}, {"label": "Reset_PB with Start on", "pulse": {"Reset_PB": 1}}, {"label": "Start off, then Reset_PB", "set": {"Char2_Start": 0}, "pulse": {"Reset_PB": 1}}], "sameAs": "ladder/One relight, then lockout"},
+      out: `Char2_Start on, 5 s purge  →  Char2_Burner_On=1
+Flame lost for 1 s         →  Retry_Used=1  →  Char2_Burner_On=0
+Flame back; 5 s purge      →  Char2_Burner_On=1
+Burns steadily for 60 s    →  Retry_Used=0
+Flame lost for 1 s         →  Retry_Used=1  →  Char2_Burner_On=0
+Flame back; 5 s purge      →  Char2_Burner_On=1
+Flame lost for 1 s         →  Flame_Lockout=1  →  Char2_Burner_On=0
+Reset_PB with Start on     →  no change
+Start off, then Reset_PB   →  Flame_Lockout=0  →  Retry_Used=0`,
+    },
+    {
+      t: "Time the press cycle",
+      goal: "The ladder challenge in Structured Text: the arrival edge, the capture, Cycle_Timer as an FBD_TIMER disabled on the edge scan, and Slow_Cycle.",
+      code: `Barrel_Edge := Barrel_In_Place AND NOT Barrel_Prev;
+Barrel_Prev := Barrel_In_Place;
+IF Barrel_Edge THEN
+    Last_Cycle_ms := Cycle_Timer.ACC;
+END_IF;
+Cycle_Timer.PRE := 600000;
+Cycle_Timer.TimerEnable := Auto AND NOT Barrel_Edge;
+TONR(Cycle_Timer);
+Slow_Cycle := Last_Cycle_ms > 72000;`,
+      about: "Disabling the timer for the edge scan resets it exactly as the ladder TON does on a false rung, so both versions read two scans short in the same way. The output matches the ladder version exactly.",
+      terms: [
+        ["Cycle_Timer.ACC", "Accumulated time", "Milliseconds since the last arrival."],
+        ["NOT Barrel_Edge", "Restart", "False for one scan, which resets the timer."],
+      ],
+      sim: {"types": {"Last_Cycle_ms": "DINT", "Slow_Cycle": "BOOL"}, "watch": ["Last_Cycle_ms", "Slow_Cycle"], "steps": [{"label": "Auto on; first barrel arrives, clamped 60 s", "set": {"Auto": 1, "Barrel_In_Place": 1}, "runMs": 60000}, {"label": "Hooped barrel leaves; 6 s gap", "set": {"Barrel_In_Place": 0}, "runMs": 6000}, {"label": "Next barrel arrives, clamped 70 s", "set": {"Barrel_In_Place": 1}, "runMs": 70000}, {"label": "Barrel leaves; 10 s gap", "set": {"Barrel_In_Place": 0}, "runMs": 10000}, {"label": "Next barrel arrives", "set": {"Barrel_In_Place": 1}}], "sameAs": "ladder/Time the press cycle"},
+      out: `Auto on; first barrel arrives, clamped 60 s  →  no change
+Hooped barrel leaves; 6 s gap                →  no change
+Next barrel arrives, clamped 70 s            →  Last_Cycle_ms=65980
+Barrel leaves; 10 s gap                      →  no change
+Next barrel arrives                          →  Last_Cycle_ms=79980  →  Slow_Cycle=1`,
+    },
+    {
+      t: "Guard interlock and rundown",
+      goal: "The ladder challenge in Structured Text: the seal-in with the guard, a TOFR rundown and the two outputs.",
+      code: `Saw_Run := (Start_PB OR Saw_Run) AND Stop_PB AND Guard_Closed;
+Rundown.PRE := 5000;
+Rundown.TimerEnable := Saw_Run;
+TOFR(Rundown);
+Guard_Lock := Rundown.DN;
+Guard_Open_Lamp := NOT Guard_Closed;`,
+      about: "The seal-in reads as one line: start or already running, and stop not pressed, and the guard shut. TOFR is the off-delay timer: .DN follows the enable on, and stays on for the preset after it goes off. The output matches the ladder version exactly.",
+      terms: [
+        ["TOFR", "Off-delay", "DN stays on for 5 s after the saw stops."],
+        ["AND Guard_Closed", "Interlock", "The guard is part of the run condition."],
+      ],
+      sim: {"start": {"Stop_PB": 1, "Guard_Closed": 1}, "types": {"Saw_Run": "BOOL"}, "scene": "jointer1", "watch": ["Saw_Run", "Guard_Lock", "Guard_Open_Lamp"], "steps": [{"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}, {"label": "Press and release Stop_PB", "pulse": {"Stop_PB": 0}}, {"label": "Blade runs down 5.1 s", "runMs": 5100}, {"label": "Guard opened", "set": {"Guard_Closed": 0}}, {"label": "Start_PB with the guard open", "pulse": {"Start_PB": 1}}, {"label": "Guard closed", "set": {"Guard_Closed": 1}}, {"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}, {"label": "Guard forced open while running", "set": {"Guard_Closed": 0}}], "sameAs": "ladder/Guard interlock and rundown"},
+      out: `Press and release Start_PB       →  Saw_Run=1  →  Guard_Lock=1
+Press and release Stop_PB        →  Saw_Run=0
+Blade runs down 5.1 s            →  Guard_Lock=0
+Guard opened                     →  Guard_Open_Lamp=1
+Start_PB with the guard open     →  no change
+Guard closed                     →  Guard_Open_Lamp=0
+Press and release Start_PB       →  Saw_Run=1  →  Guard_Lock=1
+Guard forced open while running  →  Saw_Run=0  →  Guard_Open_Lamp=1`,
+    },
+    {
+      t: "Feed after spin-up",
+      goal: "The ladder challenge in Structured Text: the saw seal-in, spin-up and infeed timers as FBD_TIMERs, the jam latch, and Stave_Count as a DINT counted on the rising edge of a stave at the sensor while feeding (Stave_Prev).",
+      code: `Saw_Run := (Start_PB OR Saw_Run) AND Stop_PB AND Guard_Closed;
+Spinup_Timer.PRE := 3000;
+Spinup_Timer.TimerEnable := Saw_Run;
+TONR(Spinup_Timer);
+Feed_Run := Spinup_Timer.DN AND NOT Feed_Jam;
+Infeed_Timer.PRE := 2000;
+Infeed_Timer.TimerEnable := Feed_Run AND Stave_At_Infeed;
+TONR(Infeed_Timer);
+IF Infeed_Timer.DN THEN
+    Feed_Jam := 1;
+END_IF;
+IF Reset_PB AND NOT Stave_At_Infeed THEN
+    Feed_Jam := 0;
+END_IF;
+IF Feed_Run AND Stave_At_Infeed AND NOT Stave_Prev THEN
+    Stave_Count := Stave_Count + 1;
+END_IF;
+Stave_Prev := Feed_Run AND Stave_At_Infeed;`,
+      about: "Each rung becomes a statement in the same order, and the count uses the same edge pattern as the conveyor counter. The output matches the ladder version exactly.",
+      terms: [
+        ["Feed_Run", "Feed permissive", "Up to speed and not jammed."],
+        ["Stave_Prev", "Previous condition", "Feeding with a stave at the sensor, last scan."],
+      ],
+      sim: {"start": {"Stop_PB": 1, "Guard_Closed": 1}, "types": {"Feed_Jam": "BOOL"}, "scene": "jointer1", "watch": ["Saw_Run", "Feed_Run", "Feed_Jam"], "steps": [{"label": "Press and release Start_PB", "pulse": {"Start_PB": 1}}, {"label": "Saw spins up 3.1 s", "runMs": 3100}, {"label": "A stave passes the sensor in 1 s", "pulse": {"Stave_At_Infeed": 1}, "pulseMs": 1000}, {"label": "A stave sticks on the sensor 2.1 s", "set": {"Stave_At_Infeed": 1}, "runMs": 2100}, {"label": "Reset_PB with the stave still there", "pulse": {"Reset_PB": 1}}, {"label": "Stave cleared, then Reset_PB", "set": {"Stave_At_Infeed": 0}, "pulse": {"Reset_PB": 1}}, {"label": "Guard opened", "set": {"Guard_Closed": 0}}], "sameAs": "ladder/Feed after spin-up"},
+      out: `Press and release Start_PB           →  Saw_Run=1
+Saw spins up 3.1 s                   →  Feed_Run=1
+A stave passes the sensor in 1 s     →  no change
+A stave sticks on the sensor 2.1 s   →  Feed_Jam=1  →  Feed_Run=0
+Reset_PB with the stave still there  →  no change
+Stave cleared, then Reset_PB         →  Feed_Jam=0  →  Feed_Run=1
+Guard opened                         →  Saw_Run=0  →  Feed_Run=0`,
+    },
   ],
 });

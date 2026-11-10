@@ -418,8 +418,67 @@ const SCENES={
       o.push(`<rect class="sc-cyl" x="${cyl}" y="58" width="${cw}" height="34" rx="4"/><rect class="sc-rod${firing?' out':''}" x="${cyl+cw}" y="69" width="${firing?stroke:18}" height="12" rx="2"/><text class="sc-label" x="${cyl}" y="50">Cylinder${firing?' firing':''}</text>`);
       o.push(`<text class="sc-label" x="${cyl}" y="${narrow?150:122}">${S.mode}</text>`);
       let y=22;const row=(cls,tag,label)=>{if(plc.has(tag)){o.push(lamp(cls,lx,y,plcOn(plc,tag),label));y+=26;}};
-      row('g','Hoop1_Air_OK','AIR OK');row('r','Hoop1_Low_Air','LOW AIR');row('g','Hoop1_Run','RUN');
+      row('g','Hoop1_Air_OK','AIR OK');row('a','Air_Warn','AIR WARN');row('r','Hoop1_Low_Air','LOW AIR');row('r','Maint_Lock','MAINT LOCK');row('g','Hoop1_Run','RUN');
       return `<svg viewBox="0 0 ${narrow?440:640} 170" role="img" aria-label="Hoop Driver 1 air header: pressure gauge, cylinder and status lamps">${o.join('')}</svg>`;
+    };
+    return S;
+  },
+  // Stave Jointer 1 at the stave mill (outside the canonical three-machine plant; illustrative).
+  // Staves ride the infeed toward the saw while Feed_Run is on; the infeed sensor drives
+  // Stave_At_Infeed while one sits over it. The saw spins up while Saw_Run is on. "Open the guard"
+  // drives Guard_Closed to 0. "Jam a stave" sticks the next stave on the sensor. Speeds are illustrative.
+  jointer1(plc){
+    if(!plc.has('Saw_Run'))return null;
+    const S={staves:[],gap:999,jamNext:false,stuck:null,SENSOR:300,W:70,SAW:470,SPEED:110,ang:0,spin:0,guard:1,at:false,
+      drives:['Guard_Closed','Stave_At_Infeed'].filter(t=>plc.has(t))};
+    const feeding=()=>plc.has('Feed_Run')?plcOn(plc,'Feed_Run'):plcOn(plc,'Saw_Run');
+    S.controls=[
+      {label:'Open the guard',run(){S.guard=0;return 'The guard is open. The saw must stop, and must not restart when it closes.';}},
+      {label:'Close the guard',run(){S.guard=1;return 'The guard is closed. A start is needed to run the saw again.';}},
+      {label:'Jam a stave',run(){S.jamNext=true;return 'The next stave will stick on the infeed sensor.';}},
+      {label:'Clear the jam',run(){if(S.stuck)S.staves=S.staves.filter(b=>b!==S.stuck);S.stuck=null;S.jamNext=false;return 'Stave cleared. A latched jam stays latched until Reset_PB.';}},
+    ];
+    S.step=dt=>{
+      const s=dt/1000;
+      S.spin=Math.max(0,Math.min(1,S.spin+(plcOn(plc,'Saw_Run')?s/3:-s/2)));
+      S.ang=(S.ang+S.spin*720*s)%360;
+      if(feeding()){
+        const d=S.SPEED*s;S.gap+=d;
+        if(S.gap>=150){S.staves.push({x:-S.W});S.gap=0;}
+        S.staves.sort((a,b)=>b.x-a.x);
+        let limit=Infinity;
+        for(const b of S.staves){
+          if(b!==S.stuck){
+            let nx=b.x+d;
+            if(S.jamNext&&!S.stuck&&b.x+S.W/2<S.SENSOR&&nx+S.W/2>=S.SENSOR){nx=S.SENSOR-S.W/2;S.stuck=b;S.jamNext=false;}
+            if(nx+S.W>limit)nx=limit-S.W;
+            b.x=Math.max(b.x,nx);
+          }
+          limit=b.x-6;
+        }
+        S.staves=S.staves.filter(b=>b.x<640);
+      }
+      S.at=S.staves.some(b=>b.x<=S.SENSOR&&b.x+S.W>=S.SENSOR);
+      if(plc.has('Stave_At_Infeed'))plc.write('Stave_At_Infeed',S.at?1:0);
+      if(plc.has('Guard_Closed'))plc.write('Guard_Closed',S.guard);
+    };
+    S.note=()=>!S.guard&&S.spin>0?'The guard is open and the blade is still turning.':S.stuck?'A stave is stuck on the infeed sensor.':null;
+    // Narrow: draw from x 200 on (sensor, saw and lamps), on a 440-wide canvas.
+    S.svg=narrow=>{
+      const o=[],ox=narrow?200:0,W=640-ox,saw=plcOn(plc,'Saw_Run'),cx=S.SAW-ox,cy=72,r=34;
+      o.push(`<rect class="sc-belt" x="0" y="110" width="${W}" height="10" rx="3"/>`);
+      for(let x=20;x<640;x+=70)if(x>=ox)o.push(`<circle class="sc-roller" cx="${x-ox}" cy="115" r="4"/>`);
+      for(const b of S.staves){const x=(b.x-ox).toFixed(1);o.push(`<rect class="sc-stave${b===S.stuck?' jam':''}" x="${x}" y="96" width="${S.W}" height="14" rx="2"/>`);}
+      const sx=S.SENSOR-ox;
+      if(sx>-20)o.push(`<rect class="sc-eye" x="${sx-6}" y="124" width="12" height="12" rx="2"/><text class="sc-label" x="${sx+10}" y="136">Stave_At_Infeed ${S.at?1:0}</text>`);
+      const pts=[];for(let i=0;i<24;i++){const a=(S.ang+i*15)*Math.PI/180,rr=i%2?r:r-7;pts.push(`${(cx+rr*Math.cos(a)).toFixed(1)},${(cy+rr*Math.sin(a)).toFixed(1)}`);}
+      o.push(`<polygon class="sc-blade${S.spin>0.99?' on':''}" points="${pts.join(' ')}"/><circle class="sc-hub" cx="${cx}" cy="${cy}" r="6"/>`);
+      o.push(`<path class="sc-guard${S.guard?'':' open'}" d="M${cx-48} ${S.guard?96:40} L${cx-48} 30 L${cx+48} 30 L${cx+48} ${S.guard?96:40}"/>`);
+      o.push(`<text class="sc-label" x="${cx-48}" y="20">Guard_Closed ${S.guard}</text><text class="sc-label" x="${cx-48}" y="156">Saw ${Math.round(S.spin*100)}% speed</text>`);
+      let y=22;const lx=W-28,row=(cls,tag,label)=>{if(plc.has(tag)){o.push(lamp(cls,lx,y,plcOn(plc,tag),'')+`<text class="sc-label" x="${lx-14}" y="${y+4}" text-anchor="end">${label}</text>`);y+=26;}};
+      row('g','Saw_Run','SAW');row('g','Feed_Run','FEED');row('r','Feed_Jam','JAM');
+      if(plc.has('Stave_Count'))o.push(`<text class="sc-lcd" x="8" y="24">STAVES ${String(plc.read(plc.typeOf('Stave_Count')==='COUNTER'?'Stave_Count.ACC':'Stave_Count')).padStart(4,'0')}</text>`);
+      return `<svg viewBox="0 0 ${W} 170" role="img" aria-label="Stave Jointer 1: staves on the infeed, infeed sensor, saw blade, guard and lamps">${o.join('')}</svg>`;
     };
     return S;
   },
