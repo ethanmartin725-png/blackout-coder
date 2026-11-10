@@ -16,6 +16,7 @@
 #   - stock_move for the Inventory / WIP track: STOCK_MOVE_DDL and seeded_stock() below, illustrative
 #   - misfeed_event for the Kaizen / A3 track: MISFEED_DDL and seeded_misfeeds() below, illustrative
 #   - energy_log for the Energy / Utilities track: ENERGY_DDL and seeded_energy() below, illustrative
+#   - demand_plan for the S&OP / Capacity track: DEMAND_DDL and seeded_demand() below, illustrative
 #   - char_depth for the SPC track: CHAR_DEPTH_DDL and seeded_char_depth() below, illustrative
 # A lesson that itself creates a table runs against an empty database instead.
 #
@@ -535,6 +536,29 @@ def seeded_energy():
     return rows
 
 
+# Demand plan for the S&OP / Capacity track. The track's first step types this same CREATE
+# (build25.py checks they match). Illustrative.
+DEMAND_DDL = """CREATE TABLE demand_plan (
+    week_start DATE NOT NULL,
+    size VARCHAR(6) NOT NULL,
+    barrels INT NOT NULL,
+    PRIMARY KEY (week_start, size)
+);"""
+
+
+def seeded_demand():
+    """Eight weeks of demand in good barrels from 2026-11-07 (Saturdays), illustrative: they average
+    the Takt track's 1,000 a day, 7,000 a week, with a pre-holiday peak. Each week splits 53-gal and
+    30-gal in Hoop Driver 1's OEE-week mix, 4,700 of 6,410."""
+    weekly = [6600, 6800, 7000, 7200, 7400, 7600, 7000, 6400]
+    rows = []
+    for k, total in enumerate(weekly):
+        week = datetime.date(2026, 11, 7) + datetime.timedelta(days=7 * k)
+        b53 = round(total * 4700 / 6410)
+        rows += [(week, "53-gal", b53), (week, "30-gal", total - b53)]
+    return rows
+
+
 def statements(sql):
     """Split on a semicolon at the end of a line. Fine for these lessons; not a general SQL parser."""
     return [s.strip() for s in re.split(r";[ \t]*(?:\n|$)", sql) if s.strip()]
@@ -590,6 +614,8 @@ if not creates_table:
     cur.executemany("INSERT INTO misfeed_event (fault_id, start_ts, end_ts, hoop_size, cause, phase) VALUES (%s, %s, %s, %s, %s, %s)", seeded_misfeeds())
     cur.execute(ENERGY_DDL)
     cur.executemany("INSERT INTO energy_log VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)", seeded_energy())
+    cur.execute(DEMAND_DDL)
+    cur.executemany("INSERT INTO demand_plan VALUES (%s, %s, %s)", seeded_demand())
     cur.execute(CHAR_DEPTH_DDL)
     cur.executemany("INSERT INTO char_depth VALUES (%s, %s, %s)", seeded_char_depth())
     for s in statements(PURCHASING_DDL):
