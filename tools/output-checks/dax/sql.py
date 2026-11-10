@@ -42,6 +42,8 @@ def plain(v):
         return float(v)
     if isinstance(v, datetime.datetime):
         return v.strftime("%Y-%m-%d %H:%M:%S")
+    if isinstance(v, datetime.date):
+        return v.strftime("%Y-%m-%d")
     return v
 
 

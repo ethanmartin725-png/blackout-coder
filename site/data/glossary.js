@@ -573,3 +573,28 @@ BC.addGlossary("dax", [
   ["args", "Argument line", "One or more arguments of the function above, on their own line.", "^\\s*[\\[\"]"],
 ]);
 
+BC.addGlossary("m", [
+  ["let", "let … in", "Named steps, then in names the result."],
+  ["in", "let … in", "Named steps, then in names the result."],
+  ["step", "Step = …", "One named step of the query.", "^\\s*#?\"?[A-Za-z][\\w ]*\"?\\s*=\\s"],
+  ["Sql.Database", "Sql.Database(server, database)", "Connects to SQL Server and returns its navigation table."],
+  ["Table.SelectRows", "Table.SelectRows", "Keeps the rows where the condition is true."],
+  ["Table.AddColumn", "Table.AddColumn", "Adds a column worked out row by row."],
+  ["Table.SelectColumns", "Table.SelectColumns", "Keeps only the columns listed."],
+  ["Table.Group", "Table.Group", "One row per key, with aggregations worked out on each group."],
+  ["Table.Sort", "Table.Sort", "Sorts by the columns listed."],
+  ["Table.NestedJoin", "Table.NestedJoin", "Joins two tables; matches go into a column of tables."],
+  ["Table.ExpandTableColumn", "Table.ExpandTableColumn", "Opens a column of tables into ordinary columns."],
+  ["Table.FromList", "Table.FromList", "A list into a table."],
+  ["Table.TransformColumnTypes", "Table.TransformColumnTypes", "Sets column types, such as date or number."],
+  ["List.Dates", "List.Dates", "A list of dates from a start, a count and a step."],
+  ["each", "each", "A function of the current row; [column] reads its fields."],
+  ["#datetime", "#datetime(…)", "A date and time value."],
+  ["#date", "#date(y, m, d)", "A date value."],
+  ["#duration", "#duration(d, h, m, s)", "A length of time."],
+  ["Duration.TotalMinutes", "Duration.TotalMinutes", "A duration in minutes."],
+  ["Date.DayOfWeekName", "Date.DayOfWeekName", "The weekday's name."],
+  ["navigation", "Navigation", "Picks one table from the navigation table.", "\\{\\[Schema"],
+  ["result", "Result step", "The step the query returns.", "^\\s*#?\"?[A-Za-z][\\w ]*\"?\\s*$"],
+]);
+

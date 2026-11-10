@@ -10,6 +10,8 @@ import { runPlcTests } from "./plc-tests.mjs";
 import { runProgressTests } from "./progress-tests.mjs";
 import { runExplainTests } from "./explain-tests.mjs";
 import { runDaxTests } from "./dax-tests.mjs";
+import { runPqTests } from "./pq-tests.mjs";
+import { trackOutputs as pbiOutputs } from "./output-checks/pq/lane.mjs";
 import { lessonOutputs as daxOutputs } from "./output-checks/dax/lane.mjs";
 import { routineCode, PLC_LANGS } from "./output-checks/plc/lessons.mjs";
 
@@ -237,6 +239,16 @@ for (const f of runExplainTests(BCcore)) fail(`Explain test: ${f}`);
 // PlantDB snapshot. The SQL twins need SQL Server, so they run in tools/output-checks/dax/run.mjs.
 for (const f of runDaxTests()) fail(`DAX model test: ${f}`);
 let daxRun = 0;
+for (const f of runPqTests()) fail(`M model test: ${f}`);
+// Tracks whose steps carry pq (Power Query) fields: outputs from the M and DAX models.
+for (const tr of BC.tracks.filter((t) => t.lessons.some((l) => l.pq))) {
+  for (const r of pbiOutputs(tr.lessons)) {
+    daxRun++;
+    const where = `${tr.id} "${r.t}"`;
+    if (r.error) fail(`${where}: the M/DAX model refused it: ${r.error}`);
+    else if (r.out !== tr.lessons.find((l) => l.t === r.t).out) fail(`${where}: stored output does not match the models. Run node tools/output-checks/pq/run.mjs`);
+  }
+}
 for (const lane of BC.lanes.filter((l) => l.lang === "dax")) {
   for (const r of daxOutputs(lane.lessons)) {
     daxRun++;
@@ -316,7 +328,7 @@ else {
   }
 }
 
-const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds, ${nativeCount.cpp} C++ and ${nativeCount.java} Java compiles, ${ladderParsed} ladder and ${stParsed} Structured Text parses, ${plcSims} PLC scenarios, ${daxRun} DAX outputs, ${glossHit}/${glossLines} code lines explained (${(100 * glossHit / Math.max(1, glossLines)).toFixed(1)}%)`;
+const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds, ${nativeCount.cpp} C++ and ${nativeCount.java} Java compiles, ${ladderParsed} ladder and ${stParsed} Structured Text parses, ${plcSims} PLC scenarios, ${daxRun} DAX and M outputs, ${glossHit}/${glossLines} code lines explained (${(100 * glossHit / Math.max(1, glossLines)).toFixed(1)}%)`;
 for (const w of warns) console.warn("warn  " + w);
 if (errors.length) { for (const e of errors) console.error("FAIL  " + e); console.error(`\n${errors.length} problem(s). ${summary}`); process.exit(1); }
 console.log(`All lessons pass. ${summary}`);

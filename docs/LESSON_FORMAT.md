@@ -122,6 +122,10 @@ dax: { card: ["Worst Machine", "Loss Dollars"], format: { "Loss Dollars": "$#,0"
 
 The code is definitions: `Name = …` for a measure, `table[column] = …` for a calculated column. Each lesson is evaluated with every earlier lesson's definitions. Write the lesson, add its SQL twin to `tools/output-checks/dax/twins.mjs`, then run `node tools/output-checks/dax/run.mjs`. Semantics: `docs/DAX_MODEL.md`.
 
+## Power Query lessons
+
+A track step with `lang: "m"` is a named Power Query query: `file` and `pq.query` give its name, and the code is a whole `let … in` expression that may use earlier queries by name. `pq: { query: "Faults", load: true, top: 4, format: { minutes: "0.00" } }`: `load` makes the result a table of the DAX model the track's DAX steps use; `top` and `format` set the preview. Add each step's SQL twin to `tools/output-checks/pq/twins.mjs` and run `node tools/output-checks/pq/run.mjs`. Semantics: `docs/PQ_MODEL.md`.
+
 ## Glossary (explain panel)
 
 `site/data/glossary.js` defines each language's everyday words once, for the explain panel under the editor:

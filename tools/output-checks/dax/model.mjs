@@ -114,10 +114,11 @@ export function definitions(code) {
 // snapshot: { table: { columns, rows } }; dates are "YYYY-MM-DD HH:MM:SS" text.
 // relationships: [[manyTable, manyColumn, oneTable, oneColumn]], filtering one -> many only.
 const DATE_COLS = new Set(["start_ts", "end_ts", "ts"]);
-export function createModel(snapshot, relationships) {
-  const T = {};
+// opts.dateCols: column names holding "YYYY-MM-DD[ HH:MM:SS]" text to read as dates (default: PlantDB's).
+export function createModel(snapshot, relationships, opts = {}) {
+  const T = {}, dateCols = new Set(opts.dateCols || DATE_COLS);
   for (const [name, t] of Object.entries(snapshot)) {
-    T[name] = { name, cols: [...t.columns], rows: t.rows.map((r) => Object.fromEntries(t.columns.map((c, i) => [c, r[i] === null ? BLANK : DATE_COLS.has(c) ? dtFromText(r[i]) : r[i]]))) };
+    T[name] = { name, cols: [...t.columns], rows: t.rows.map((r) => Object.fromEntries(t.columns.map((c, i) => [c, r[i] === null ? BLANK : dateCols.has(c) ? dtFromText(r[i]) : r[i]]))) };
   }
   const rels = relationships.map(([mt, mc, ot, oc]) => ({ mt, mc, ot, oc }));
   const measures = new Map();
@@ -360,6 +361,19 @@ export function createModel(snapshot, relationships) {
       case "OR": return truthy(n(0)) || truthy(n(1));
       case "NOT": return !truthy(n(0));
       case "BLANK": return BLANK;
+      case "FORMAT": {
+        // A few format strings: numbers as in Power BI ("0.0%", "#,0", "$#,0", "0.00"), and dates
+        // with d, dd, mmm, mmmm, yyyy (English month names, as in an en-US report).
+        const v = n(0), f = n(1);
+        if (isBlank(v)) return "";
+        if (v instanceof DT) {
+          const d = new Date(EPOCH + secs(v) * 1000), M = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+          const out = f.replace(/yyyy|mmmm|mmm|dd|d/g, (k) => ({ yyyy: d.getUTCFullYear(), mmmm: M[d.getUTCMonth()], mmm: M[d.getUTCMonth()].slice(0, 3), dd: String(d.getUTCDate()).padStart(2, "0"), d: d.getUTCDate() })[k]);
+          if (/[a-z]/i.test(out.replace(/[A-Z][a-z]+/g, ""))) throw new NotModeled(`date format "${f}" uses parts this model does not know`);
+          return out;
+        }
+        return format(num(v, "FORMAT"), f);
+      }
       case "DISTINCTCOUNT": {
         if (!A[0].col) throw new NotModeled("DISTINCTCOUNT takes a column");
         const [t, c] = A[0].col; colCheck(t, c);

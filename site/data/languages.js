@@ -131,3 +131,10 @@ BC.addLanguage("dax", {
   "kw": "VAR RETURN CALCULATE SUM SUMX AVERAGEX COUNTROWS DIVIDE ALL FILTER VALUES IF SWITCH TRUE FALSE BLANK MAX MIN DATE TIME DATEDIFF COALESCE RANKX HASONEVALUE SECOND DISTINCTCOUNT AVERAGE HOUR YEAR MONTH DAY IN NOT KEEPFILTERS ALLEXCEPT REMOVEFILTERS TOPN CONCATENATEX ASC DESC",
   "note": "DAX: the formula language of Power BI. A measure is worked out for each cell of a visual, under that cell's filters. DAX only runs inside Power BI, so these outputs come from a teaching model of DAX, and every lesson is checked against the same question asked of SQL Server."
 });
+BC.addLanguage("m", {
+  "name": "Power Query M",
+  "short": "M",
+  "tab": 4,
+  "kw": "let in each if then else and or not null type",
+  "note": "Power Query M: the language behind Power BI's Get Data and Transform steps. A query is a let expression of named steps; each step builds on the one before. M only runs inside Power BI and Excel, so these outputs come from a teaching model of M, and every step is checked against the same question asked of SQL Server."
+});
