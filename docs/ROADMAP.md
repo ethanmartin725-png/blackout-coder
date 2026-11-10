@@ -81,7 +81,6 @@
 - [x] Hoop Driver 1 press scene (`hoop1`) and three challenges in ladder and Structured Text: interlocks, a step sequence, a misfeed fault with a step time limit.
 - [x] Eight more scene challenges in ladder and Structured Text (jam lockout with a window, behind-target lamp, air warning with hysteresis, maintenance lock after two trips, one relight then lockout, press cycle time, guard interlock with rundown, feed after spin-up) and a new stave-mill scene, Stave Jointer 1 (`jointer1`). Ladder 61, Structured Text 63.
 - [ ] More challenge lessons per scene, and scenes for new machines as lessons need them. CTUD once its Logix semantics are confirmed.
-- [ ] Ladder lesson 9 "Compare a value": in the diagram, the OTL box's "L" is drawn just outside its box (the ladder browser test flags it; seen before the scene challenges were added).
 - [x] Ladder simulation: the learner's own ladder or Structured Text drives a machine scene in the simulator (PLC interpreter phases 1 to 4).
 
 ## Known limitations

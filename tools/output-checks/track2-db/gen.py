@@ -19,6 +19,16 @@ for m,fs in freq.items():
             d=random.uniform(*types[f])
             rows.append([m,f,t.replace(microsecond=0),(t+timedelta(minutes=d)).replace(microsecond=0)])
 df=pd.DataFrame(rows,columns=['machine','fault','start_ts','end_ts']).sort_values('start_ts').reset_index(drop=True)
+# A machine cannot start a new stop while it is still stopped: a fault that would begin before the
+# same machine's previous fault ends is moved to start when that one ends, keeping its length, so no
+# downtime total changes. Only fault 21 (Hoop Driver 1, 2026-11-03) moves: it would otherwise start
+# 11 s before fault 20 ends.
+last_end={}
+for i,r in df.iterrows():
+    if r.machine in last_end and r.start_ts<last_end[r.machine]:
+        shift=last_end[r.machine]-r.start_ts
+        df.at[i,'start_ts']=r.start_ts+shift; df.at[i,'end_ts']=r.end_ts+shift
+    last_end[r.machine]=max(last_end.get(r.machine,df.at[i,'end_ts']),df.at[i,'end_ts'])
 # one open fault right now on Hoop Driver 1
 df=pd.concat([df,pd.DataFrame([['Hoop Driver 1','Hoop misfeed',datetime(2026,11,7,10,9,40),pd.NaT]],columns=df.columns)],ignore_index=True)
 df['start_ts']=pd.to_datetime(df['start_ts']);df['end_ts']=pd.to_datetime(df['end_ts'])

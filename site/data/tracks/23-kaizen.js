@@ -54,7 +54,7 @@ JOIN dim_machine AS m ON m.machine = f.machine
 WHERE f.machine = 'Hoop Driver 1' AND f.fault = 'Hoop misfeed'
     AND f.start_ts >= @start AND f.start_ts < @end
 GROUP BY m.ideal_rate_hr, m.margin_per_barrel;`,
-      about: "A kaizen starts with the problem as a number everyone accepts: 11 misfeeds, 61.23 minutes, $2,385.55 a week. That is the TPM track's figure and the Savings Tracker's P2 baseline, so the result can be checked against them later. One data note: faults 20 and 21 overlap by 11 seconds (15:33:15 against 15:33:26), so 11 seconds are counted twice. It does not move the dollars, but a real problem statement should say so rather than hide it.",
+      about: "A kaizen starts with the problem as a number everyone accepts: 11 misfeeds, 61.23 minutes, $2,385.55 a week. That is the TPM track's figure and the Savings Tracker's P2 baseline, so the result can be checked against them later. Check the events before trusting the total: no two misfeeds may overlap, since a machine cannot start a new stop while it is still stopped, and an overlap would count the same minutes twice.",
       terms: [
         ["ideal_rate_hr", "Ideal rate", "Barrels an hour the machine should make."],
         ["margin_per_barrel", "Margin", "Dollars each barrel is worth ($42.50, illustrative)."],

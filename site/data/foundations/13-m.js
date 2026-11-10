@@ -110,7 +110,7 @@ in
     Shown = Table.SelectColumns(Misfeeds, {"fault_id", "start_ts", "end_ts"})
 in
     Shown`,
-      about: "each is shorthand for a function of one row, and [machine] reads that row's machine. Table.SelectRows keeps the rows where the function returns true. Hoop Driver 1 has 12 misfeeds in fault_log: the OEE week's 11 and the one open at 10:15 on 7 November. Faults 20 and 21 overlap by 11 seconds, a quirk of the sample data worth noticing when you scan a filtered table.",
+      about: "each is shorthand for a function of one row, and [machine] reads that row's machine. Table.SelectRows keeps the rows where the function returns true. Hoop Driver 1 has 12 misfeeds in fault_log: the OEE week's 11 and the one open at 10:15 on 7 November. Scanning a filtered table is a quick data check: fault 21 starts at 15:33:26, the moment fault 20 ends and not before, since a machine cannot start a new stop while it is still stopped.",
       terms: [
         ["each", "each", "A function of the current row."],
         ["and", "and", "Both conditions must hold."],
@@ -121,7 +121,7 @@ in
        3  2026-11-01 01:04:59  2026-11-01 01:09:01
       15  2026-11-02 06:17:43  2026-11-02 06:22:47
       20  2026-11-03 15:27:12  2026-11-03 15:33:26
-      21  2026-11-03 15:33:15  2026-11-03 15:37:18
+      21  2026-11-03 15:33:26  2026-11-03 15:37:29
 12 rows, first 5 shown`,
     },
     {
