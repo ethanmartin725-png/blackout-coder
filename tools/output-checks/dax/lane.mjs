@@ -3,6 +3,8 @@
 // A lesson's `dax` field says what to show:
 //   { rows: "dim_machine[machine]", values: ["Measure", …], format: { Measure: "0.0%" } }   a table visual
 //   { table: "fault_log", columns: ["fault_id", …], top: 4, format: { column: "0.00" } }   a table's first rows
+//   { rows: ["dim_machine[machine]", "fault_log[fault]"], values: […] }   a table visual with two fields
+//   { card: ["Measure", …], format: {…} }   a card: each measure with no filter
 import fs from "node:fs";
 import path from "node:path";
 import { createModel, renderTable, BLANK, DT, format } from "./model.mjs";
@@ -24,7 +26,7 @@ export function lessonOutputs(lessons) {
       if (!l.dax) throw new Error("no dax field: say what the lesson shows");
       const m = createModel(snap, RELATIONSHIPS);
       for (const earlier of lessons.slice(0, i + 1)) m.define(earlier.code);
-      const view = l.dax.rows ? m.visual(l.dax) : m.columnRows(l.dax);
+      const view = l.dax.rows ? m.visual(l.dax) : l.dax.card ? m.card(l.dax) : m.columnRows(l.dax);
       return { t: l.t, out: renderTable(view, l.dax.format || {}), raw: view.rows.map((r) => r.map(plain)) };
     } catch (e) {
       return { t: l.t, error: e.message };

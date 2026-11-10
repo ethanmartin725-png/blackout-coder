@@ -128,6 +128,6 @@ BC.addLanguage("dax", {
   "name": "DAX",
   "short": "DAX",
   "tab": 4,
-  "kw": "VAR RETURN CALCULATE SUM SUMX AVERAGEX COUNTROWS DIVIDE ALL FILTER VALUES IF SWITCH TRUE FALSE BLANK MAX MIN DATE TIME DATEDIFF COALESCE RANKX HASONEVALUE SECOND",
+  "kw": "VAR RETURN CALCULATE SUM SUMX AVERAGEX COUNTROWS DIVIDE ALL FILTER VALUES IF SWITCH TRUE FALSE BLANK MAX MIN DATE TIME DATEDIFF COALESCE RANKX HASONEVALUE SECOND DISTINCTCOUNT AVERAGE HOUR YEAR MONTH DAY IN NOT KEEPFILTERS ALLEXCEPT REMOVEFILTERS TOPN CONCATENATEX ASC DESC",
   "note": "DAX: the formula language of Power BI. A measure is worked out for each cell of a visual, under that cell's filters. DAX only runs inside Power BI, so these outputs come from a teaching model of DAX, and every lesson is checked against the same question asked of SQL Server."
 });

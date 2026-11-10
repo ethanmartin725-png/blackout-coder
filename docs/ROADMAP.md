@@ -34,7 +34,7 @@
   - [x] C++ 50
   - [x] Java 50
   - [x] Ignition 50
-  - [ ] DAX 20 of 50 (stage 1: measures, filter context, CALCULATE, OEE, RANKX; outputs from a teaching model checked against SQL twins)
+  - [x] DAX 50: measures, filter context, CALCULATE patterns (ALL, ALLEXCEPT, KEEPFILTERS, FILTER), OEE and loss dollars, shift and date windows, RANKX, TOPN, CONCATENATEX; outputs from a teaching model, every lesson checked against a SQL twin
   - [x] Structured Text 52, with four user-defined type lessons; CTUD and REAL-to-DINT rounding (stage 3) still wait on 1756-RM003
 - [ ] Many more lessons across every lane and track. Owner's goal: a large library, so keep new content on the canonical sample plant and generate outputs by running the code.
 - [x] Phone layout for the simulator scenes: below 600px each scene draws a compact 440-wide layout (the conveyor shows the belt from the eye on), so nothing scrolls sideways. Drawing only; the scene physics are the same at every width.

@@ -106,6 +106,47 @@ export function runDaxTests() {
   t("a condition on dates compares the instant", () => (model("Late = CALCULATE(COUNTROWS(fact), fact[ts] >= DATE(2026,11,3) + TIME(6,0,0))").evaluate("[Late]") === 3 ? "" : "wrong"));
   t("formats: percent, thousands, currency", () => [format(0.7381, "0.0%"), format(251876.4, "$#,0"), format(20510, "#,0"), format(87.049997, "0.00")].join(" ") === "73.8% $251,876 20,510 87.05" ? "" : "wrong");
   t("a value on an exact half is refused rather than rounded one way", () => throws(() => format(70.05, "0.0"), "on a half"));
+  // Stage 2
+  t("DISTINCTCOUNT counts the different values visible", () => {
+    const got = vis(model("Machines = DISTINCTCOUNT(fact[m])"), "fact[kind]", ["Machines"]);
+    return got === "Air:2 Jam:2 Total:2" ? "" : got;
+  });
+  t("HOUR, YEAR, MONTH and DAY take a date apart", () => {
+    const m = model("H = HOUR(DATE(2026,11,7) + TIME(22,5,0))\nD = DAY(DATE(2026,11,7) + TIME(22,5,0)) + 100 * MONTH(DATE(2026,11,7)) + 10000 * YEAR(DATE(2026,11,7))");
+    return m.evaluate("[H]") === 22 && m.evaluate("[D]") === 20261107 ? "" : `${m.evaluate("[H]")} ${m.evaluate("[D]")}`;
+  });
+  t("a date minus a time stays a date", () => {
+    const m = model("fact[sd] = VAR t = fact[ts] - TIME(6, 0, 0) RETURN DATE(YEAR(t), MONTH(t), DAY(t))\nFirst = MIN(fact[sd])");
+    return format(m.evaluate("[First]")) === "2026-11-01" ? "" : format(m.evaluate("[First]"));
+  });
+  t("IN { … } matches any value in the list", () => (model("JA = CALCULATE(SUM(fact[mins]), fact[kind] IN {\"Jam\", \"Air\"})\nJ = CALCULATE(SUM(fact[mins]), fact[kind] IN {\"Jam\"})").evaluate("[JA]") === 24 ? "" : "wrong"));
+  t("KEEPFILTERS keeps the visual's filter; a plain condition replaces it", () => {
+    const got = vis(model("Jam Plain = CALCULATE(SUM(fact[mins]), fact[kind] = \"Jam\")\nJam Keep = CALCULATE(SUM(fact[mins]), KEEPFILTERS(fact[kind] = \"Jam\"))"), "fact[kind]", ["Jam Plain", "Jam Keep"]);
+    return got === "Air:15:_ Jam:15:15 Total:15:15" ? "" : got;
+  });
+  t("ALLEXCEPT keeps only the named columns' filters", () => {
+    const m = model("Mins = SUM(fact[mins])\nMachine Mins = CALCULATE([Mins], ALLEXCEPT(fact, dim[m]))");
+    const got = m.visual({ rows: ["dim[m]", "fact[kind]"], values: ["Mins", "Machine Mins"] }).rows.map((r) => r.join(":")).join(" ");
+    return got === "A:Air:6:10 A:Jam:4:10 B:Air:3:14 B:Jam:11:14 Total::24:24" ? "" : got;
+  });
+  t("ALLEXCEPT on the fact's own column loses the dimension's filter", () => {
+    const got = vis(model("Mins = SUM(fact[mins])\nWrong = CALCULATE([Mins], ALLEXCEPT(fact, fact[m]))"), "dim[m]", ["Wrong"]);
+    return got === "A:24 B:24 Total:24" ? "" : got;
+  });
+  t("TOPN keeps the largest, and every row tied with the last", () => {
+    const m = model("Mins = SUM(fact[mins])\nTop = CONCATENATEX(TOPN(1, VALUES(fact[kind]), [Mins]), fact[kind], \", \")\nTie = COUNTROWS(TOPN(1, VALUES(fact[m]), 5))");
+    return m.evaluate("[Top]") === "Jam" && m.evaluate("[Tie]") === 2 ? "" : `${m.evaluate("[Top]")} ${m.evaluate("[Tie]")}`;
+  });
+  t("CONCATENATEX joins in the order asked", () => (model("L = CONCATENATEX(VALUES(fact[kind]), fact[kind], \", \", fact[kind], DESC)").evaluate("[L]") === "Jam, Air" ? "" : "wrong"));
+  t("CONCATENATEX without an order is refused: DAX promises none", () => throws(() => model("L = CONCATENATEX(VALUES(fact[kind]), fact[kind], \", \")").evaluate("[L]"), "does not promise", NotModeled));
+  t("a table visual with two fields shows each pair that has a value", () => {
+    const got = model("Mins = SUM(fact[mins])").visual({ rows: ["dim[m]", "fact[kind]"], values: ["Mins"] }).rows.map((r) => r.join(":")).join(" ");
+    return got === "A:Air:6 A:Jam:4 B:Air:3 B:Jam:11 Total::24" ? "" : got;
+  });
+  t("a card shows each measure with no filter", () => {
+    const got = model("Mins = SUM(fact[mins])").card({ card: ["Mins"] }).rows.map((r) => r.join(":")).join(" ");
+    return got === "Mins:24" ? "" : got;
+  });
   t("a function outside the model is refused", () => throws(() => model("X = TOTALYTD(1, 2)").evaluate("[X]"), "not in this model", NotModeled));
   return fails;
 }

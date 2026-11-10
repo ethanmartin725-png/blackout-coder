@@ -16,7 +16,7 @@ const secs = (dt) => Math.round(dt.d * 86400);
 const dtText = (dt) => new Date(EPOCH + secs(dt) * 1000).toISOString().slice(0, 19).replace("T", " ");
 
 /* ---------- tokens and parser ---------- */
-const TOK = /\s+|\/\/[^\n]*|--[^\n]*|\/\*[\s\S]*?\*\/|("(?:[^"]|"")*")|('(?:[^']|'')+'|[A-Za-z_][\w.]*)?\[([^\]]+)\]|(\d+(?:\.\d+)?)|([A-Za-z_][\w.]*)|(<>|<=|>=|==|&&|\|\||[-+*/&=<>(),^])/y;
+const TOK = /\s+|\/\/[^\n]*|--[^\n]*|\/\*[\s\S]*?\*\/|("(?:[^"]|"")*")|('(?:[^']|'')+'|[A-Za-z_][\w.]*)?\[([^\]]+)\]|(\d+(?:\.\d+)?)|([A-Za-z_][\w.]*)|(<>|<=|>=|==|&&|\|\||[-+*/&=<>(),^{}])/y;
 function tokenize(src) {
   const out = []; let m; TOK.lastIndex = 0;
   while (TOK.lastIndex < src.length) {
@@ -49,8 +49,17 @@ export function parse(src) {
   function bin(l) {
     if (l === LEVELS.length) return unary();
     let e = bin(l + 1);
-    while (t[p] && t[p].k === "op" && LEVELS[l].includes(t[p].v)) { const op = t[p++].v; e = { op, a: e, b: bin(l + 1) }; }
-    return e;
+    for (;;) {
+      if (t[p] && t[p].k === "op" && LEVELS[l].includes(t[p].v)) { const op = t[p++].v; e = { op, a: e, b: bin(l + 1) }; continue; }
+      // x IN { a, b, … }: at the same level as the comparisons
+      if (l === 2 && isId("IN")) {
+        p++; expectOp("{"); const list = [];
+        if (!isOp("}")) { do { list.push(bin(3)); } while (isOp(",") && ++p); }
+        expectOp("}");
+        e = { inList: list, a: e }; continue;
+      }
+      return e;
+    }
   }
   function unary() {
     if (isOp("-")) { p++; return { neg: unary() }; }
@@ -151,7 +160,10 @@ export function createModel(snapshot, relationships) {
     if (a instanceof DT || b instanceof DT) {
       if (op === "+" && a instanceof DT && b instanceof DT) return new DT(a.d + b.d); // DATE(…) + TIME(…)
       if (op === "+" && a instanceof DT && typeof b === "number") return new DT(a.d + b);
-      throw new NotModeled(`date arithmetic ${op} is not modeled beyond DATE(…) + TIME(…)`);
+      // A date-time minus a time or a number of days is a date-time, as DAX gives it.
+      if (op === "-" && a instanceof DT && b instanceof DT) return new DT(a.d - b.d);
+      if (op === "-" && a instanceof DT && typeof b === "number") return new DT(a.d - b);
+      throw new NotModeled(`date arithmetic ${op} is not modeled`);
     }
     if (op === "+" || op === "-") { if (isBlank(a) && isBlank(b)) return BLANK; const x = num(a, op), y = num(b, op); return op === "+" ? x + y : x - y; }
     if (op === "*") { if (isBlank(a) || isBlank(b)) return BLANK; return num(a, op) * num(b, op); }
@@ -201,10 +213,36 @@ export function createModel(snapshot, relationships) {
       }
       return src.kind === "phys" ? { ...src, rows: keep } : { ...src, values: keep };
     }
+    if (e.fn === "TOPN") {
+      // TOPN(n, table, expression): the rows with the n largest values. Rows tied with the last one
+      // are all kept, as in DAX, so it can return more than n.
+      if (e.args.length !== 3) throw new NotModeled("TOPN(n, table, expression) is the form modeled (largest first)");
+      const k = num(ev(e.args[0], ctx), "TOPN"), src = tableOf(e.args[1], ctx), items = src.kind === "phys" ? src.rows : src.values;
+      const scored = iterate(src).map((rc, i) => [items[i], num(ev(e.args[2], { ...ctx, rows: [...ctx.rows, rc] }), "TOPN")]).sort((a, b) => b[1] - a[1]);
+      const cut = scored.length > k ? scored[k - 1][1] : -Infinity, keep = scored.filter(([, v]) => v >= cut).map(([x]) => x);
+      return src.kind === "phys" ? { ...src, rows: keep } : { ...src, values: keep };
+    }
     throw new NotModeled(`a table expression ${e.fn || e.name || "here"} is not modeled`);
   }
   const distinct = (vals) => { const seen = new Map(); for (const v of vals) if (!seen.has(keyOf(v))) seen.set(keyOf(v), v); return [...seen.values()]; };
   const iterate = (tv) => (tv.kind === "phys" ? tv.rows.map((idx) => ({ kind: "phys", table: tv.table, idx })) : tv.values.map((value) => ({ kind: "col", table: tv.table, col: tv.col, value })));
+
+  // A boolean on one column, as a CALCULATE filter: FILTER(ALL(table[column]), condition).
+  function columnCondition(a, ctx) {
+    const cols = new Map(); let measureRef = false;
+    (function walk(n) {
+      if (!n || typeof n !== "object") return;
+      if (n.col) cols.set(n.col.join("|"), n.col);
+      if (n.bare && measures.has(n.bare)) measureRef = true;
+      for (const v of Object.values(n)) if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === "object") walk(v);
+    })(a);
+    if (measureRef) throw new NotModeled("a measure inside a CALCULATE condition is not allowed in DAX; use FILTER");
+    if (cols.size !== 1) throw new NotModeled("a CALCULATE condition must use exactly one column; use FILTER for more");
+    const [t, c] = [...cols.values()][0]; colCheck(t, c);
+    const all = distinct(table(t).rows.map((r) => r[c]));
+    const keep = all.filter((v) => truthy(ev(a, { ...ctx, rows: [...ctx.rows, { kind: "col", table: t, col: c, value: v }] })));
+    return { kind: "col", table: t, col: c, values: new Set(keep.map(keyOf)) };
+  }
 
   /* CALCULATE */
   // 1. filter arguments are evaluated in the outer context; 2. context transition turns each row
@@ -219,25 +257,25 @@ export function createModel(snapshot, relationships) {
         else throw new NotModeled("ALL here needs a table or a column");
         continue;
       }
+      if (a.fn === "ALLEXCEPT") {
+        const [tb, ...keep] = a.args;
+        if (!tb.name || !keep.length || keep.some((k) => !k.col)) throw new NotModeled("ALLEXCEPT(table, column, …) is the form modeled");
+        table(tb.name); keep.forEach((k) => colCheck(k.col[0], k.col[1]));
+        removals.push({ table: tb.name, col: null, except: keep.map((k) => k.col.join("|")) });
+        continue;
+      }
+      if (a.fn === "KEEPFILTERS") {
+        const inner = a.args[0];
+        if (inner.fn) throw new NotModeled("KEEPFILTERS is modeled around a condition on one column");
+        adds.push({ ...columnCondition(inner, ctx), keep: true });
+        continue;
+      }
       if (a.fn === "FILTER" || a.fn === "VALUES" || (a.fn === "ALL")) {
         const tv = tableOf(a, ctx);
         adds.push(tv.kind === "phys" ? { kind: "rows", table: tv.table, rows: new Set(tv.rows) } : { kind: "col", table: tv.table, col: tv.col, values: new Set(tv.values.map(keyOf)) });
         continue;
       }
-      // A boolean on one column: FILTER(ALL(table[column]), condition).
-      const cols = new Map(); let measureRef = false;
-      (function walk(n) {
-        if (!n || typeof n !== "object") return;
-        if (n.col) cols.set(n.col.join("|"), n.col);
-        if (n.bare && measures.has(n.bare)) measureRef = true;
-        for (const v of Object.values(n)) if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === "object") walk(v);
-      })(a);
-      if (measureRef) throw new NotModeled("a measure inside a CALCULATE condition is not allowed in DAX; use FILTER");
-      if (cols.size !== 1) throw new NotModeled("a CALCULATE condition must use exactly one column; use FILTER for more");
-      const [t, c] = [...cols.values()][0]; colCheck(t, c);
-      const all = distinct(table(t).rows.map((r) => r[c]));
-      const keep = all.filter((v) => truthy(ev(a, { ...ctx, rows: [...ctx.rows, { kind: "col", table: t, col: c, value: v }] })));
-      adds.push({ kind: "col", table: t, col: c, values: new Set(keep.map(keyOf)) });
+      adds.push(columnCondition(a, ctx));
     }
     let filters = [...ctx.filters];
     for (const r of ctx.rows) {
@@ -245,13 +283,18 @@ export function createModel(snapshot, relationships) {
       else filters = [...filters.filter((f) => !(f.kind === "col" && f.table === r.table && f.col === r.col)), { kind: "col", table: r.table, col: r.col, values: new Set([keyOf(r.value)]) }];
     }
     for (const rm of removals) {
-      if (rm.col === null) { const gone = expands(rm.table); filters = filters.filter((f) => !gone.includes(f.table)); }
+      if (rm.col === null) {
+        // ALL(table) and ALLEXCEPT(table, …) reach the tables the table expands to.
+        const gone = expands(rm.table), kept = rm.except || [];
+        filters = filters.filter((f) => !gone.includes(f.table) || (f.kind === "col" && kept.includes(`${f.table}|${f.col}`)));
+      }
       else {
         if (filters.some((f) => f.kind === "rows" && f.table === rm.table)) throw new NotModeled(`ALL(${rm.table}[${rm.col}]) on top of a filter on whole ${rm.table} rows is not modeled`);
         filters = filters.filter((f) => !(f.kind === "col" && f.table === rm.table && f.col === rm.col));
       }
     }
-    for (const a of adds) if (a.kind === "col") filters = filters.filter((f) => !(f.kind === "col" && f.table === a.table && f.col === a.col));
+    // A new filter replaces the context's filters on its column; KEEPFILTERS keeps them, so both apply.
+    for (const a of adds) if (a.kind === "col" && !a.keep) filters = filters.filter((f) => !(f.kind === "col" && f.table === a.table && f.col === a.col));
     filters.push(...adds);
     return ev(exprNode, { filters, rows: [], vars: ctx.vars, depth: (ctx.depth || 0) + 1 });
   }
@@ -281,6 +324,7 @@ export function createModel(snapshot, relationships) {
     }
     if (e.col) return colValue(ctx, e.col[0], e.col[1]);
     if (e.neg) { const v = ev(e.neg, ctx); return isBlank(v) ? BLANK : -num(v, "-"); }
+    if (e.inList) { const v = ev(e.a, ctx); return e.inList.some((x) => compare("=", v, ev(x, ctx))); }
     if (e.op) {
       if (e.op === "&&") return truthy(ev(e.a, ctx)) && truthy(ev(e.b, ctx));
       if (e.op === "||") return truthy(ev(e.a, ctx)) || truthy(ev(e.b, ctx));
@@ -316,6 +360,29 @@ export function createModel(snapshot, relationships) {
       case "OR": return truthy(n(0)) || truthy(n(1));
       case "NOT": return !truthy(n(0));
       case "BLANK": return BLANK;
+      case "DISTINCTCOUNT": {
+        if (!A[0].col) throw new NotModeled("DISTINCTCOUNT takes a column");
+        const [t, c] = A[0].col; colCheck(t, c);
+        const k = distinct(visible(t, ctx.filters).map((i) => table(t).rows[i][c])).length;
+        return k ? k : BLANK;
+      }
+      case "HOUR": case "YEAR": case "MONTH": case "DAY": {
+        const v = n(0); if (isBlank(v)) return BLANK;
+        if (!(v instanceof DT)) throw new NotModeled(`${f} needs a date`);
+        const d = new Date(EPOCH + secs(v) * 1000);
+        return { HOUR: d.getUTCHours(), YEAR: d.getUTCFullYear(), MONTH: d.getUTCMonth() + 1, DAY: d.getUTCDate() }[f];
+      }
+      case "CONCATENATEX": {
+        // CONCATENATEX(table, expression, delimiter, orderBy, ASC|DESC). DAX promises no order without
+        // orderBy, so more than one row without it is refused.
+        const tv = tableOf(A[0], ctx), rcs = iterate(tv);
+        const delim = A[2] ? n(2) : "";
+        let items = rcs.map((rc) => ({ v: ev(A[1], { ...ctx, rows: [...ctx.rows, rc] }), o: A[3] ? ev(A[3], { ...ctx, rows: [...ctx.rows, rc] }) : null }));
+        if (A[3]) { const desc = A[4] && A[4].name && A[4].name.toUpperCase() === "DESC"; items.sort((a, b) => (compare("<", a.o, b.o) ? -1 : compare(">", a.o, b.o) ? 1 : 0) * (desc ? -1 : 1)); }
+        else if (items.length > 1) throw new NotModeled("CONCATENATEX without an order: DAX does not promise one; add orderBy and ASC or DESC");
+        const parts = items.map((x) => (isBlank(x.v) ? "" : String(x.v)));
+        return parts.length ? parts.join(delim) : BLANK;
+      }
       case "ISBLANK": return isBlank(n(0));
       case "COALESCE": { for (let i = 0; i < A.length; i++) { const v = n(i); if (!isBlank(v)) return v; } return BLANK; }
       case "ROUND": { const v = n(0); if (isBlank(v)) return BLANK; const k = 10 ** num(n(1), "ROUND"), x = num(v, "ROUND") * k; return Math.sign(x) * Math.round(Math.abs(x) + 1e-9) / k; }
@@ -369,15 +436,26 @@ export function createModel(snapshot, relationships) {
     evaluate(src, filters = []) { return ev(parse(src), { filters, rows: [], vars: new Map() }); },
     // A table visual: one row per value of the rows column (sorted, rows where every value is
     // blank hidden, as Power BI does), then the Total row, evaluated with no filter at all.
+    // rows: one column, or several (a table visual with two fields: every combination that has a
+    // value, sorted by the first field then the next).
     visual({ rows, values }) {
-      const [t, c] = /^(\w+)\[([^\]]+)\]$/.exec(rows).slice(1);
-      colCheck(t, c);
-      const keys = distinct(table(t).rows.map((r) => r[c])).sort((a, b) => (keyOf(a) < keyOf(b) ? -1 : 1));
+      const cols = (Array.isArray(rows) ? rows : [rows]).map((r) => { const m = /^(\w+)\[([^\]]+)\]$/.exec(r); colCheck(m[1], m[2]); return [m[1], m[2]]; });
+      const sortKey = (v) => (typeof v === "number" ? String(v).padStart(20, "0") : keyOf(v));
+      const keysOf = ([t, c]) => distinct(table(t).rows.map((r) => r[c])).sort((a, b) => (sortKey(a) < sortKey(b) ? -1 : 1));
+      let combos = [[]];
+      for (const col of cols) combos = combos.flatMap((cb) => keysOf(col).map((k) => [...cb, k]));
       const run = (filters) => values.map((m) => { if (!measures.has(m)) throw new Error(`there is no measure [${m}]`); return calculate(measures.get(m), [], { filters, rows: [], vars: new Map() }); });
       const out = [];
-      for (const k of keys) { const vs = run([{ kind: "col", table: t, col: c, values: new Set([keyOf(k)]) }]); if (vs.some((v) => !isBlank(v))) out.push([k, ...vs]); }
-      out.push(["Total", ...run([])]);
-      return { header: [c, ...values], rows: out };
+      for (const cb of combos) {
+        const vs = run(cb.map((k, i) => ({ kind: "col", table: cols[i][0], col: cols[i][1], values: new Set([keyOf(k)]) })));
+        if (vs.some((v) => !isBlank(v))) out.push([...cb, ...vs]);
+      }
+      out.push(["Total", ...cols.slice(1).map(() => ""), ...run([])]);
+      return { header: [...cols.map(([, c]) => c), ...values], rows: out, keys: cols.length };
+    },
+    // A card visual: each measure with no filter, one line each.
+    card({ card }) {
+      return { header: ["measure", "value"], rows: card.map((m) => { if (!measures.has(m)) throw new Error(`there is no measure [${m}]`); return [m, calculate(measures.get(m), [], { filters: [], rows: [], vars: new Map() })]; }), keys: 1 };
     },
     columnRows({ table: t, columns, top }) {
       const tb = table(t); columns.forEach((c) => colCheck(t, c));
@@ -390,7 +468,7 @@ export function createModel(snapshot, relationships) {
 // Power BI-style format strings used by the lessons: "0", "0.00", "#,0", "#,0.00", "$#,0", "$#,0.00", "0.0%".
 export function format(v, fmt) {
   if (isBlank(v)) return "";
-  if (v instanceof DT) return dtText(v);
+  if (v instanceof DT) return secs(v) % 86400 === 0 ? dtText(v).slice(0, 10) : dtText(v);
   if (typeof v === "boolean") return v ? "True" : "False";
   if (typeof v === "string") return v;
   if (!fmt) return String(Number(v.toPrecision(12)));
@@ -407,10 +485,12 @@ export function format(v, fmt) {
   return (neg ? "-" : "") + m[1] + i + (f ? "." + f : "") + m[4];
 }
 export function renderTable({ header, rows }, formats = {}) {
-  const cells = [header, ...rows.map((r) => r.map((v, i) => (i === 0 ? format(v) : format(v, formats[header[i]]))))];
+  // A card's rows are measures, so each value takes its own measure's format.
+  const card = header[0] === "measure";
+  const cells = [header, ...rows.map((r) => r.map((v, i) => (i === 0 ? format(v) : format(v, card ? formats[r[0]] : formats[header[i]]))))];
   const w = header.map((_, i) => Math.max(...cells.map((r) => r[i].length)));
   // Numbers line up on the right, text on the left, as in a Power BI table.
-  const right = header.map((_, i) => i > 0 && rows.every((r) => typeof r[i] === "number" || r[i] === BLANK));
+  const right = header.map((_, i) => i > 0 && rows.every((r) => typeof r[i] === "number" || r[i] === BLANK || r[i] === ""));
   return cells.map((r) => r.map((s, i) => (right[i] ? s.padStart(w[i]) : s.padEnd(w[i]))).join("  ").trimEnd()).join("\n");
 }
 export { isBlank, dtFromText };
