@@ -13,6 +13,7 @@
 #     Spend track: PURCHASING_DDL and seeded_purchasing() below, all illustrative
 #   - machine_event for the Automated Capture track: seeded_events() below, partly illustrative
 #   - work_order for the Maintenance / CMMS track: WORK_ORDER_DDL and seeded_work_orders() below, illustrative
+#   - stock_move for the Inventory / WIP track: STOCK_MOVE_DDL and seeded_stock() below, illustrative
 #   - char_depth for the SPC track: CHAR_DEPTH_DDL and seeded_char_depth() below, illustrative
 # A lesson that itself creates a table runs against an empty database instead.
 #
@@ -321,6 +322,81 @@ def seeded_work_orders():
     return sorted(rows, key=lambda r: r[6])
 
 
+# Stock movements for the Inventory / WIP track. The track's first step types this same CREATE
+# (build22.py checks they match). Illustrative.
+STOCK_MOVE_DDL = """CREATE TABLE stock_move (
+    move_id INT IDENTITY(1,1) PRIMARY KEY,
+    item_no VARCHAR(8) NOT NULL,
+    move_ts DATETIME NOT NULL,
+    kind VARCHAR(10) NOT NULL,
+    qty DECIMAL(12,2) NOT NULL,
+    po_no INT NULL,
+    line INT NULL,
+    wo_id INT NULL,
+    note VARCHAR(60) NULL
+);"""
+
+
+def seeded_stock():
+    """Stock movements, 2026-10-01 06:00 to 2026-11-07 06:00: opening balances, receipts, issues and
+    two cycle-count adjustments. qty is signed: in is positive, out negative. Illustrative except where noted.
+      - Receipts: every po_line, received at 10:00 on its invoice date (two days after the PO), at the
+        PO quantity. The 10-15 Hollow Creek invoice bills 36,000 staves against 35,000 received. The
+        11-05 PO arrives 11-07 10:00, after "now".
+      - Issues: one backflush per production day (06:00 to 06:00), posted at the day's end. Staves and
+        hoops by Hoop Driver 1's barrels at the Procurement track's bill of materials (53-gal 33 staves
+        and 6 hoops, 30-gal 22 and 4); propane at 0.46 gal per Char Station 2 barrel (illustrative).
+        In the OEE week the barrels are count_log's, and the 53-gal mix is 4,700 of 6,410 to the
+        barrel, so hoop issues are 28,200 and 6,840, the Procurement track's figures. The 30 days
+        before use illustrative daily barrels with seeded noise.
+      - MRO parts are issued to the Maintenance track's work orders: a photo eye to fault 29's
+        repair, 8 quick-release clamps to the clamp improvement.
+      - Cycle count before 06:00 on 11-07: 53-gal hoops 66 short (about a set per misfeed, illustrative)
+        and 53-gal staves 450 short."""
+    import random
+    rows = []
+    D = datetime.datetime
+    for item, qty in (("STV-53", 210000), ("STV-30", 52000), ("HP-53", 36000), ("HP-30", 9000), ("LPG", 4500), ("EYE-PE", 2)):
+        rows.append((item, D(2026, 10, 1, 6), "opening", qty, None, None, None, "Opening balance"))
+    for po_no, line, item, _sup, qty, _price, when in [r for t, rr in seeded_purchasing() if t == "po_line" for r in rr]:
+        rows.append((item, D.combine(when + datetime.timedelta(days=2), datetime.time(10)), "receipt", qty, po_no, line, None, None))
+    # Daily barrels: the OEE week from count_log (the v_hourly_barrels rule), the 30 days before illustrative
+    start = D(2026, 10, 31, 6)
+    daily = {"Hoop Driver 1": [0] * 7, "Char Station 2": [0] * 7}
+    prev = {}
+    for machine, barrels, _state, ts in sorted(seeded_counts(), key=lambda r: (r[0], r[3])):
+        made = 0 if machine not in prev else (barrels if barrels < prev[machine] else barrels - prev[machine])
+        prev[machine] = barrels
+        k = int(((ts - start).total_seconds() - 1) // 86400)
+        if machine in daily and start < ts <= start + datetime.timedelta(days=7):
+            daily[machine][k] += made
+    rng = random.Random(2026)
+    days = []
+    for n in range(30):
+        hd = round(rng.gauss(916, 60))
+        days.append((D(2026, 10, 1, 6) + datetime.timedelta(days=n), hd, round(hd * rng.gauss(4700 / 6410, 0.04)), round(rng.gauss(997, 50))))
+    cum = 0
+    for n in range(7):
+        hd = daily["Hoop Driver 1"][n]
+        before = round(cum * 4700 / 6410)
+        cum += hd
+        days.append((start + datetime.timedelta(days=n), hd, round(cum * 4700 / 6410) - before, daily["Char Station 2"][n]))
+    for day, hd, b53, char in days:
+        end = day + datetime.timedelta(days=1)
+        b30 = hd - b53
+        for item, q in (("STV-53", 33 * b53), ("STV-30", 22 * b30), ("HP-53", 6 * b53), ("HP-30", 4 * b30), ("LPG", round(0.46 * char, 1))):
+            rows.append((item, end, "issue", -q, None, None, None, f"Backflush {day:%m-%d}: {hd} barrels"))
+    wos = seeded_work_orders()
+    for wo_id, w in enumerate(wos, start=1):
+        if w[4] == 29:
+            rows.append(("EYE-PE", w[8], "issue", -1, None, None, wo_id, "Fault 29 repair"))
+        if w[2] == "Fit quick-release guide clamps":
+            rows.append(("QR-CL", w[8], "issue", -8, None, None, wo_id, "Clamp improvement"))
+    rows.append(("HP-53", D(2026, 11, 7, 5, 30), "count", -66, None, None, None, "Cycle count: bent hoops not scrapped"))
+    rows.append(("STV-53", D(2026, 11, 7, 5, 30), "count", -450, None, None, None, "Cycle count: staves rejected at raising"))
+    return sorted(rows, key=lambda r: (r[1], r[0]))
+
+
 def statements(sql):
     """Split on a semicolon at the end of a line. Fine for these lessons; not a general SQL parser."""
     return [s.strip() for s in re.split(r";[ \t]*(?:\n|$)", sql) if s.strip()]
@@ -378,6 +454,8 @@ if not creates_table:
         cur.execute(s)
     for name, rows in seeded_purchasing():
         cur.executemany(f"INSERT INTO {name} VALUES ({', '.join(['%s'] * len(rows[0]))})", rows)
+    cur.execute(STOCK_MOVE_DDL)
+    cur.executemany("INSERT INTO stock_move (item_no, move_ts, kind, qty, po_no, line, wo_id, note) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", seeded_stock())
     cur.executemany(
         "INSERT INTO handoff_note (shift_date, shift, machine, author, note, created_ts) VALUES (%s, %s, %s, %s, %s, %s)",
         [(datetime.date(2026, 11, 6), "C", "Char Station 2", "T. Nguyen", "Burner B igniter sparking weak on Char Station 2. Maintenance work order opened.", datetime.datetime(2026, 11, 7, 5, 52)),
