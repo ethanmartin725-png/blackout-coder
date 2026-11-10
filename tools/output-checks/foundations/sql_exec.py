@@ -9,6 +9,8 @@
 #   - handoff_note rows: the two open notes the Shift Handoff track starts with
 #   - count_log rows: hourly counter readings from seeded_counts() below
 #   - reject_log rows: rejects from seeded_rejects() below (table from OEE Loss Report's CREATE step)
+#   - purchasing tables (supplier, item, contract_price, po_line, invoice_line) for the Procurement
+#     Spend track: PURCHASING_DDL and seeded_purchasing() below, all illustrative
 # A lesson that itself creates a table runs against an empty database instead.
 #
 # Server: a local SQL Server 2022, e.g.
@@ -130,6 +132,70 @@ def seeded_rejects():
     return sorted(rows, key=lambda r: r[3])
 
 
+# Purchasing tables for the Procurement Spend track. Not created by any lesson, so defined here.
+# Everything in them is illustrative, and every supplier name is fictional.
+PURCHASING_DDL = """
+CREATE TABLE supplier (supplier_id VARCHAR(4) PRIMARY KEY, name VARCHAR(50) NOT NULL);
+CREATE TABLE item (item_no VARCHAR(8) PRIMARY KEY, description VARCHAR(60) NOT NULL, category VARCHAR(20) NOT NULL, uom VARCHAR(8) NOT NULL);
+CREATE TABLE contract_price (item_no VARCHAR(8) NOT NULL, supplier_id VARCHAR(4) NOT NULL, price DECIMAL(10,4) NOT NULL, valid_from DATE NOT NULL, valid_to DATE NOT NULL);
+CREATE TABLE po_line (po_no INT NOT NULL, line INT NOT NULL, item_no VARCHAR(8) NOT NULL, supplier_id VARCHAR(4) NOT NULL, qty INT NOT NULL, unit_price DECIMAL(10,4) NOT NULL, po_date DATE NOT NULL, PRIMARY KEY (po_no, line));
+CREATE TABLE invoice_line (invoice_no INT NOT NULL, po_no INT NOT NULL, line INT NOT NULL, qty INT NOT NULL, unit_price DECIMAL(10,4) NOT NULL, invoice_date DATE NOT NULL);
+"""
+
+
+def seeded_purchasing():
+    """Rows for the purchasing tables: (table, rows). Illustrative, built by rule, not at random.
+
+    - Weekly POs every Thursday, 2026-10-01 to 2026-11-05, invoiced two days later. The PO of
+      2026-10-29 is the only one invoiced in the OEE week (2026-10-31 to 2026-11-06): 28,000 53-gal
+      hoops and 7,000 30-gal hoops, against the week's use of 28,200 and 6,840 (Hoop Driver 1's
+      6,410 barrels, an illustrative mix of 4,700 53-gal and 1,710 30-gal, at 6 and 4 hoops).
+    - Planted findings the track must find: Ironbend's 53-gal hoops ordered at $1.55 against a $1.48
+      contract on 10-22 and 10-29; photo eyes at $104 against $96 on 10-29; two buys with no
+      contract (30-gal staves from Hollow Creek on 10-15, quick-release clamps on 10-22); an invoice
+      for 36,000 staves against a PO for 35,000 (10-15); 30-gal hoops invoiced at $1.08 against a PO at
+      $1.05 (10-22); propane ordered on 11-05 at the old $2.20, invoiced at the new contract $2.35."""
+    d = datetime.date
+    suppliers = [("S1", "Ridgeline Stave Co."), ("S2", "Hollow Creek Timber"), ("S3", "Tri-County Hoop Steel"),
+                 ("S4", "Ironbend Hoop & Wire"), ("S5", "Eastfork Propane"), ("S6", "Millbrook Industrial Supply")]
+    items = [("STV-53", "White oak stave, 53-gal", "Staves", "each"), ("STV-30", "White oak stave, 30-gal", "Staves", "each"),
+             ("HP-53", "Steel hoop, 53-gal", "Hoops", "each"), ("HP-30", "Steel hoop, 30-gal", "Hoops", "each"),
+             ("LPG", "Propane for the char booth", "Char gas", "gal"), ("GD-30", "30-gal side guide set", "MRO parts", "each"),
+             ("EYE-PE", "Photo eye sensor", "MRO parts", "each"), ("QR-CL", "Quick-release guide clamp", "MRO parts", "each")]
+    year = (d(2026, 1, 1), d(2026, 12, 31))
+    contracts = [("STV-53", "S1", 2.85, *year), ("STV-53", "S2", 2.95, *year), ("STV-30", "S1", 2.10, *year),
+                 ("HP-53", "S3", 1.42, *year), ("HP-53", "S4", 1.48, *year), ("HP-30", "S3", 1.05, *year),
+                 ("LPG", "S5", 2.20, d(2026, 1, 1), d(2026, 10, 31)), ("LPG", "S5", 2.35, d(2026, 11, 1), d(2026, 12, 31)),
+                 ("GD-30", "S6", 185.00, *year), ("EYE-PE", "S6", 96.00, *year)]
+    po, inv = [], []
+    po_no = 4100
+    for week in range(6):
+        when = d(2026, 10, 1) + datetime.timedelta(days=7 * week)
+        lines = [("STV-53", "S1", 120000, 2.85), ("STV-53", "S2", 35000, 2.95), ("STV-30", "S1", 38000, 2.10),
+                 ("HP-53", "S3", 24000, 1.42), ("HP-53", "S4", 4000, 1.55 if when in (d(2026, 10, 22), d(2026, 10, 29)) else 1.48),
+                 ("HP-30", "S3", 7000, 1.05), ("LPG", "S5", 3200, 2.20)]
+        extra = {d(2026, 10, 8): [("GD-30", "S6", 2, 185.00)],
+                 d(2026, 10, 15): [("STV-30", "S2", 6000, 2.25), ("EYE-PE", "S6", 3, 96.00)],
+                 d(2026, 10, 22): [("QR-CL", "S6", 8, 42.00)],
+                 d(2026, 10, 29): [("EYE-PE", "S6", 2, 104.00)]}.get(when, [])
+        for supplier in ["S1", "S2", "S3", "S4", "S5", "S6"]:
+            mine = [x for x in lines + extra if x[1] == supplier]
+            if not mine:
+                continue
+            po_no += 1
+            for n, (item, sup, qty, price) in enumerate(mine, start=1):
+                po.append((po_no, n, item, sup, qty, price, when))
+                i_qty, i_price = qty, price
+                if when == d(2026, 10, 15) and item == "STV-53" and sup == "S2":
+                    i_qty = 36000
+                if when == d(2026, 10, 22) and item == "HP-30":
+                    i_price = 1.08
+                if when == d(2026, 11, 5) and item == "LPG":
+                    i_price = 2.35
+                inv.append((po_no + 50000, po_no, n, i_qty, i_price, when + datetime.timedelta(days=2)))
+    return [("supplier", suppliers), ("item", items), ("contract_price", contracts), ("po_line", po), ("invoice_line", inv)]
+
+
 def statements(sql):
     """Split on a semicolon at the end of a line. Fine for these lessons; not a general SQL parser."""
     return [s.strip() for s in re.split(r";[ \t]*(?:\n|$)", sql) if s.strip()]
@@ -175,6 +241,10 @@ if not creates_table:
     cur.executemany("INSERT INTO fault_log (machine, fault, start_ts, end_ts) VALUES (%s, %s, %s, %s)", seeded_faults())
     cur.executemany("INSERT INTO count_log (machine, barrels, state, ts) VALUES (%s, %s, %s, %s)", seeded_counts())
     cur.executemany("INSERT INTO reject_log (machine, reason, qty, ts) VALUES (%s, %s, %s, %s)", seeded_rejects())
+    for s in statements(PURCHASING_DDL):
+        cur.execute(s)
+    for name, rows in seeded_purchasing():
+        cur.executemany(f"INSERT INTO {name} VALUES ({', '.join(['%s'] * len(rows[0]))})", rows)
     cur.executemany(
         "INSERT INTO handoff_note (shift_date, shift, machine, author, note, created_ts) VALUES (%s, %s, %s, %s, %s, %s)",
         [(datetime.date(2026, 11, 6), "C", "Char Station 2", "T. Nguyen", "Burner B igniter sparking weak on Char Station 2. Maintenance work order opened.", datetime.datetime(2026, 11, 7, 5, 52)),
