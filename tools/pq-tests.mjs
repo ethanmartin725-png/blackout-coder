@@ -60,7 +60,7 @@ export function runPqTests() {
   t("a function with named parameters", () => (val("let Price = (rate, minutes) => minutes / 60 * rate, P = Price(60, 30) in P") === 30 ? "" : "wrong value"));
   t("calling a function with the wrong number of arguments is an M error", () => (val("let F = (a, b) => a + b, R = try F(1) otherwise -1 in R") === -1 ? "" : "not caught"));
   t("try … otherwise catches an M error", () => (val('let R = try Number.From("n/a") otherwise null, S = try Number.From("7.5") otherwise null in {R, S}').map(text).join() === "null,7.5" ? "" : "wrong"));
-  t("try does not hide something the model cannot do", () => throws(() => val("let R = try Table.Pivot(1) otherwise 0 in R"), "not in this model", NotModeled));
+  t("try does not hide something the model cannot do", () => throws(() => val("let R = try Table.Transpose(1) otherwise 0 in R"), "not in this model", NotModeled));
   t("List.Count, Sum, Average, Max, Min and Distinct", () => {
     const got = val('let L = {3, 1, null, 3, 5} in {List.Count(L), List.Sum(L), List.Average(L), List.Max(L), List.Min(L), List.Count(List.Distinct(L))}').map(text).join();
     return got === "5,12,3,5,1,4" ? "" : got;
@@ -85,8 +85,44 @@ export function runPqTests() {
   t("comparing a date with a date-time is refused, as in M", () => throws(() => run({ ...F, g: "let S = Table.SelectRows(f, each [start_ts] >= #date(2026, 11, 1)) in S" }, "g"), "different types", NotModeled));
   t("if without else is a syntax error", () => throws(() => run({ g: "let x = if true then 1 in x" }, "g"), "else"));
   t("an unknown column names the ones that exist", () => throws(() => run({ ...F, g: "let S = Table.SelectColumns(f, {\"minutes\"}) in S" }, "g"), "has no column"));
-  t("a function outside the model is refused", () => throws(() => run({ ...F, g: "let S = Table.Pivot(f) in S" }, "g"), "not in this model", NotModeled));
+  t("a function outside the model is refused", () => throws(() => run({ ...F, g: "let S = Table.Transpose(f) in S" }, "g"), "not in this model", NotModeled));
   t("a query that refers to itself is caught", () => throws(() => run({ g: "let S = g in S" }, "g"), "refers to itself"));
+  t("Table.Pivot: one column per value in the list's order, null where a cell is empty", () => {
+    const got = rows(run({ ...F, g: 'let S = Table.SelectColumns(f, {"m", "id", "mins"}), P = Table.Pivot(Table.RemoveColumns(S, {"id"}), {"B", "A"}, "m", "mins", List.Sum) in P' }, "g"));
+    return got === "11:10" ? "" : got;
+  });
+  t("Table.Pivot without an aggregation is an M error on duplicates", () => throws(() => val('let S = Table.SelectColumns(f, {"m", "mins"}), P = Table.Pivot(S, {"A"}, "m", "mins") in P'.replace("f", 'Sql.Database("s", "db"){[Schema = "dbo", Item = "f"]}[Data]')), "aggregation"));
+  t("Table.UnpivotOtherColumns: other columns become rows, nulls dropped", () => {
+    const got = rows(run({ g: 'let T = Table.FromRecords({[k = "x", a = 1, b = null], [k = "y", a = 2, b = 3]}), U = Table.UnpivotOtherColumns(T, {"k"}, "Attribute", "Value") in U' }, "g"));
+    return got === "x:a:1 y:a:2 y:b:3" ? "" : got;
+  });
+  t("Table.ReplaceValue, FillDown and TransformColumns", () => {
+    const got = rows(run({ g: 'let T = Table.FromRecords({[k = "x", v = null], [k = null, v = 2.5]}), R = Table.ReplaceValue(T, null, 0, Replacer.ReplaceValue, {"v"}), D = Table.FillDown(R, {"k"}), C = Table.TransformColumns(D, {{"v", each Number.Round(_)}}) in C' }, "g"));
+    return got === "x:0 x:2" ? "" : got;
+  });
+  t("Table.AddIndexColumn counts from the start by the step", () => (rows(run({ ...F, g: 'let I = Table.AddIndexColumn(Table.SelectColumns(f, {"id"}), "rank", 1, 1) in I' }, "g")) === "1:1 2:2 3:3 4:4" ? "" : "wrong"));
+  t("Text.Contains, PadStart and Replace", () => {
+    const got = val('let L = {Text.Contains("Low air", "air"), Text.Contains("Low air", "Air"), Text.PadStart("47", 4, "0"), Text.Replace("Hoop misfeed", " ", "_")} in L').map(text).join();
+    return got === "true,false,0047,Hoop_misfeed" ? "" : got;
+  });
+  t("List.Contains, FirstN, Range and Accumulate", () => {
+    const got = val("let L = {5, 3, 2} in {List.Contains(L, 3), List.Sum(List.FirstN(L, 2)), List.Sum(List.Range(L, 1, 2)), List.Accumulate(L, 0, (s, x) => s + x)}").map(text).join();
+    return got === "true,8,5,10" ? "" : got;
+  });
+  t("week functions need the first day, and use it", () => {
+    const got = val("let D = #datetime(2026, 11, 3, 15, 27, 12) in {Date.DayOfWeek(D, Day.Saturday), Date.StartOfWeek(D, Day.Saturday), Date.AddDays(D, 4), Time.Minute(D)}").map(text).join();
+    return got === "3,2026-10-31 00:00:00,2026-11-07 15:27:12,27" ? "" : got;
+  });
+  t("a week function without a first day is refused", () => throws(() => val("let D = Date.DayOfWeek(#date(2026, 11, 3)) in D"), "first day", NotModeled));
+  t("Duration.Hours and Minutes are parts, TotalSeconds the whole", () => (val("let D = #duration(1, 2, 30, 15) in {Duration.Hours(D), Duration.Minutes(D), Duration.TotalSeconds(D)}").join() === "2,30,95415" ? "" : "wrong"));
+  t("Record.ToTable and Record.FieldNames", () => {
+    const got = rows(asTable(val('let R = Record.ToTable([a = 1, b = "x"]) in R'))) + " " + val("let N = Record.FieldNames([a = 1, b = 2]) in N").join();
+    return got === "a:1 b:x a,b" ? "" : got;
+  });
+  t("typed parameters: a wrong type or a null is an M error; nullable allows null", () => {
+    const got = val('let F = (m as number, r as number) as number => m * r, G = (x as nullable number) => x in {F(2, 3), try F("2", 3) otherwise "bad", try F(null, 3) otherwise "null", G(null)}').map(text).join();
+    return got === "6,bad,null,null" ? "" : got;
+  });
   return fails;
 }
 

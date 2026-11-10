@@ -84,9 +84,10 @@ export function parse(src) {
     if (isKw("type")) { p++; return { type: name() }; }
     if (isOp("(")) {
       // (a, b) => body: a function with named parameters
-      let q = p + 1; const params = [];
-      while (t[q] && t[q].k === "id" && !KW.has(t[q].v)) { params.push(t[q].v); q++; if (t[q] && t[q].k === "op" && t[q].v === ",") q++; else break; }
-      if (t[q] && t[q].v === ")" && t[q + 1] && t[q + 1].v === "=>") { p = q + 2; return { params, body: expr() }; }
+      let q = p + 1; const params = [], types = [];
+      const typeAt = () => { if (!(t[q] && t[q].v === "as")) return null; q++; let ty = t[q] && t[q].v; q++; if (ty === "nullable") { ty = "nullable " + (t[q] && t[q].v); q++; } return ty; };
+      while (t[q] && t[q].k === "id" && !KW.has(t[q].v)) { params.push(t[q].v); q++; types.push(typeAt()); if (t[q] && t[q].k === "op" && t[q].v === ",") q++; else break; }
+      if (t[q] && t[q].v === ")") { q++; const ret = typeAt(); if (t[q] && t[q].v === "=>") { p = q + 1; return { params, types, ret, body: expr() }; } }
       p++; const e = expr(); expect(")"); return e;
     }
     if (isOp("{")) { p++; const items = []; if (!isOp("}")) { do { items.push(expr()); } while (isOp(",") && ++p); } expect("}"); return { list: items }; }
@@ -134,6 +135,17 @@ export function createEngine(snapshot) {
     if (a instanceof MDate && b instanceof MDate && op === "-") return new MDuration(a.ms - b.ms);
     const x = num(a, op), y = num(b, op);
     return { "+": x + y, "-": x - y, "*": x * y, "/": x / y }[op];
+  }
+  // A type annotation on a function: number, text and so on exclude null; nullable number allows it.
+  const TYPES = { number: (v) => typeof v === "number", text: (v) => typeof v === "string", logical: (v) => typeof v === "boolean",
+    date: (v) => v instanceof MDate, datetime: (v) => v instanceof MDateTime, duration: (v) => v instanceof MDuration,
+    list: (v) => Array.isArray(v), table: (v) => isTable(v), record: (v) => v && typeof v === "object" && !Array.isArray(v) && !isTable(v), any: () => true };
+  function checkType(v, ty, what) {
+    if (!ty) return v;
+    const nullable = ty.startsWith("nullable "), base = nullable ? ty.slice(9) : ty;
+    if (!TYPES[base]) throw new NotModeled(`type ${base} is not modeled`);
+    if (v === null ? !(nullable || base === "any") : !TYPES[base](v)) throw new MError(`${what}: ${text(v)} is not of type ${ty}`);
+    return v;
   }
   const truthy = (v) => { if (typeof v !== "boolean") throw new NotModeled(`a condition must be true or false, not ${text(v)}`); return v; };
   const recOf = (cols, row) => ({ rec: true, row });
@@ -215,6 +227,59 @@ export function createEngine(snapshot) {
     "List.Max": (l) => { const xs = l.filter((x) => x !== null); return xs.length ? xs.reduce((a, b) => (compare(">", b, a) ? b : a)) : null; },
     "List.Min": (l) => { const xs = l.filter((x) => x !== null); return xs.length ? xs.reduce((a, b) => (compare("<", b, a) ? b : a)) : null; },
     "List.Distinct": (l) => { const seen = new Set(); return l.filter((x) => { const k = text(x); if (seen.has(k)) return false; seen.add(k); return true; }); },
+    // Table.Pivot(table, values, attributeColumn, valueColumn, aggregation): one new column per value, in
+    // the list's order; the other columns group the rows. Two values for one cell with no aggregation is an error.
+    "Table.Pivot": (t, values, attr, val, agg) => {
+      col(t, attr); col(t, val);
+      const keys = t.cols.filter((c) => c !== attr && c !== val), groups = new Map();
+      for (const r of t.rows) { const k = JSON.stringify(keys.map((c) => text(r[c]))); if (!groups.has(k)) groups.set(k, { base: r, cells: new Map() }); const g = groups.get(k); const a = text(r[attr]); if (!g.cells.has(a)) g.cells.set(a, []); g.cells.get(a).push(r[val]); }
+      return new MTable([...keys, ...values], [...groups.values()].map(({ base, cells }) => {
+        const o = Object.fromEntries(keys.map((c) => [c, base[c]]));
+        for (const v of values) { const xs = cells.get(text(v)); o[v] = !xs ? null : agg ? call(agg, xs) : xs.length === 1 ? xs[0] : (() => { throw new MError(`more than one value for ${v}: give Table.Pivot an aggregation`); })(); }
+        return o;
+      }));
+    },
+    // Table.UnpivotOtherColumns(table, keep, attributeColumn, valueColumn): every other column becomes a row; nulls are dropped.
+    "Table.UnpivotOtherColumns": (t, keep, attr, val) => {
+      keep.forEach((c) => col(t, c));
+      const other = t.cols.filter((c) => !keep.includes(c));
+      return new MTable([...keep, attr, val], t.rows.flatMap((r) => other.filter((c) => r[c] !== null).map((c) => ({ ...Object.fromEntries(keep.map((k) => [k, r[k]])), [attr]: c, [val]: r[c] }))));
+    },
+    // The replacer is a function of (value, old, new), called on each cell of the listed columns.
+    "Table.ReplaceValue": (t, oldV, newV, replacer, cols) => {
+      cols.forEach((c) => col(t, c));
+      return new MTable(t.cols, t.rows.map((r) => { const o = { ...r }; for (const c of cols) o[c] = call(replacer, o[c], oldV, newV); return o; }));
+    },
+    "Replacer.ReplaceValue": (v, oldV, newV) => (text(v) === text(oldV) && (v === null) === (oldV === null) ? newV : v),
+    "Table.FillDown": (t, cols) => { cols.forEach((c) => col(t, c)); const last = {}; return new MTable(t.cols, t.rows.map((r) => { const o = { ...r }; for (const c of cols) { if (o[c] === null) o[c] = last[c] ?? null; else last[c] = o[c]; } return o; })); },
+    "Table.TransformColumns": (t, pairs) => { pairs.forEach(([c]) => col(t, c)); return new MTable(t.cols, t.rows.map((r) => { const o = { ...r }; for (const [c, f] of pairs) o[c] = call(f, o[c]); return o; })); },
+    "Table.AddIndexColumn": (t, n, start, step) => { if (t.cols.includes(n)) throw new Error(`column "${n}" already exists`); return new MTable([...t.cols, n], t.rows.map((r, i) => ({ ...r, [n]: (start ?? 0) + i * (step ?? 1) }))); },
+    "Text.Contains": (v, sub) => (v === null ? null : String(v).includes(sub)),
+    "Text.PadStart": (v, n, ch) => (v === null ? null : String(v).padStart(n, ch ?? " ")),
+    "Text.Replace": (v, a, b) => (v === null ? null : String(v).split(a).join(b)),
+    "List.Contains": (l, x) => l.some((y) => text(y) === text(x) && (y === null) === (x === null)),
+    "List.FirstN": (l, n) => l.slice(0, n),
+    "List.Range": (l, offset, count) => l.slice(offset, count === undefined ? undefined : offset + count),
+    "List.Accumulate": (l, seed, f) => l.reduce((state, x) => call(f, state, x), seed),
+    // The week functions need the first day passed in: M's default depends on the culture, and the
+    // model does not guess it. Day.Sunday is 0 through Day.Saturday 6.
+    "Date.DayOfWeek": (d, first) => {
+      if (first === undefined) throw new NotModeled("Date.DayOfWeek without a first day of the week: pass one, such as Day.Saturday");
+      return d === null ? null : (new Date(d.ms).getUTCDay() - first + 7) % 7;
+    },
+    "Date.StartOfWeek": (d, first) => {
+      if (first === undefined) throw new NotModeled("Date.StartOfWeek without a first day of the week: pass one, such as Day.Saturday");
+      if (d === null) return null;
+      const day = Math.floor(d.ms / dayMs) * dayMs, back = (new Date(d.ms).getUTCDay() - first + 7) % 7;
+      return new d.constructor(day - back * dayMs);
+    },
+    "Date.AddDays": (d, n) => (d === null ? null : new d.constructor(d.ms + num(n, "Date.AddDays") * dayMs)),
+    "Time.Minute": (d) => (d === null ? null : new Date(d.ms).getUTCMinutes()),
+    "Duration.Minutes": (d) => (d === null ? null : Math.trunc(d.ms / 60000) % 60),
+    "Duration.TotalSeconds": (d) => (d === null ? null : d.ms / 1000),
+    "Duration.Hours": (d) => (d === null ? null : Math.trunc(d.ms / 3600000) % 24),
+    "Record.ToTable": (r) => new MTable(["Name", "Value"], Object.entries(r && r.rec ? r.row : r).map(([k, v]) => ({ Name: k, Value: v }))),
+    "Record.FieldNames": (r) => Object.keys(r && r.rec ? r.row : r),
     "Table.FirstN": (t, n) => new MTable(t.cols, t.rows.slice(0, n)),
     "Table.Distinct": (t) => { const seen = new Set(); return new MTable(t.cols, t.rows.filter((r) => { const k = JSON.stringify(t.cols.map((c) => text(r[c]))); if (seen.has(k)) return false; seen.add(k); return true; })); },
     "Table.Combine": (ts) => { const cols = [...new Set(ts.flatMap((t) => t.cols))]; return new MTable(cols, ts.flatMap((t) => t.rows.map((r) => Object.fromEntries(cols.map((c) => [c, c in r ? r[c] : null]))))); },
@@ -229,7 +294,7 @@ export function createEngine(snapshot) {
     if (ty === "datetime" && v instanceof MDateTime) return v;
     throw new NotModeled(`changing ${text(v)} to type ${ty} is not modeled`);
   }
-  const ENUMS = { "JoinKind.LeftOuter": "LeftOuter", "JoinKind.Inner": "Inner", "JoinKind.LeftAnti": "LeftAnti", "JoinKind.RightOuter": "RightOuter", "JoinKind.FullOuter": "FullOuter", "JoinKind.RightAnti": "RightAnti", "Order.Ascending": 0, "Order.Descending": 1, "Int64.Type": "Int64.Type" };
+  const ENUMS = { "Day.Sunday": 0, "Day.Monday": 1, "Day.Tuesday": 2, "Day.Wednesday": 3, "Day.Thursday": 4, "Day.Friday": 5, "Day.Saturday": 6, "JoinKind.LeftOuter": "LeftOuter", "JoinKind.Inner": "Inner", "JoinKind.LeftAnti": "LeftAnti", "JoinKind.RightOuter": "RightOuter", "JoinKind.FullOuter": "FullOuter", "JoinKind.RightAnti": "RightAnti", "Order.Ascending": 0, "Order.Descending": 1, "Int64.Type": "Int64.Type" };
 
   function ev(e, env) {
     if ("lit" in e) return e.lit;
@@ -240,7 +305,8 @@ export function createEngine(snapshot) {
     if (e.each) return fn((arg) => ev(e.each, new Map([...env, ["_", arg]])));
     if (e.params) return fn((...args) => {
       if (args.length !== e.params.length) throw new MError(`the function takes ${e.params.length} argument(s), got ${args.length}`);
-      return ev(e.body, new Map([...env, ...e.params.map((n, i) => [n, args[i]])]));
+      e.params.forEach((n, i) => checkType(args[i], e.types[i], `argument ${n}`));
+      return checkType(ev(e.body, new Map([...env, ...e.params.map((n, i) => [n, args[i]])])), e.ret, "the result");
     });
     if ("try" in e) { try { return ev(e.try, env); } catch (err) { if (err instanceof MError) return ev(e.otherwise, env); throw err; } }
     if (e.if) return truthy(ev(e.if, env)) ? ev(e.then, env) : ev(e.else, env);

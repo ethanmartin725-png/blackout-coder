@@ -629,5 +629,425 @@ Char Station 2  n/a       null  false
 Hoop Driver 1   15          15  true
 4 rows`,
     },
+    {
+      t: "Pivot",
+      goal: "In the OEE week, work out each fault's minutes, keep fault, machine and minutes, and pivot the machines into columns, summing the minutes of each fault on each machine.",
+      code: `let
+    Source = Sql.Database("plant-sql01", "PlantDB"),
+    Faults = Source{[Schema = "dbo", Item = "fault_log"]}[Data],
+    Week = Table.SelectRows(Faults, each [start_ts] >= #datetime(2026, 10, 31, 6, 0, 0) and [start_ts] < #datetime(2026, 11, 7, 6, 0, 0)),
+    Minutes = Table.AddColumn(Week, "minutes", each Duration.TotalMinutes([end_ts] - [start_ts])),
+    Slim = Table.SelectColumns(Minutes, {"fault", "machine", "minutes"}),
+    Pivoted = Table.Pivot(Slim, {"Conveyor 3", "Hoop Driver 1", "Char Station 2"}, "machine", "minutes", List.Sum)
+in
+    Pivoted`,
+      about: "Table.Pivot turns the values of one column into columns: here each machine becomes a column of minutes, one row per fault. List.Sum adds the minutes when a fault happened more than once on a machine; without an aggregation, a cell with two values is an error. A blank cell is null: Conveyor 3 never misfed and only Char Station 2 has char flares. Low air reaches all three machines, 36.90 + 34.62 + 15.92 minutes. The machines are listed in the call, so their column order is yours to choose.",
+      terms: [
+        ["Table.Pivot", "Table.Pivot(table, values, attribute, value, aggregation)", "One column per value, filled from another column."],
+        ["List.Sum", "Aggregation", "How two values for one cell are combined."],
+      ],
+      pq: {"query": "Minutes by Machine", "format": {"Conveyor 3": "0.00", "Hoop Driver 1": "0.00", "Char Station 2": "0.00"}},
+      out: `fault         Conveyor 3  Hoop Driver 1  Char Station 2
+Hoop misfeed        null          61.23            null
+E-stop              7.82           1.90            1.08
+Jam                50.02          11.10            null
+Low air            36.90          34.62           15.92
+Char flare          null           null           70.05
+5 rows`,
+    },
+    {
+      t: "Unpivot",
+      goal: "Build the same pivot, then unpivot every column except fault back into machine and minutes rows.",
+      code: `let
+    Source = Sql.Database("plant-sql01", "PlantDB"),
+    Faults = Source{[Schema = "dbo", Item = "fault_log"]}[Data],
+    Week = Table.SelectRows(Faults, each [start_ts] >= #datetime(2026, 10, 31, 6, 0, 0) and [start_ts] < #datetime(2026, 11, 7, 6, 0, 0)),
+    Minutes = Table.AddColumn(Week, "minutes", each Duration.TotalMinutes([end_ts] - [start_ts])),
+    Slim = Table.SelectColumns(Minutes, {"fault", "machine", "minutes"}),
+    Pivoted = Table.Pivot(Slim, {"Conveyor 3", "Hoop Driver 1", "Char Station 2"}, "machine", "minutes", List.Sum),
+    Unpivoted = Table.UnpivotOtherColumns(Pivoted, {"fault"}, "machine", "minutes")
+in
+    Unpivoted`,
+      about: "Unpivoting goes the other way: every column except fault becomes a machine and minutes row. 15 cells come back as 10 rows because unpivot drops nulls, so a fault that never happened on a machine leaves no row at all. Reports want this long shape: one fact per row, with machine as a column a slicer can filter. When a spreadsheet arrives wide, with a column per machine or per day, unpivot is the first step.",
+      terms: [
+        ["Table.UnpivotOtherColumns", "Table.UnpivotOtherColumns(table, keep, attribute, value)", "Every column not kept becomes rows."],
+        ["{\"fault\"}", "Columns to keep", "The rest are unpivoted."],
+      ],
+      pq: {"query": "Minutes Long", "format": {"minutes": "0.00"}},
+      out: `fault         machine         minutes
+Hoop misfeed  Hoop Driver 1     61.23
+E-stop        Conveyor 3         7.82
+E-stop        Hoop Driver 1      1.90
+E-stop        Char Station 2     1.08
+Jam           Conveyor 3        50.02
+Jam           Hoop Driver 1     11.10
+Low air       Conveyor 3        36.90
+Low air       Hoop Driver 1     34.62
+Low air       Char Station 2    15.92
+Char flare    Char Station 2    70.05
+10 rows`,
+    },
+    {
+      t: "Replace null with zero",
+      goal: "Total shift A's rejects on 2026-11-07 by machine, merge them onto every machine, and replace the null for a machine with none with 0.",
+      code: `let
+    Source = Sql.Database("plant-sql01", "PlantDB"),
+    Machines = Source{[Schema = "dbo", Item = "dim_machine"]}[Data],
+    Rejects = Source{[Schema = "dbo", Item = "reject_log"]}[Data],
+    Today = Table.SelectRows(Rejects, each [ts] >= #datetime(2026, 11, 7, 6, 0, 0)),
+    Totals = Table.Group(Today, {"machine"}, {{"rejects", each List.Sum([qty])}}),
+    Joined = Table.NestedJoin(Machines, {"machine"}, Totals, {"machine"}, "r", JoinKind.LeftOuter),
+    Expanded = Table.SelectColumns(Table.ExpandTableColumn(Joined, "r", {"rejects"}), {"machine", "rejects"}),
+    Zeroed = Table.ReplaceValue(Expanded, null, 0, Replacer.ReplaceValue, {"rejects"})
+in
+    Zeroed`,
+      about: "After the left join, Char Station 2's rejects were null: no rejects row exists for it. Table.ReplaceValue swaps that null for 0 in the rejects column. Whether to do this is a decision: 0 means \"we checked and there were none\", null means \"no data\". For rejects on a running shift, 0 is the honest answer; for a meter that failed to report, null is.",
+      terms: [
+        ["Table.ReplaceValue", "Table.ReplaceValue(table, old, new, replacer, columns)", "Replaces one value with another in the columns listed."],
+        ["Replacer.ReplaceValue", "Replacer.ReplaceValue", "Replaces whole values that match exactly."],
+      ],
+      pq: {"query": "Rejects Today, Zeros"},
+      out: `machine         rejects
+Char Station 2        0
+Conveyor 3            5
+Hoop Driver 1         3
+3 rows`,
+    },
+    {
+      t: "Fill down",
+      goal: "Type shift A's stops as a hand sheet where the machine is written only on its first stop, fill the machine down, and total the minutes per machine.",
+      code: `let
+    Sheet = Table.FromRecords({
+        [machine = "Conveyor 3", fault = "Jam", minutes = 4.62],
+        [machine = "Hoop Driver 1", fault = "Hoop misfeed", minutes = 7.5],
+        [machine = null, fault = "Low air", minutes = 18.5],
+        [machine = null, fault = "Low air", minutes = 15.0],
+        [machine = "Char Station 2", fault = "Char flare", minutes = 18.75]
+    }),
+    Filled = Table.FillDown(Sheet, {"machine"}),
+    Totals = Table.Group(Filled, {"machine"}, {{"minutes", each List.Sum([minutes])}})
+in
+    Totals`,
+      about: "A hand-kept sheet often writes the machine once and leaves the rows under it blank. Table.FillDown copies the last value down into the nulls, so every stop has its machine again. The totals are shift A's down minutes from the Shift Handoff: Conveyor 3 4.62, Hoop Driver 1 41.00 (7.5 + 18.5 + 15.0), Char Station 2 18.75, its open flare clipped at 14:00. Fill down only fills nulls, never an empty text, so check how blanks arrive from Excel first.",
+      terms: [
+        ["Table.FillDown", "Table.FillDown(table, columns)", "Each null takes the value above it."],
+        ["machine = null", "A blank cell", "The machine was not written on this row."],
+      ],
+      pq: {"query": "Shift A Sheet", "format": {"minutes": "0.00"}},
+      out: `machine         minutes
+Conveyor 3         4.62
+Hoop Driver 1     41.00
+Char Station 2    18.75
+3 rows`,
+    },
+    {
+      t: "Search text and lists",
+      goal: "Keep the faults whose name contains \"air\" on Hoop Driver 1 or Char Station 2, using Text.Contains and List.Contains, and show fault_id, machine and start_ts.",
+      code: `let
+    Source = Sql.Database("plant-sql01", "PlantDB"),
+    Faults = Source{[Schema = "dbo", Item = "fault_log"]}[Data],
+    Machines = {"Hoop Driver 1", "Char Station 2"},
+    Air = Table.SelectRows(Faults, each Text.Contains([fault], "air") and List.Contains(Machines, [machine])),
+    Shown = Table.SelectColumns(Air, {"fault_id", "machine", "start_ts"})
+in
+    Shown`,
+      about: "Text.Contains finds \"air\" inside \"Low air\"; it is case-sensitive, so \"Air\" would find nothing. List.Contains checks a value against a list, the M way of writing SQL's IN. Low air has 5 events in all; these are the 3 on Hoop Driver 1 and Char Station 2. Keeping the machine list in its own step makes it one place to change.",
+      terms: [
+        ["Text.Contains", "Text.Contains", "Whether the text includes a piece; case matters."],
+        ["List.Contains", "List.Contains", "Whether the list holds the value, like IN."],
+      ],
+      pq: {"query": "Low Air on Two Machines"},
+      out: `fault_id  machine         start_ts
+       5  Hoop Driver 1   2026-11-01 02:54:37
+      17  Char Station 2  2026-11-02 17:29:13
+      24  Hoop Driver 1   2026-11-04 11:42:21
+3 rows`,
+    },
+    {
+      t: "Codes with padding",
+      goal: "Add a code F and the fault_id padded to four digits with zeros, and a key from the fault name with spaces replaced by underscores.",
+      code: `let
+    Source = Sql.Database("plant-sql01", "PlantDB"),
+    Faults = Source{[Schema = "dbo", Item = "fault_log"]}[Data],
+    Code = Table.AddColumn(Faults, "code", each "F" & Text.PadStart(Text.From([fault_id]), 4, "0")),
+    Key = Table.AddColumn(Code, "key", each Text.Replace([fault], " ", "_")),
+    Shown = Table.SelectColumns(Key, {"code", "machine", "key"})
+in
+    Shown`,
+      about: "Text.PadStart pads on the left to a fixed width, so fault 1 becomes F0001 and codes sort the same as text and as numbers. Text.Replace swaps every space for an underscore, a key a system that dislikes spaces can take. Padded codes like these are common in ERP and MES exports; four digits allow 9,999 faults before the width has to change.",
+      terms: [
+        ["Text.PadStart", "Text.PadStart(text, width, pad)", "Pads on the left to the width."],
+        ["Text.Replace", "Text.Replace", "Replaces every occurrence."],
+      ],
+      pq: {"query": "Fault Codes", "top": 5},
+      out: `code   machine        key
+F0001  Hoop Driver 1  Hoop_misfeed
+F0002  Conveyor 3     E-stop
+F0003  Hoop Driver 1  Hoop_misfeed
+F0004  Conveyor 3     Jam
+F0005  Hoop Driver 1  Low_air
+47 rows, first 5 shown`,
+    },
+    {
+      t: "Weeks that start on Saturday",
+      goal: "Add each fault's week start and day of the week, both with Saturday as the first day, then count the faults for each week and day.",
+      code: `let
+    Source = Sql.Database("plant-sql01", "PlantDB"),
+    Faults = Source{[Schema = "dbo", Item = "fault_log"]}[Data],
+    WeekStart = Table.AddColumn(Faults, "week_start", each Date.StartOfWeek([start_ts], Day.Saturday)),
+    Day = Table.AddColumn(WeekStart, "day", each Date.DayOfWeek([start_ts], Day.Saturday)),
+    Counted = Table.Group(Day, {"week_start", "day"}, {{"faults", each Table.RowCount(_)}})
+in
+    Counted`,
+      about: "The OEE week starts on Saturday, so the week functions are given Day.Saturday. Day 0 is Saturday and 6 is Friday. The first calendar week holds 44 faults, not the OEE week's 45: fault 45 started at 04:10 on Saturday 7 November, which is the new calendar week but still the OEE week, because that week runs 06:00 to 06:00. A week start from Date.StartOfWeek follows the calendar; a production week needs the six-hour shift first. This model requires the first day to be passed in, because M's default depends on the culture setting.",
+      terms: [
+        ["Day.Saturday", "Day.Saturday", "The day the week starts."],
+        ["Date.StartOfWeek", "Date.StartOfWeek", "Midnight on the week's first day."],
+        ["Date.DayOfWeek", "Date.DayOfWeek", "0 for the first day of the week."],
+      ],
+      pq: {"query": "Faults by Week Day"},
+      out: `week_start           day  faults
+2026-10-31 00:00:00    0       2
+2026-10-31 00:00:00    1      12
+2026-10-31 00:00:00    2       3
+2026-10-31 00:00:00    3       6
+2026-10-31 00:00:00    4       6
+2026-10-31 00:00:00    5       5
+2026-10-31 00:00:00    6      10
+2026-11-07 00:00:00    0       3
+8 rows`,
+    },
+    {
+      t: "A duration in hours and minutes",
+      goal: "Total each machine's down seconds in the OEE week, turn them into a duration, and pull out its hours and minutes.",
+      code: `let
+    Source = Sql.Database("plant-sql01", "PlantDB"),
+    Faults = Source{[Schema = "dbo", Item = "fault_log"]}[Data],
+    Week = Table.SelectRows(Faults, each [start_ts] >= #datetime(2026, 10, 31, 6, 0, 0) and [start_ts] < #datetime(2026, 11, 7, 6, 0, 0)),
+    Seconds = Table.AddColumn(Week, "secs", each Duration.TotalSeconds([end_ts] - [start_ts])),
+    Totals = Table.Group(Seconds, {"machine"}, {{"secs", each List.Sum([secs])}}),
+    Down = Table.AddColumn(Totals, "down", each #duration(0, 0, 0, [secs])),
+    Hours = Table.AddColumn(Down, "hours", each Duration.Hours([down])),
+    Mins = Table.AddColumn(Hours, "minutes", each Duration.Minutes([down]))
+in
+    Mins`,
+      about: "Durations carry their own parts: Duration.Hours and Duration.Minutes are the hours and minutes on the clock face, not totals. Hoop Driver 1's 6,531 seconds of stops in the OEE week are 1 hour 48 minutes 51 seconds, the 108.85 minutes of the OEE track. #duration(0, 0, 0, seconds) builds one from seconds. Use Duration.TotalMinutes for arithmetic and the parts only for display.",
+      terms: [
+        ["Duration.Hours", "Duration.Hours", "The hours part, not total hours."],
+        ["Duration.TotalSeconds", "Duration.TotalSeconds", "The whole duration in seconds."],
+        ["#duration(0, 0, 0, [secs])", "Build a duration", "Days, hours, minutes, seconds."],
+      ],
+      pq: {"query": "Down as Hours"},
+      out: `machine         secs  down        hours  minutes
+Hoop Driver 1   6531  0.01:48:51      1       48
+Conveyor 3      5684  0.01:34:44      1       34
+Char Station 2  5223  0.01:27:03      1       27
+3 rows`,
+    },
+    {
+      t: "Change a column in place",
+      goal: "Work out the closed faults' minutes, then round the minutes column to one place in place with Table.TransformColumns.",
+      code: `let
+    Source = Sql.Database("plant-sql01", "PlantDB"),
+    Faults = Source{[Schema = "dbo", Item = "fault_log"]}[Data],
+    Closed = Table.SelectRows(Faults, each [end_ts] <> null),
+    Minutes = Table.AddColumn(Closed, "minutes", each Duration.TotalMinutes([end_ts] - [start_ts])),
+    Rounded = Table.TransformColumns(Minutes, {{"minutes", each Number.Round(_, 1)}}),
+    Shown = Table.SelectColumns(Rounded, {"fault_id", "fault", "minutes"})
+in
+    Shown`,
+      about: "Table.TransformColumns changes a column's values where they are, with _ standing for each value, instead of adding a new column and removing the old. Look at fault 5: 17.85 minutes rounds to 17.8, because M rounds half to even and 8 is even. SQL Server's ROUND and Excel's give 17.9. Round only for display; keep the full minutes for totals.",
+      terms: [
+        ["Table.TransformColumns", "Table.TransformColumns(table, {{column, function}})", "Changes a column in place."],
+        ["_", "_", "The value being transformed."],
+      ],
+      pq: {"query": "Rounded Minutes", "top": 5},
+      out: `fault_id  fault         minutes
+       1  Hoop misfeed      5.7
+       2  E-stop            3.3
+       3  Hoop misfeed        4
+       4  Jam               4.6
+       5  Low air          17.8
+46 rows, first 5 shown`,
+    },
+    {
+      t: "Rank the Pareto",
+      goal: "Build the Pareto of all 47 faults to 10:15 (minutes by fault, largest first) and number its rows from 1 with Table.AddIndexColumn.",
+      code: `let
+    Source = Sql.Database("plant-sql01", "PlantDB"),
+    Faults = Source{[Schema = "dbo", Item = "fault_log"]}[Data],
+    Now = #datetime(2026, 11, 7, 10, 15, 0),
+    Minutes = Table.AddColumn(Faults, "minutes", each Duration.TotalMinutes((if [end_ts] = null then Now else [end_ts]) - [start_ts])),
+    Grouped = Table.Group(Minutes, {"fault"}, {{"minutes", each List.Sum([minutes])}}),
+    Sorted = Table.Sort(Grouped, {{"minutes", Order.Descending}}),
+    Ranked = Table.AddIndexColumn(Sorted, "rank", 1, 1)
+in
+    Ranked`,
+      about: "Table.AddIndexColumn numbers the rows from a start by a step: 1, 2, 3 after the sort, so the number is the rank. The index follows the rows as they are, so sort first. Low air ranks first with 87.43 minutes.",
+      terms: [
+        ["Table.AddIndexColumn", "Table.AddIndexColumn(table, name, start, step)", "Numbers the rows."],
+      ],
+      pq: {"query": "Ranked Pareto", "format": {"minutes": "0.00"}},
+      out: `fault         minutes  rank
+Low air         87.43     1
+Char flare      70.05     2
+Hoop misfeed    66.57     3
+Jam             65.73     4
+E-stop          10.80     5
+5 rows`,
+    },
+    {
+      t: "A running total",
+      goal: "Rank the Pareto, take its minutes as a list, and add each row's cumulative share: the sum of the first rank minutes over the sum of all.",
+      code: `let
+    Source = Sql.Database("plant-sql01", "PlantDB"),
+    Faults = Source{[Schema = "dbo", Item = "fault_log"]}[Data],
+    Now = #datetime(2026, 11, 7, 10, 15, 0),
+    Minutes = Table.AddColumn(Faults, "minutes", each Duration.TotalMinutes((if [end_ts] = null then Now else [end_ts]) - [start_ts])),
+    Grouped = Table.Group(Minutes, {"fault"}, {{"minutes", each List.Sum([minutes])}}),
+    Sorted = Table.Sort(Grouped, {{"minutes", Order.Descending}}),
+    Ranked = Table.AddIndexColumn(Sorted, "rank", 1, 1),
+    Mins = Sorted[minutes],
+    Cumulative = Table.AddColumn(Ranked, "cum_share", each List.Sum(List.FirstN(Mins, [rank])) / List.Sum(Mins))
+in
+    Cumulative`,
+      about: "The cumulative share adds each row's minutes to all those above it: List.FirstN takes the first rank minutes of the list and List.Sum adds them. Low air and char flare are 52.4% of the minutes; with hoop misfeeds, 74.5%: three causes of five carry three quarters of the loss. This works row by row, so it is fine for a Pareto of five; for thousands of rows, List.Accumulate or a running total in DAX scales better.",
+      terms: [
+        ["List.FirstN", "List.FirstN", "The first n items of a list."],
+        ["Sorted[minutes]", "The minutes as a list", "Read once, used on every row."],
+      ],
+      pq: {"query": "Cumulative Pareto", "format": {"minutes": "0.00", "cum_share": "0.0%"}},
+      out: `fault         minutes  rank  cum_share
+Low air         87.43     1      29.1%
+Char flare      70.05     2      52.4%
+Hoop misfeed    66.57     3      74.5%
+Jam             65.73     4      96.4%
+E-stop          10.80     5     100.0%
+5 rows`,
+    },
+    {
+      t: "Fold a list",
+      goal: "Take the OEE week's fault minutes as a list and fold it with List.Accumulate into a record of the count and the total, starting from zero.",
+      code: `let
+    Source = Sql.Database("plant-sql01", "PlantDB"),
+    Faults = Source{[Schema = "dbo", Item = "fault_log"]}[Data],
+    Week = Table.SelectRows(Faults, each [start_ts] >= #datetime(2026, 10, 31, 6, 0, 0) and [start_ts] < #datetime(2026, 11, 7, 6, 0, 0)),
+    Mins = Table.AddColumn(Week, "m", each Duration.TotalMinutes([end_ts] - [start_ts]))[m],
+    Folded = List.Accumulate(Mins, [n = 0, total = 0], (state, m) => [n = state[n] + 1, total = state[total] + m]),
+    Result = [faults = Folded[n], minutes = Number.Round(Folded[total], 2)]
+in
+    Result`,
+      about: "List.Accumulate walks a list carrying a state: here a record of the count so far and the total so far, starting from zero. The function takes the state and the next item and returns the new state. 45 faults, 290.63 minutes: the OEE week, the TPM track's total. Any running calculation, a running maximum or a reset at each shift, can be written as a fold.",
+      terms: [
+        ["List.Accumulate", "List.Accumulate(list, seed, (state, item) => …)", "Folds a list into one value."],
+        ["[n = 0, total = 0]", "Seed", "The state before the first item."],
+      ],
+      pq: {"query": "Week Totals"},
+      out: `Field     Value
+faults       45
+minutes  290.63
+2 rows`,
+    },
+    {
+      t: "A record as a table",
+      goal: "Pick Hoop Driver 1's row from dim_machine and turn the record into a Name and Value table with Record.ToTable.",
+      code: `let
+    Source = Sql.Database("plant-sql01", "PlantDB"),
+    Machines = Source{[Schema = "dbo", Item = "dim_machine"]}[Data],
+    Hoop = Machines{[machine = "Hoop Driver 1"]},
+    Fields = Record.ToTable(Hoop)
+in
+    Fields`,
+      about: "Record.ToTable turns a record into Name and Value rows, which is how to show one item's details as a list or join them to something else. These are Hoop Driver 1's dim_machine fields: Assembly, 55 barrels an hour, the illustrative $42.50 margin.",
+      terms: [
+        ["Record.ToTable", "Record.ToTable", "Name and Value rows."],
+      ],
+      pq: {"query": "Hoop Driver 1 Fields"},
+      out: `Name               Value
+machine            Hoop Driver 1
+area               Assembly
+ideal_rate_hr      55
+margin_per_barrel  42.5
+4 rows`,
+    },
+    {
+      t: "Typed functions",
+      goal: "Write LostDollars with every parameter typed as number and a number result, then return a list of its result for Hoop Driver 1's week, rounded to 2 places, and of calling it with text, caught by try.",
+      code: `let
+    LostDollars = (minutes as number, rate as number, margin as number) as number => minutes / 60 * rate * margin,
+    Checks = {
+        Number.Round(LostDollars(108.85, 55, 42.5), 2),
+        try LostDollars("108.85", 55, 42.5) otherwise "not a number"
+    }
+in
+    Checks`,
+      about: "as number on each parameter and after the brackets makes the function check its arguments and its result. Given the text \"108.85\", it raises an error instead of quietly returning nonsense, and try catches it. A type like number does not include null; nullable number does. Types are worth adding to any function other queries call, because the error lands where the bad value enters.",
+      terms: [
+        ["as number", "Type annotation", "The value must be a number, and not null."],
+        ["try", "try … otherwise", "Catches the type error."],
+      ],
+      pq: {"query": "Typed Check"},
+      out: `List
+4240.61
+not a number
+2 rows`,
+    },
+    {
+      t: "Keep the rows that converted",
+      goal: "Convert the four typed minutes with try, keep the rows that converted, and total their minutes.",
+      code: `let
+    Entered = Table.FromRecords({
+        [machine = "Conveyor 3", typed = "12"],
+        [machine = "Hoop Driver 1", typed = "7.5"],
+        [machine = "Char Station 2", typed = "n/a"],
+        [machine = "Hoop Driver 1", typed = "15"]
+    }),
+    Parsed = Table.AddColumn(Entered, "minutes", each try Number.From([typed]) otherwise null),
+    Good = Table.SelectRows(Parsed, each [minutes] <> null),
+    Total = [rows = Table.RowCount(Good), skipped = Table.RowCount(Parsed) - Table.RowCount(Good), minutes = List.Sum(Good[minutes])]
+in
+    Total`,
+      about: "Converting with try leaves null where a value would not convert; keeping only the non-null rows and counting what was skipped means a refresh never silently drops data. 3 rows convert, 1 is skipped (the n/a), and the minutes total 34.5. Report the skipped count beside the total so someone fixes the source.",
+      terms: [
+        ["Table.RowCount", "Table.RowCount", "Rows in the table."],
+        ["Good[minutes]", "Column as a list", "The converted minutes."],
+      ],
+      pq: {"query": "Typed Minutes Total"},
+      out: `Field    Value
+rows         3
+skipped      1
+minutes   34.5
+3 rows`,
+    },
+    {
+      t: "Shift summary",
+      goal: "For the OEE week, add each fault's minutes and shift, pivot the shifts A, B and C into columns by machine, add a total across them, and sort by machine.",
+      code: `let
+    Source = Sql.Database("plant-sql01", "PlantDB"),
+    Faults = Source{[Schema = "dbo", Item = "fault_log"]}[Data],
+    Week = Table.SelectRows(Faults, each [start_ts] >= #datetime(2026, 10, 31, 6, 0, 0) and [start_ts] < #datetime(2026, 11, 7, 6, 0, 0)),
+    Minutes = Table.AddColumn(Week, "minutes", each Duration.TotalMinutes([end_ts] - [start_ts])),
+    Shifts = Table.AddColumn(Minutes, "shift", each
+        if Time.Hour([start_ts]) >= 6 and Time.Hour([start_ts]) < 14 then "A"
+        else if Time.Hour([start_ts]) >= 14 and Time.Hour([start_ts]) < 22 then "B"
+        else "C"),
+    Slim = Table.SelectColumns(Shifts, {"machine", "shift", "minutes"}),
+    Pivoted = Table.Pivot(Slim, {"A", "B", "C"}, "shift", "minutes", List.Sum),
+    Total = Table.AddColumn(Pivoted, "total", each List.Sum({[A], [B], [C]})),
+    Sorted = Table.Sort(Total, {{"machine", Order.Ascending}})
+in
+    Sorted`,
+      about: "Everything together: a column worked out per row, a shift from the hour, a pivot of the shifts into columns, and a total across them. The totals are the OEE week's down minutes, 87.05 / 94.73 / 108.85. Shift B and C match the DAX lane's 105.63 and 123.93; shift A is 61.06 here against its 71.02 because the DAX figure includes shift A's two faults on 7 November, after the OEE week. List.Sum skips nulls, so a machine with no stops in a shift still totals correctly.",
+      terms: [
+        ["Table.Pivot", "Pivot the shifts", "A, B and C become columns."],
+        ["List.Sum({[A], [B], [C]})", "Total across", "Adds the row's shift columns, skipping nulls."],
+      ],
+      pq: {"query": "Shift Summary", "format": {"A": "0.00", "B": "0.00", "C": "0.00", "total": "0.00"}},
+      out: `machine             A      B      C   total
+Char Station 2   7.98  40.03  39.03   87.05
+Conveyor 3      20.83  27.28  46.62   94.73
+Hoop Driver 1   32.25  38.32  38.28  108.85
+3 rows`,
+    },
   ],
 });
