@@ -532,3 +532,31 @@ BC.addGlossary("ignexpr", [
   ["{", "{tag path}", "A tag's value. The binding re-evaluates when it changes.", "\\{\\["],
   ["args", "Argument line", "One or more arguments of the function call above, on their own line. In switch(), the values to match come first, then the results in the same order, then the default.", "^\\s*[\\d\"]"],
 ]);
+
+BC.addGlossary("dax", [
+  ["define", "Name = …", "Defines a measure: a formula worked out for each cell of a visual, under that cell's filters.", "^[A-Za-z][\\w ]*=\\s*"],
+  ["calc-column", "table[column] = …", "Defines a calculated column: worked out once per row and stored.", "^\\w+\\[[^\\]]+\\]\\s*="],
+  ["[", "[Measure]", "Uses another measure, worked out in the same cell.", "^\\s*\\[|[(,\\s]\\[[A-Z]"],
+  ["VAR", "VAR name = …", "Names a value, worked out once, where it is written."],
+  ["RETURN", "RETURN", "The measure's result, which can use the variables."],
+  ["CALCULATE", "CALCULATE(expression, filters…)", "Works out the expression with the filters changed."],
+  ["SUM", "SUM(column)", "Adds the column over the rows visible in the cell."],
+  ["SUMX", "SUMX(table, expression)", "Works out the expression for each row of the table and adds the results."],
+  ["AVERAGEX", "AVERAGEX(table, expression)", "Works out the expression for each row and averages the results."],
+  ["COUNTROWS", "COUNTROWS(table)", "How many rows of the table are visible in the cell."],
+  ["DIVIDE", "DIVIDE(top, bottom)", "Division that gives blank when the bottom is zero or blank."],
+  ["ALL", "ALL(table or column)", "Removes filters inside CALCULATE, or lists every row or value."],
+  ["FILTER", "FILTER(table, condition)", "The rows of the table that meet the condition."],
+  ["VALUES", "VALUES(column)", "The column's values visible in the cell."],
+  ["IF", "IF(condition, then, else)", "Then when the condition is true, else (or blank) when not."],
+  ["SWITCH", "SWITCH(TRUE(), cond, result, …, else)", "The result of the first true condition."],
+  ["MAX", "MAX(column)", "The largest value visible in the cell."],
+  ["DATE", "DATE(y, m, d)", "A date. Adding TIME(h, m, s) gives a date and time."],
+  ["TIME", "TIME(h, m, s)", "A time of day, added to a DATE for a date and time."],
+  ["DATEDIFF", "DATEDIFF(start, end, unit)", "Whole units between two times, such as SECOND."],
+  ["COALESCE", "COALESCE(a, b)", "The first value that is not blank."],
+  ["RANKX", "RANKX(table, expression)", "This cell's value ranked against the expression over the table, largest first."],
+  ["HASONEVALUE", "HASONEVALUE(column)", "True when the cell shows exactly one value of the column."],
+  ["args", "Argument line", "One or more arguments of the function above, on their own line.", "^\\s*[\\[\"]"],
+]);
+

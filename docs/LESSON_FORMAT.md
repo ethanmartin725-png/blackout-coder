@@ -109,6 +109,17 @@ JavaScript has two modes. `js` previews a page and only makes sense in a track, 
 - Long lines are harder on phones. Break them where the language allows.
 - Ladder: one rung per line, ending in `;`.
 
+## DAX lessons
+
+The DAX lane's lessons have a `dax` field instead of `sim`, saying what the output shows:
+
+```js
+dax: { rows: "dim_machine[machine]", values: ["Week Down Min", "OEE"], format: { OEE: "0.0%" } }   // a table visual
+dax: { table: "fault_log", columns: ["fault_id", "minutes"], top: 4, format: { minutes: "0.00" } } // a table's first rows
+```
+
+The code is definitions: `Name = …` for a measure, `table[column] = …` for a calculated column. Each lesson is evaluated with every earlier lesson's definitions. Write the lesson, add its SQL twin to `tools/output-checks/dax/twins.mjs`, then run `node tools/output-checks/dax/run.mjs`. Semantics: `docs/DAX_MODEL.md`.
+
 ## Glossary (explain panel)
 
 `site/data/glossary.js` defines each language's everyday words once, for the explain panel under the editor:

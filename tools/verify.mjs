@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 import { runPlcTests } from "./plc-tests.mjs";
 import { runProgressTests } from "./progress-tests.mjs";
 import { runExplainTests } from "./explain-tests.mjs";
+import { runDaxTests } from "./dax-tests.mjs";
+import { lessonOutputs as daxOutputs } from "./output-checks/dax/lane.mjs";
 import { routineCode, PLC_LANGS } from "./output-checks/plc/lessons.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -231,6 +233,19 @@ for (const lang of ["cpp", "java"]) {
 for (const f of runProgressTests(BCcore)) fail(`Progress file test: ${f}`);
 for (const f of runExplainTests(BCcore)) fail(`Explain test: ${f}`);
 
+// DAX lane: the teaching model's own tests, then every lesson's output from the model over the
+// PlantDB snapshot. The SQL twins need SQL Server, so they run in tools/output-checks/dax/run.mjs.
+for (const f of runDaxTests()) fail(`DAX model test: ${f}`);
+let daxRun = 0;
+for (const lane of BC.lanes.filter((l) => l.lang === "dax")) {
+  for (const r of daxOutputs(lane.lessons)) {
+    daxRun++;
+    const where = `${lane.id} "${r.t}"`;
+    if (r.error) fail(`${where}: the DAX model refused it: ${r.error}`);
+    else if (r.out !== lane.lessons.find((l) => l.t === r.t).out) fail(`${where}: stored output does not match the DAX model. Run node tools/output-checks/dax/run.mjs`);
+  }
+}
+
 // Glossary for the explain panel (data/glossary.js): well-formed entries, unique keys, no em-dash
 // asides, every entry used by some lesson in its language, and most lines explained.
 let glossLines = 0, glossHit = 0;
@@ -301,7 +316,7 @@ else {
   }
 }
 
-const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds, ${nativeCount.cpp} C++ and ${nativeCount.java} Java compiles, ${ladderParsed} ladder and ${stParsed} Structured Text parses, ${plcSims} PLC scenarios, ${glossHit}/${glossLines} code lines explained (${(100 * glossHit / Math.max(1, glossLines)).toFixed(1)}%)`;
+const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds, ${nativeCount.cpp} C++ and ${nativeCount.java} Java compiles, ${ladderParsed} ladder and ${stParsed} Structured Text parses, ${plcSims} PLC scenarios, ${daxRun} DAX outputs, ${glossHit}/${glossLines} code lines explained (${(100 * glossHit / Math.max(1, glossLines)).toFixed(1)}%)`;
 for (const w of warns) console.warn("warn  " + w);
 if (errors.length) { for (const e of errors) console.error("FAIL  " + e); console.error(`\n${errors.length} problem(s). ${summary}`); process.exit(1); }
 console.log(`All lessons pass. ${summary}`);

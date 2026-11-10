@@ -124,3 +124,10 @@ BC.addLanguage("jscon", {
   "kw": "const let var function return if else for of in new async await try catch throw true false null",
   "note": "JavaScript run on its own, in Node.js or a browser's developer console. console.log prints a line. The Plant Board track uses the same language to change a web page."
 });
+BC.addLanguage("dax", {
+  "name": "DAX",
+  "short": "DAX",
+  "tab": 4,
+  "kw": "VAR RETURN CALCULATE SUM SUMX AVERAGEX COUNTROWS DIVIDE ALL FILTER VALUES IF SWITCH TRUE FALSE BLANK MAX MIN DATE TIME DATEDIFF COALESCE RANKX HASONEVALUE SECOND",
+  "note": "DAX: the formula language of Power BI. A measure is worked out for each cell of a visual, under that cell's filters. DAX only runs inside Power BI, so these outputs come from a teaching model of DAX, and every lesson is checked against the same question asked of SQL Server."
+});
