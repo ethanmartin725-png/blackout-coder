@@ -780,5 +780,78 @@ Press and release Stop_PB    →  Hoop1_Run=0
 Air drops to 70 psi for 3 s  →  Hoop1_Low_Air=1
 Air back to 92 psi for 6 s   →  Hoop1_Low_Air=0`,
     },
+    {
+      t: "Clamp before you press",
+      goal: "Hoop Driver 1 by hand: Clamp_PB seals in Clamp_Cmd while a barrel is in place; Unclamp_PB releases it only with the press up. Press_Extend runs only while Press_PB is held with the clamp closed and a hoop fed.",
+      code: `BST XIC(Clamp_PB) NXB XIC(Clamp_Cmd) BND XIC(Barrel_In_Place) BST XIO(Unclamp_PB) NXB XIO(Press_Up) BND OTE(Clamp_Cmd);
+XIC(Press_PB) XIC(Clamp_Closed) XIC(Hoop_Fed) OTE(Press_Extend);`,
+      about: "Interlocks make the wrong order impossible: the press cannot come down on a barrel that is not clamped, or with no hoop to drive, and the clamp cannot open while the press is down. The unclamp branch passes power when Unclamp_PB is not pressed OR the press is not up, so pressing Unclamp_PB breaks the seal only with the press at the top. Press_PB is hold-to-run: release it and the press stops extending. The simulator's press scene drives the sensors; its travel times are compressed and illustrative (a real cycle at 55 barrels/hr takes about 65 s).",
+      terms: [
+        ["Clamp_Cmd", "Seal-in", "Clamp_PB starts it; the contact on its own output keeps it on."],
+        ["XIO(Press_Up)", "Unclamp interlock", "Unclamp_PB is ignored while the press is away from the top."],
+        ["Press_PB", "Hold to run", "The press extends only while the button is held."],
+      ],
+      sim: {"start":{"Barrel_In_Place":1,"Hoop_Fed":1,"Press_Up":1},"watch":["Clamp_Cmd","Press_Extend"],"steps":[{"label":"Press_PB before clamping","pulse":{"Press_PB":1}},{"label":"Press and release Clamp_PB","pulse":{"Clamp_PB":1}},{"label":"Clamp closes; hold Press_PB","set":{"Clamp_Closed":1,"Press_PB":1}},{"label":"Press leaves the top; Unclamp_PB","set":{"Press_Up":0},"pulse":{"Unclamp_PB":1}},{"label":"Release Press_PB; press back up","set":{"Press_PB":0,"Press_Up":1}},{"label":"Unclamp_PB with the press up","pulse":{"Unclamp_PB":1}}],"scene":"hoop1"},
+      out: `Press_PB before clamping          →  no change
+Press and release Clamp_PB        →  Clamp_Cmd=1
+Clamp closes; hold Press_PB       →  Press_Extend=1
+Press leaves the top; Unclamp_PB  →  no change
+Release Press_PB; press back up   →  Press_Extend=0
+Unclamp_PB with the press up      →  Clamp_Cmd=0`,
+    },
+    {
+      t: "Press step sequence",
+      goal: "Run Hoop Driver 1 as a step sequence in Step: 0 idle until Auto with a barrel in place and a hoop fed; 10 clamp until Clamp_Closed; 20 press until Press_Down; 30 return until Press_Up; 40 unclamp until the clamp is open and the barrel gone, then 0. Clamp_Cmd is on in steps 10 to 30, Press_Extend in step 20.",
+      code: `EQU(Step,0) XIC(Auto) XIC(Barrel_In_Place) XIC(Hoop_Fed) MOV(10,Step);
+EQU(Step,10) XIC(Clamp_Closed) MOV(20,Step);
+EQU(Step,20) XIC(Press_Down) MOV(30,Step);
+EQU(Step,30) XIC(Press_Up) MOV(40,Step);
+EQU(Step,40) XIO(Clamp_Closed) XIO(Barrel_In_Place) MOV(0,Step);
+LIM(10,Step,30) OTE(Clamp_Cmd);
+EQU(Step,20) OTE(Press_Extend);`,
+      about: "A step sequence is how most machines are programmed: each step turns on its outputs and waits for one sensor before moving to the next. One rung per transition: EQU checks the step, the contacts are what it waits for, MOV moves on. The outputs are written once, from the step number, so no two rungs ever fight over Clamp_Cmd. Steps go up in 10s so a step can be added later without renumbering. Rungs run top to bottom, so a sequence can pass through two steps in one scan when both waits are already met; this one never does, because each step waits for something the step before has to change. The simulator's press scene drives the sensors; its travel times are compressed and illustrative (a real cycle at 55 barrels/hr takes about 65 s).",
+      terms: [
+        ["EQU(Step,10)", "In step 10", "This rung only acts while the sequence is in step 10."],
+        ["MOV(20,Step)", "Next step", "Moves the sequence on once the step's sensor is made."],
+        ["LIM(10,Step,30)", "Steps 10 to 30", "True for any step from 10 to 30: the clamp stays on through them."],
+      ],
+      sim: {"start":{"Barrel_In_Place":1,"Hoop_Fed":1,"Press_Up":1},"watch":["Step","Clamp_Cmd","Press_Extend"],"steps":[{"label":"Auto on, barrel in place, hoop fed","set":{"Auto":1}},{"label":"Clamp closes","set":{"Clamp_Closed":1}},{"label":"Press leaves the top","set":{"Press_Up":0}},{"label":"Press reaches the bottom","set":{"Press_Down":1}},{"label":"Press back at the top","set":{"Press_Down":0,"Press_Up":1}},{"label":"Clamp opens; barrel rolls out","set":{"Clamp_Closed":0,"Barrel_In_Place":0}},{"label":"Next barrel arrives","set":{"Barrel_In_Place":1}}],"scene":"hoop1"},
+      out: `Auto on, barrel in place, hoop fed  →  Step=10  →  Clamp_Cmd=1
+Clamp closes                        →  Step=20  →  Press_Extend=1
+Press leaves the top                →  no change
+Press reaches the bottom            →  Step=30  →  Press_Extend=0
+Press back at the top               →  Step=40  →  Clamp_Cmd=0
+Clamp opens; barrel rolls out       →  Step=0
+Next barrel arrives                 →  Step=10  →  Clamp_Cmd=1`,
+    },
+    {
+      t: "Hoop misfeed fault",
+      goal: "Add a misfeed fault to the press sequence: if Press_Down has not come 3 s into step 20 (Misfeed_Timer), latch Hoop_Misfeed and go to step 90, where the press retracts and the clamp holds. Reset_PB, with the press up and a hoop fed, clears the fault and retries from step 10.",
+      code: `EQU(Step,0) XIC(Auto) XIC(Barrel_In_Place) XIC(Hoop_Fed) MOV(10,Step);
+EQU(Step,10) XIC(Clamp_Closed) MOV(20,Step);
+EQU(Step,20) XIC(Press_Down) MOV(30,Step);
+EQU(Step,20) XIC(Misfeed_Timer.DN) OTL(Hoop_Misfeed) MOV(90,Step);
+EQU(Step,30) XIC(Press_Up) MOV(40,Step);
+EQU(Step,40) XIO(Clamp_Closed) XIO(Barrel_In_Place) MOV(0,Step);
+EQU(Step,90) XIC(Reset_PB) XIC(Press_Up) XIC(Hoop_Fed) OTU(Hoop_Misfeed) MOV(10,Step);
+EQU(Step,20) TON(Misfeed_Timer,3000,0);
+BST LIM(10,Step,30) NXB EQU(Step,90) BND OTE(Clamp_Cmd);
+EQU(Step,20) OTE(Press_Extend);`,
+      about: "Every step that waits on a sensor needs a time limit, or a jam leaves the machine waiting forever with the press bearing down on a bent hoop. Hoop misfeed is one of the canonical faults in fault_log. Step 90 is a fault step: the press output is off, so the ram returns, while the clamp keeps the barrel still for the operator. The reset needs the press back up and a new hoop, so a retry starts from a known state. On the retry the clamp is still closed, so step 10 passes straight to 20 on the next scan, which is why the output shows Step=20. The timer rung sits after the step rungs, so the step that sees .DN is the scan after it was set, as in the Structured Text version. The simulator's press scene drives the sensors; its travel times are compressed and illustrative (a real cycle at 55 barrels/hr takes about 65 s).",
+      terms: [
+        ["Misfeed_Timer", "Step time limit", "Runs only in step 20; done at 3 s if Press_Down never came."],
+        ["MOV(90,Step)", "Fault step", "Press off, clamp held, until a reset."],
+        ["OTU(Hoop_Misfeed)", "Reset", "Only with the press up and a hoop fed; then retry from step 10."],
+      ],
+      sim: {"start":{"Barrel_In_Place":1,"Hoop_Fed":1,"Press_Up":1},"watch":["Step","Hoop_Misfeed","Clamp_Cmd","Press_Extend"],"steps":[{"label":"Auto on, barrel in place, hoop fed","set":{"Auto":1}},{"label":"Clamp closes","set":{"Clamp_Closed":1}},{"label":"Press leaves the top, stalls 3 s","set":{"Press_Up":0,"Hoop_Fed":0},"runMs":3100},{"label":"Press back at the top","set":{"Press_Up":1}},{"label":"Reset_PB with no hoop fed","pulse":{"Reset_PB":1}},{"label":"Hoop fed; Reset_PB","set":{"Hoop_Fed":1},"pulse":{"Reset_PB":1}},{"label":"Press leaves the top","set":{"Press_Up":0}},{"label":"Press reaches the bottom","set":{"Press_Down":1}}],"scene":"hoop1"},
+      out: `Auto on, barrel in place, hoop fed  →  Step=10  →  Clamp_Cmd=1
+Clamp closes                        →  Step=20  →  Press_Extend=1
+Press leaves the top, stalls 3 s    →  Hoop_Misfeed=1  →  Step=90  →  Press_Extend=0
+Press back at the top               →  no change
+Reset_PB with no hoop fed           →  no change
+Hoop fed; Reset_PB                  →  Hoop_Misfeed=0  →  Step=20  →  Press_Extend=1
+Press leaves the top                →  no change
+Press reaches the bottom            →  Step=30  →  Press_Extend=0`,
+    },
   ],
 });

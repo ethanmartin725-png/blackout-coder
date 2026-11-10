@@ -423,6 +423,53 @@ const SCENES={
     };
     return S;
   },
+  // Hoop Driver 1 press. A barrel waits in the cradle; the clamp closes while Clamp_Cmd is on, the
+  // press drives down while Press_Extend is on and returns without it. Driving to the bottom puts the
+  // hoop on; the feeder then loads the next hoop. A hooped barrel rolls out once the clamp opens and
+  // a new one arrives. "Hoop misfeeds" jams the next hoop: the press stalls at 70% of its stroke and
+  // Hoop_Fed drops until the misfeed is cleared. Travel times are compressed and illustrative (a
+  // real cycle at 55 barrels/hr takes about 65 s).
+  hoop1(plc){
+    if(!plc.has('Press_Extend'))return null;
+    const S={clamp:0,press:0,barrel:1,hooped:false,hoop:1,refeed:0,stall:false,jamNext:false,away:0,
+      drives:['Barrel_In_Place','Clamp_Closed','Press_Down','Press_Up','Hoop_Fed'].filter(t=>plc.has(t))};
+    const w=(t,v)=>{if(plc.has(t))plc.write(t,v?1:0);};
+    S.controls=[
+      {label:'Hoop misfeeds',run(){S.jamNext=true;return 'The next hoop will jam: the press will stall short of the bottom.';}},
+      {label:'Clear the misfeed',run(){const was=S.stall;S.stall=false;S.jamNext=false;return was?'Misfeed cleared and the bent hoop removed. The feeder loads a new one once the press is up.':'Nothing is jammed.';}},
+    ];
+    S.step=dt=>{
+      const s=dt/1000,toward=(x,on,per)=>Math.max(0,Math.min(1,x+(on?1:-1)*s/per));
+      S.clamp=toward(S.clamp,plcOn(plc,'Clamp_Cmd'),0.5);
+      const ext=plcOn(plc,'Press_Extend');
+      if(ext&&S.jamNext&&S.hoop&&S.press>0){S.stall=true;S.jamNext=false;S.hoop=0;}
+      S.press=toward(S.press,ext,1.0);
+      if(S.stall&&S.press>0.7)S.press=0.7;
+      if(S.press>=1&&S.hoop&&S.barrel){S.hoop=0;S.hooped=true;}
+      if(!S.hoop&&!S.stall&&S.press<=0){S.refeed+=s;if(S.refeed>=0.6){S.hoop=1;S.refeed=0;}}
+      if(S.barrel&&S.hooped&&S.clamp<=0&&S.press<=0){S.away+=s;if(S.away>=0.8){S.barrel=0;S.hooped=false;S.away=0;}}
+      else if(!S.barrel){S.away+=s;if(S.away>=1.5){S.barrel=1;S.away=0;}}
+      w('Barrel_In_Place',S.barrel);w('Clamp_Closed',S.clamp>=1);w('Press_Down',S.press>=1);w('Press_Up',S.press<=0);w('Hoop_Fed',S.hoop);
+    };
+    S.note=()=>S.stall?'The press is stalled on a jammed hoop. Does your logic notice?':null;
+    S.svg=narrow=>{
+      const o=[],c=S.clamp,pr=S.press,lx=narrow?380:500,lbl=(t,x,y,a)=>plc.has(t)?`<text class="sc-label" x="${x}" y="${y}"${a?` text-anchor="${a}"`:''}>${t} ${plcOn(plc,t)?1:0}</text>`:'';
+      o.push('<rect class="sc-belt" x="176" y="150" width="148" height="8" rx="3"/>');
+      if(S.barrel)o.push(`<g class="sc-barrel"><rect x="210" y="86" width="80" height="64" rx="10"/><line x1="210" y1="100" x2="290" y2="100"/><line x1="210" y1="136" x2="290" y2="136"/></g>`+(S.hooped?'<line class="sc-hoop" x1="208" y1="92" x2="292" y2="92"/>':''));
+      o.push(`<rect class="sc-cyl" x="${(178+18*c).toFixed(1)}" y="100" width="12" height="36" rx="2"/><rect class="sc-cyl" x="${(310-18*c).toFixed(1)}" y="100" width="12" height="36" rx="2"/>`);
+      o.push(`<rect class="sc-cyl" x="226" y="4" width="48" height="26" rx="4"/><rect class="sc-rod${plcOn(plc,'Press_Extend')?' out':''}" x="244" y="30" width="12" height="${(10+pr*44).toFixed(1)}"/><rect class="sc-rod${S.stall?' jam':''}" x="212" y="${(40+pr*44).toFixed(1)}" width="76" height="6" rx="2"/>`);
+      o.push('<rect class="sc-mag" x="94" y="52" width="52" height="24" rx="3"/>');
+      if(S.hoop)o.push('<ellipse class="sc-hoopring" cx="120" cy="64" rx="20" ry="6"/>');
+      if(S.stall)o.push(`<path class="sc-jam" d="M232 ${(46+pr*44).toFixed(1)} l8 8 m0 -8 l-8 8 M260 ${(46+pr*44).toFixed(1)} l8 8 m0 -8 l-8 8"/>`);
+      // A sensor's label shows only when the lesson's code uses that tag.
+      o.push(lbl('Press_Up',220,16,'end'),lbl('Press_Down',220,34,'end'),lbl('Hoop_Fed',120,96,'middle'),lbl('Clamp_Closed',250,168,'middle'),lbl('Barrel_In_Place',8,146));
+      if(plc.has('Step'))o.push(`<text class="sc-lcd" x="8" y="24">STEP ${plc.read('Step')}</text>`);
+      let y=22;const row=(cls,tag,label)=>{if(plc.has(tag)){o.push(lamp(cls,lx,y,plcOn(plc,tag),label));y+=26;}};
+      row('a','Clamp_Cmd','CLAMP');row('g','Press_Extend','PRESS');row('r','Hoop_Misfeed','MISFEED');
+      return `<svg viewBox="0 0 ${narrow?440:640} 170" role="img" aria-label="Hoop Driver 1 press: barrel in the cradle, clamp, press ram, hoop feeder and lamps">${o.join('')}</svg>`;
+    };
+    return S;
+  },
   // Char Station 2 burner and exhaust fan. The scene only reads tags. Smoke builds while the
   // burner is on and clears only with the fan running. Illustrative numbers.
   char2(plc){

@@ -238,6 +238,11 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
 .sc-hood{fill:var(--panel-2);stroke:var(--line)}
 .sc-duct{fill:var(--line)}
 .sc-blade{fill:var(--muted)}
+.sc-hoop{stroke:var(--ink-2);stroke-width:4}
+.sc-hoopring{fill:none;stroke:var(--ink-2);stroke-width:4}
+.sc-mag{fill:var(--panel-2);stroke:var(--line)}
+.sc-rod.jam{fill:var(--bad)}
+.sc-jam{stroke:var(--bad);stroke-width:2.5;fill:none}
 .sc-blade.on{fill:var(--ok)}
 .sc-flame{fill:var(--warn);stroke:var(--bad);stroke-width:2}
 .sc-smoke{fill:var(--muted)}

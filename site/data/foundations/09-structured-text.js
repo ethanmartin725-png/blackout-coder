@@ -971,6 +971,90 @@ Behind_Count := n;`,
 Hoop Driver 1 reaches 300  →  Line[1].Behind=0  →  Behind_Count=0`,
     },
     {
+      t: "Clamp before you press",
+      goal: "Write the hand-operated press interlocks as two assignments: Clamp_Cmd seals in from Clamp_PB with a barrel in place and drops on Unclamp_PB only with the press up; Press_Extend needs Press_PB held, the clamp closed and a hoop fed.",
+      code: `Clamp_Cmd := (Clamp_PB OR Clamp_Cmd) AND Barrel_In_Place AND NOT (Unclamp_PB AND Press_Up);
+Press_Extend := Press_PB AND Clamp_Closed AND Hoop_Fed;`,
+      about: "The ladder lesson's two rungs as two statements. The unclamp branch, Unclamp_PB not pressed OR the press not up, is NOT (Unclamp_PB AND Press_Up): the same rule read the other way round. The output matches the ladder lesson step for step. The simulator's press scene drives the sensors; its travel times are compressed and illustrative (a real cycle at 55 barrels/hr takes about 65 s).",
+      terms: [
+        ["NOT (Unclamp_PB AND Press_Up)", "Unclamp interlock", "Unclamp_PB only counts with the press at the top."],
+        ["(Clamp_PB OR Clamp_Cmd)", "Seal-in", "The output keeps itself on once started."],
+      ],
+      sim: {"start":{"Barrel_In_Place":1,"Hoop_Fed":1,"Press_Up":1},"watch":["Clamp_Cmd","Press_Extend"],"steps":[{"label":"Press_PB before clamping","pulse":{"Press_PB":1}},{"label":"Press and release Clamp_PB","pulse":{"Clamp_PB":1}},{"label":"Clamp closes; hold Press_PB","set":{"Clamp_Closed":1,"Press_PB":1}},{"label":"Press leaves the top; Unclamp_PB","set":{"Press_Up":0},"pulse":{"Unclamp_PB":1}},{"label":"Release Press_PB; press back up","set":{"Press_PB":0,"Press_Up":1}},{"label":"Unclamp_PB with the press up","pulse":{"Unclamp_PB":1}}],"scene":"hoop1","sameAs":"ladder/Clamp before you press"},
+      out: `Press_PB before clamping          →  no change
+Press and release Clamp_PB        →  Clamp_Cmd=1
+Clamp closes; hold Press_PB       →  Press_Extend=1
+Press leaves the top; Unclamp_PB  →  no change
+Release Press_PB; press back up   →  Press_Extend=0
+Unclamp_PB with the press up      →  Clamp_Cmd=0`,
+    },
+    {
+      t: "Press step sequence with CASE",
+      goal: "Write the press sequence with CASE on Step: 0 idle until Auto, a barrel and a hoop; 10 until Clamp_Closed; 20 until Press_Down; 30 until Press_Up; 40 until the clamp is open and the barrel gone. Then set Clamp_Cmd for steps 10 to 30 and Press_Extend for step 20.",
+      code: `CASE Step OF
+    0:  IF Auto AND Barrel_In_Place AND Hoop_Fed THEN Step := 10; END_IF;
+    10: IF Clamp_Closed THEN Step := 20; END_IF;
+    20: IF Press_Down THEN Step := 30; END_IF;
+    30: IF Press_Up THEN Step := 40; END_IF;
+    40: IF NOT Clamp_Closed AND NOT Barrel_In_Place THEN Step := 0; END_IF;
+END_CASE;
+Clamp_Cmd := Step >= 10 AND Step <= 30;
+Press_Extend := Step = 20;`,
+      about: "CASE is the natural shape for a step sequence: one arm per step, each waiting for its sensor. Only one arm runs per scan, so the sequence moves at most one step a scan, where ladder rungs can pass through two. The outputs come from the step number after the CASE, in one place. The output matches the ladder lesson step for step. The simulator's press scene drives the sensors; its travel times are compressed and illustrative (a real cycle at 55 barrels/hr takes about 65 s).",
+      terms: [
+        ["CASE Step OF", "One arm per step", "Only the arm for the current step runs."],
+        ["Step >= 10 AND Step <= 30", "Steps 10 to 30", "The clamp is on from clamping until the press is back up."],
+      ],
+      sim: {"start":{"Barrel_In_Place":1,"Hoop_Fed":1,"Press_Up":1},"watch":["Step","Clamp_Cmd","Press_Extend"],"steps":[{"label":"Auto on, barrel in place, hoop fed","set":{"Auto":1}},{"label":"Clamp closes","set":{"Clamp_Closed":1}},{"label":"Press leaves the top","set":{"Press_Up":0}},{"label":"Press reaches the bottom","set":{"Press_Down":1}},{"label":"Press back at the top","set":{"Press_Down":0,"Press_Up":1}},{"label":"Clamp opens; barrel rolls out","set":{"Clamp_Closed":0,"Barrel_In_Place":0}},{"label":"Next barrel arrives","set":{"Barrel_In_Place":1}}],"scene":"hoop1","sameAs":"ladder/Press step sequence"},
+      out: `Auto on, barrel in place, hoop fed  →  Step=10  →  Clamp_Cmd=1
+Clamp closes                        →  Step=20  →  Press_Extend=1
+Press leaves the top                →  no change
+Press reaches the bottom            →  Step=30  →  Press_Extend=0
+Press back at the top               →  Step=40  →  Clamp_Cmd=0
+Clamp opens; barrel rolls out       →  Step=0
+Next barrel arrives                 →  Step=10  →  Clamp_Cmd=1`,
+    },
+    {
+      t: "Hoop misfeed with CASE",
+      goal: "Add the misfeed fault to the CASE sequence: in step 20, Press_Down moves on to 30, but Misfeed_Timer.DN latches Hoop_Misfeed and moves to step 90. In step 90, Reset_PB with the press up and a hoop fed clears it and retries from 10. Time step 20 with a 3 s TONR; keep the clamp on in step 90.",
+      code: `CASE Step OF
+    0:  IF Auto AND Barrel_In_Place AND Hoop_Fed THEN Step := 10; END_IF;
+    10: IF Clamp_Closed THEN Step := 20; END_IF;
+    20: IF Press_Down THEN
+            Step := 30;
+        ELSIF Misfeed_Timer.DN THEN
+            Hoop_Misfeed := 1;
+            Step := 90;
+        END_IF;
+    30: IF Press_Up THEN Step := 40; END_IF;
+    40: IF NOT Clamp_Closed AND NOT Barrel_In_Place THEN Step := 0; END_IF;
+    90: IF Reset_PB AND Press_Up AND Hoop_Fed THEN
+            Hoop_Misfeed := 0;
+            Step := 10;
+        END_IF;
+END_CASE;
+Misfeed_Timer.PRE := 3000;
+Misfeed_Timer.TimerEnable := Step = 20;
+TONR(Misfeed_Timer);
+Clamp_Cmd := (Step >= 10 AND Step <= 30) OR Step = 90;
+Press_Extend := Step = 20;`,
+      about: "ELSIF gives the order of the two ways out of step 20: reaching the bottom wins over the timer. On the retry the clamp is still closed, so step 10 passes straight to 20 on the next scan, which is why the output shows Step=20. The timer runs after the CASE, so the CASE sees .DN on the next scan, the same as the ladder version, whose timer rung sits after the step rungs. The output matches the ladder lesson step for step. The simulator's press scene drives the sensors; its travel times are compressed and illustrative (a real cycle at 55 barrels/hr takes about 65 s).",
+      terms: [
+        ["ELSIF Misfeed_Timer.DN", "Time limit", "3 s in step 20 without Press_Down."],
+        ["Step := 90;", "Fault step", "Press off, clamp held, until a reset."],
+        ["Misfeed_Timer.TimerEnable := Step = 20;", "Times step 20 only", "Leaving step 20 resets the timer."],
+      ],
+      sim: {"start":{"Barrel_In_Place":1,"Hoop_Fed":1,"Press_Up":1},"watch":["Step","Hoop_Misfeed","Clamp_Cmd","Press_Extend"],"steps":[{"label":"Auto on, barrel in place, hoop fed","set":{"Auto":1}},{"label":"Clamp closes","set":{"Clamp_Closed":1}},{"label":"Press leaves the top, stalls 3 s","set":{"Press_Up":0,"Hoop_Fed":0},"runMs":3100},{"label":"Press back at the top","set":{"Press_Up":1}},{"label":"Reset_PB with no hoop fed","pulse":{"Reset_PB":1}},{"label":"Hoop fed; Reset_PB","set":{"Hoop_Fed":1},"pulse":{"Reset_PB":1}},{"label":"Press leaves the top","set":{"Press_Up":0}},{"label":"Press reaches the bottom","set":{"Press_Down":1}}],"scene":"hoop1","sameAs":"ladder/Hoop misfeed fault"},
+      out: `Auto on, barrel in place, hoop fed  →  Step=10  →  Clamp_Cmd=1
+Clamp closes                        →  Step=20  →  Press_Extend=1
+Press leaves the top, stalls 3 s    →  Hoop_Misfeed=1  →  Step=90  →  Press_Extend=0
+Press back at the top               →  no change
+Reset_PB with no hoop fed           →  no change
+Hoop fed; Reset_PB                  →  Hoop_Misfeed=0  →  Step=20  →  Press_Extend=1
+Press leaves the top                →  no change
+Press reaches the bottom            →  Step=30  →  Press_Extend=0`,
+    },
+    {
       t: "Conveyor 3 in Structured Text",
       goal: "Write all of Conveyor 3 in Structured Text: permissive, seal-in, 4 s jam fault with a reset interlock, a barrel count on the eye's leading edge cleared by Shift_Change, and Conv_State 2 jammed, 1 running, 3 idle.",
       code: `(* Permissive and seal-in *)

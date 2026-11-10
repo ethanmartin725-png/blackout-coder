@@ -64,6 +64,7 @@
 - [x] Ignition runtime and lane: real Jython 2.7.4 with a teaching model of `system.*` (tags, db over JDBC to SQL Server, date, dataset, util) and the expression language; the PLC track's 5 Ignition outputs are now generated, and a 30-lesson Ignition lane. The verifier refuses Jython-incompatible code.
 - [x] C# to 50: 28 Foundations lessons (format strings and culture, loops, arrays, switch expressions, TryParse, nullable, DateTime, decimal for money, collections and LINQ through a cumulative Pareto, enums, records, validation, interfaces, extension and generic methods, pattern matching, exceptions, files, JSON, async/await, banker's rounding), outputs from `dotnet run`.
 - [x] Ladder to 50: 29 Foundations lessons (bit patterns, timers, counters and math, compare and select, ladder state machines, two scene challenges). 9 are held identical to their Structured Text twins with `sameAs`. The on-delay lesson's tags became `No_Feed_Timer`/`No_Feed_Fault`: a starved belt is not a jam.
+- [x] Hoop Driver 1 press scene (`hoop1`) and three challenges in ladder and Structured Text: interlocks, a step sequence, a misfeed fault with a step time limit.
 - [ ] More challenge lessons per scene, and scenes for new machines as lessons need them. CTUD once its Logix semantics are confirmed.
 - [x] Ladder simulation: the learner's own ladder or Structured Text drives a machine scene in the simulator (PLC interpreter phases 1 to 4).
 
