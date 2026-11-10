@@ -14,6 +14,7 @@
 #   - machine_event for the Automated Capture track: seeded_events() below, partly illustrative
 #   - work_order for the Maintenance / CMMS track: WORK_ORDER_DDL and seeded_work_orders() below, illustrative
 #   - stock_move for the Inventory / WIP track: STOCK_MOVE_DDL and seeded_stock() below, illustrative
+#   - misfeed_event for the Kaizen / A3 track: MISFEED_DDL and seeded_misfeeds() below, illustrative
 #   - char_depth for the SPC track: CHAR_DEPTH_DDL and seeded_char_depth() below, illustrative
 # A lesson that itself creates a table runs against an empty database instead.
 #
@@ -397,6 +398,64 @@ def seeded_stock():
     return sorted(rows, key=lambda r: (r[1], r[0]))
 
 
+# Misfeeds for the Kaizen / A3 track. The track's first step types this same CREATE (build23.py
+# checks they match). Illustrative except the baseline rows' times, which are fault_log's.
+MISFEED_DDL = """CREATE TABLE misfeed_event (
+    event_id INT IDENTITY(1,1) PRIMARY KEY,
+    fault_id INT NULL,
+    start_ts DATETIME NOT NULL,
+    end_ts DATETIME NOT NULL,
+    hoop_size VARCHAR(6) NOT NULL,
+    cause VARCHAR(30) NOT NULL,
+    phase VARCHAR(8) NOT NULL
+);"""
+
+
+def seeded_misfeeds():
+    """Hoop Driver 1 misfeeds coded by cause for the kaizen. Illustrative except where noted.
+      - baseline: the OEE week's 11 misfeeds from fault_log (canonical times, 61.23 min), with cause
+        codes the team assigned during the kaizen.
+      - after: four weeks from 2026-11-07 06:00 whose minutes are the Savings Tracker's P2 actuals,
+        58.0 / 45.5 / 30.0 / 28.5. The first is shift A's canonical 10:09:40 to 10:17:10 misfeed.
+        The kaizen runs 11-10 to 11-13: feed rail realigned 11-11, misfeed sensor rebuilt 11-12. Out-of-
+        round hoops from one supplier lot persist until incoming inspection starts on 11-20."""
+    import random
+    D = datetime.datetime
+    base_cause = {1: "Feed rail worn", 3: "Hoop out of round", 15: "Feed rail worn", 20: "Sensor late",
+                  21: "Sensor late", 27: "Feed rail worn", 28: "Hoop out of round", 32: "Wrong size loaded",
+                  34: "Feed rail worn", 35: "Hoop out of round", 37: "Feed rail worn"}
+    rows = []
+    start = D(2026, 10, 31, 6)
+    for fault_id, (machine, fault, s, e) in enumerate(seeded_faults(), start=1):
+        if machine == "Hoop Driver 1" and fault == "Hoop misfeed" and start <= s < start + datetime.timedelta(days=7):
+            rows.append((fault_id, s, e, "30-gal" if base_cause[fault_id] == "Wrong size loaded" else "53-gal", base_cause[fault_id], "baseline"))
+    # (day from the week start, hour, minute, cause) per week; week totals in seconds are P2's actuals
+    plan = [
+        (3480, [(0, 10, 9, "Feed rail worn"), (0, 19, 44, "Hoop out of round"), (1, 3, 12, "Feed rail worn"),
+                (1, 15, 30, "Sensor late"), (2, 8, 41, "Hoop out of round"), (2, 22, 5, "Feed rail worn"),
+                (3, 13, 18, "Sensor late"), (4, 6, 52, "Hoop out of round"), (5, 17, 27, "Feed rail worn"),
+                (6, 9, 3, "Unknown")]),
+        (2730, [(0, 7, 35, "Hoop out of round"), (1, 16, 2, "Hoop out of round"), (2, 1, 48, "Feed rail worn"),
+                (2, 20, 14, "Hoop out of round"), (3, 11, 37, "Wrong size loaded"), (4, 4, 26, "Hoop out of round"),
+                (5, 14, 55, "Sensor late"), (6, 2, 9, "Hoop out of round")]),
+        (1800, [(0, 12, 16, "Feed rail worn"), (2, 18, 40, "Hoop out of round"), (3, 5, 22, "Wrong size loaded"),
+                (4, 21, 7, "Feed rail worn"), (6, 10, 33, "Unknown")]),
+        (1710, [(1, 9, 51, "Feed rail worn"), (2, 23, 4, "Sensor late"), (3, 15, 46, "Hoop out of round"),
+                (5, 3, 19, "Wrong size loaded"), (6, 16, 28, "Feed rail worn")]),
+    ]
+    rng = random.Random(2026)
+    for w, (total, events) in enumerate(plan):
+        week = D(2026, 11, 7, 6) + datetime.timedelta(days=7 * w)
+        secs = [450 if (w, i) == (0, 0) else round(rng.uniform(200, 480)) for i in range(len(events))]
+        secs[-1] += total - sum(secs)
+        for (day, h, m, cause), sec in zip(events, secs):
+            ts = week.replace(hour=h, minute=m) + datetime.timedelta(days=day + (1 if h < 6 else 0))
+            if (w, day, h, m) == (0, 0, 10, 9):
+                ts = D(2026, 11, 7, 10, 9, 40)
+            rows.append((None, ts, ts + datetime.timedelta(seconds=sec), "30-gal" if cause == "Wrong size loaded" else "53-gal", cause, "after"))
+    return sorted(rows, key=lambda r: r[1])
+
+
 def statements(sql):
     """Split on a semicolon at the end of a line. Fine for these lessons; not a general SQL parser."""
     return [s.strip() for s in re.split(r";[ \t]*(?:\n|$)", sql) if s.strip()]
@@ -448,6 +507,8 @@ if not creates_table:
     cur.executemany("INSERT INTO machine_event (machine, tag, value, quality, ts, logged_ts) VALUES (%s, %s, %s, %s, %s, %s)", seeded_events())
     cur.execute(WORK_ORDER_DDL)
     cur.executemany("INSERT INTO work_order (machine, wo_type, description, failure_mode, fault_id, priority, created_ts, due_ts, done_ts, est_hours, act_hours, parts_cost) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", seeded_work_orders())
+    cur.execute(MISFEED_DDL)
+    cur.executemany("INSERT INTO misfeed_event (fault_id, start_ts, end_ts, hoop_size, cause, phase) VALUES (%s, %s, %s, %s, %s, %s)", seeded_misfeeds())
     cur.execute(CHAR_DEPTH_DDL)
     cur.executemany("INSERT INTO char_depth VALUES (%s, %s, %s)", seeded_char_depth())
     for s in statements(PURCHASING_DDL):
