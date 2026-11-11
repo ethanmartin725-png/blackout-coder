@@ -17,6 +17,7 @@
 #   - misfeed_event for the Kaizen / A3 track: MISFEED_DDL and seeded_misfeeds() below, illustrative
 #   - energy_log for the Energy / Utilities track: ENERGY_DDL and seeded_energy() below, illustrative
 #   - demand_plan for the S&OP / Capacity track: DEMAND_DDL and seeded_demand() below, illustrative
+#   - wip_count and audit_5s for the Lean Basics track: WIP_DDL, AUDIT_DDL, seeded_wip(), seeded_audits(), illustrative
 #   - char_depth for the SPC track: CHAR_DEPTH_DDL and seeded_char_depth() below, illustrative
 # A lesson that itself creates a table runs against an empty database instead.
 #
@@ -559,6 +560,58 @@ def seeded_demand():
     return rows
 
 
+# WIP counts and 5S audits for the Lean Basics track. The track types these same CREATEs (build26.py
+# checks they match). Illustrative.
+WIP_DDL = """CREATE TABLE wip_count (
+    location VARCHAR(30) NOT NULL,
+    counted_ts DATETIME NOT NULL,
+    barrels INT NOT NULL,
+    PRIMARY KEY (location, counted_ts)
+);"""
+AUDIT_DDL = """CREATE TABLE audit_5s (
+    audit_date DATE NOT NULL,
+    area VARCHAR(20) NOT NULL,
+    s_name VARCHAR(20) NOT NULL,
+    score TINYINT NOT NULL,
+    PRIMARY KEY (audit_date, area, s_name)
+);"""
+
+
+def seeded_wip():
+    """Barrels counted in three buffers at every shift change of the OEE week, 2026-10-31 06:00 to
+    11-07 06:00 (22 counts each). Illustrative, with seeded noise: about 120 waiting for Hoop Driver 1,
+    60 for Char Station 2, and finished goods around 1,500, exactly the S&OP track's 1,500 at the last count."""
+    import random
+    rng = random.Random(2026)
+    rows = []
+    for k in range(22):
+        ts = datetime.datetime(2026, 10, 31, 6) + datetime.timedelta(hours=8 * k)
+        for loc, mean, sd in (("Before Hoop Driver 1", 120, 25), ("Before Char Station 2", 60, 15), ("Finished goods", 1500, 120)):
+            n = max(0, round(rng.gauss(mean, sd)))
+            if loc == "Finished goods" and k == 21:
+                n = 1500  # 11-07 06:00: the S&OP track's starting stock
+            rows.append((loc, ts, n))
+    return rows
+
+
+def seeded_audits():
+    """Four weekly 5S audits (Saturdays 10-17 to 11-07) of three areas, each S scored 0 to 4.
+    Illustrative: Assembly improving, Finishing flat with Shine held low by char soot, the Stave
+    yard slipping on Sustain."""
+    S = ["Sort", "Set in order", "Shine", "Standardize", "Sustain"]
+    plan = {
+        "Assembly":   [[2, 2, 2, 1, 1], [3, 2, 3, 2, 2], [3, 3, 3, 2, 2], [4, 3, 3, 3, 3]],
+        "Finishing":  [[3, 3, 1, 2, 2], [3, 3, 1, 2, 2], [3, 3, 2, 2, 2], [3, 3, 1, 2, 2]],
+        "Stave yard": [[3, 3, 3, 3, 3], [3, 3, 3, 3, 2], [3, 3, 2, 3, 2], [3, 2, 2, 2, 1]],
+    }
+    rows = []
+    for w in range(4):
+        d = datetime.date(2026, 10, 17) + datetime.timedelta(days=7 * w)
+        for area, weeks in plan.items():
+            rows += [(d, area, s, weeks[w][i]) for i, s in enumerate(S)]
+    return rows
+
+
 def statements(sql):
     """Split on a semicolon at the end of a line. Fine for these lessons; not a general SQL parser."""
     return [s.strip() for s in re.split(r";[ \t]*(?:\n|$)", sql) if s.strip()]
@@ -616,6 +669,10 @@ if not creates_table:
     cur.executemany("INSERT INTO energy_log VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)", seeded_energy())
     cur.execute(DEMAND_DDL)
     cur.executemany("INSERT INTO demand_plan VALUES (%s, %s, %s)", seeded_demand())
+    cur.execute(WIP_DDL)
+    cur.executemany("INSERT INTO wip_count VALUES (%s, %s, %s)", seeded_wip())
+    cur.execute(AUDIT_DDL)
+    cur.executemany("INSERT INTO audit_5s VALUES (%s, %s, %s, %s)", seeded_audits())
     cur.execute(CHAR_DEPTH_DDL)
     cur.executemany("INSERT INTO char_depth VALUES (%s, %s, %s)", seeded_char_depth())
     for s in statements(PURCHASING_DDL):
