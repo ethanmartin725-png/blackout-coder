@@ -128,6 +128,7 @@
       <span class="foot-actions">
         <button class="linkish" id="startBtn" type="button">Start here</button>
         <button class="linkish" id="aboutBtn" type="button">About</button>
+        <button class="linkish" id="threadsBtn" type="button">How it connects</button>
         <a class="linkish" id="reportLink" href="https://github.com/ethanmartin725-png/blackout-coder/issues/new?template=lesson-problem.md" target="_blank" rel="noopener">Report a problem</a>
         <button class="linkish" id="soundBtn" aria-pressed="false">Sound: off</button>
         <button class="linkish" id="saveProg">Save progress</button>
@@ -161,6 +162,18 @@
       <button class="pick" data-go="proj:t-plc" type="button"><b>I want a project</b><span>PLC &amp; HMI: a conveyor from first rung to screen</span></button>
     </div>
     <p class="intro-note">Every number comes from one sample plant whose figures are illustrative, not from a real plant. Your progress stays in this browser. Find this again under Start here, below the lesson.</p>
+  </section>
+</div>
+<div class="sum-wrap" id="threadsDlg" hidden>
+  <section class="sum intro" role="dialog" aria-modal="true" aria-labelledby="threadsTitle">
+    <div class="sum-head">
+      <div><span class="eyebrow">How it connects</span><h2 id="threadsTitle">One problem, many tracks</h2>
+        <p>The tracks share one plant, so the same problem turns up in several of them. Pick one and follow it; each stop opens the step where its number is worked out.</p></div>
+      <button class="btn" id="threadsClose" type="button">Close</button>
+    </div>
+    <div class="thread-picks" id="threadPicks" role="tablist" aria-label="Thread"></div>
+    <p class="intro-note" id="threadSub"></p>
+    <ol class="thread-list" id="threadList"></ol>
   </section>
 </div>
 <div class="sum-wrap" id="aboutDlg" hidden>
@@ -239,6 +252,7 @@
 <script src="data/tracks/24-energy.js"></script>
 <script src="data/tracks/25-sop.js"></script>
 <script src="data/tracks/26-lean.js"></script>
+<script src="data/threads.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

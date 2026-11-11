@@ -1006,11 +1006,36 @@ $('progFile').addEventListener('change',async e=>{
 let dlgOpener=null;
 function openDlg(id){dlgOpener=document.activeElement;$(id).hidden=false;$(id).querySelector('.btn').focus();}
 function closeDlg(id){$(id).hidden=true;if(id==='welcome'&&!S.welcomed){S.welcomed=1;save();}if(dlgOpener&&dlgOpener.focus)dlgOpener.focus();}
-for(const [id,btn] of [['welcome','welcomeClose'],['aboutDlg','aboutClose']]){
+for(const [id,btn] of [['welcome','welcomeClose'],['aboutDlg','aboutClose'],['threadsDlg','threadsClose']]){
   $(btn).addEventListener('click',()=>closeDlg(id));
   $(id).addEventListener('click',e=>{if(e.target===$(id))closeDlg(id);});
   $(id).addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closeDlg(id);}});
 }
+/* ---------- how it connects ---------- */
+// Threads (data/threads.js) follow one problem across lanes and tracks. Each stop opens its step.
+const THREADS=BC.threads||[];
+function renderThreads(){
+  const th=THREADS.find(t=>t.id===S.thread)||THREADS[0];if(!th)return;
+  $('threadPicks').innerHTML=THREADS.map(t=>`<button role="tab" type="button" data-id="${t.id}" aria-selected="${t===th}">${esc(t.name)}</button>`).join('');
+  $('threadSub').textContent=th.sub||'';
+  $('threadList').innerHTML=th.stations.map(([gid,title,quote,note],i)=>{
+    const g=[...LANES,...TRACKS].find(x=>x.id===gid),n=g?g.lessons.findIndex(l=>l.t===title):-1;
+    return `<li><button class="stop" type="button" data-i="${i}"><span class="where">${esc(g?g.name:gid)} · ${TRACKS.includes(g)?'Step':'Lesson'} ${n+1} · ${esc(title)}</span><span class="num">${esc(quote)}</span><span>${esc(note)}</span></button></li>`;
+  }).join('');
+}
+$('threadPicks').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.thread=b.dataset.id;save();renderThreads();});
+$('threadList').addEventListener('click',e=>{
+  const b=e.target.closest('.stop');if(!b)return;
+  const th=THREADS.find(t=>t.id===S.thread)||THREADS[0],[gid,title]=th.stations[+b.dataset.i];
+  const isTrack=TRACKS.some(t=>t.id===gid);
+  S.mode=isTrack?'proj':'found';if(isTrack)S.track=gid;else S.lane=gid;
+  const g=(isTrack?TRACKS:LANES).find(x=>x.id===gid);
+  if(!S.per[gid])S.per[gid]={lesson:0,earned:0,rank:0,prog:0,best:{}};
+  S.per[gid].lesson=Math.max(0,g.lessons.findIndex(l=>l.t===title));
+  closeDlg('threadsDlg');save();loadLesson();
+  document.querySelector('.goal').scrollIntoView({block:'start'});
+});
+$('threadsBtn').addEventListener('click',()=>{renderThreads();openDlg('threadsDlg');});
 $('startBtn').addEventListener('click',()=>openDlg('welcome'));
 $('aboutBtn').addEventListener('click',()=>openDlg('aboutDlg'));
 $('welcome').querySelectorAll('.pick').forEach(b=>b.addEventListener('click',()=>{

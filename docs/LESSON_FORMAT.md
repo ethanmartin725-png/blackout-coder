@@ -143,3 +143,17 @@ BC.addGlossary("python", [
 - Text in strings and comments is not matched. The lesson's own `terms` show first; a glossary entry with the same label as one already shown is dropped.
 - Catch-all keys listed in `FILLER` in `core.js` (such as `call` and `prop`) show only when nothing more specific matched.
 - The verifier fails on an entry that matches no lesson line in its language, on em dashes, and when under 95% of code lines get an explanation.
+
+## Threads (How it connects)
+
+`site/data/threads.js` follows one problem across lanes and tracks:
+
+```js
+BC.addThreads([
+  { id: "misfeeds", name: "Hoop Driver 1's misfeeds", sub: "One sentence on the thread.",
+    stations: [["t-db", "Downtime Pareto", "66.566666", "One sentence on what this stop adds."]] },
+]);
+```
+
+- A station is `[lane or track id, step title, quote, note]`. The quote must be text from that step's generated `out`, copied exactly; the screen shows it as the stop's number.
+- The verifier fails on a missing lane, track or step, on a quote no longer in the output, on a thread with fewer than two stations, and on em dashes. Renaming a step or regenerating its output can break a station: fix the thread in the same commit.

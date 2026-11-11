@@ -298,6 +298,16 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
 .pick:hover,.pick:focus-visible{border-color:var(--gold);outline:none}
 .intro-body p{margin:4px 0 0;color:var(--ink);font-size:14px;line-height:1.55}
 .intro-note{margin:0;color:var(--muted);font-size:12.5px;line-height:1.5}
+.thread-picks{display:flex;flex-wrap:wrap;gap:6px}
+.thread-picks button{font:600 13px var(--f-body);color:var(--muted);background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:6px 10px;cursor:pointer}
+.thread-picks button[aria-selected="true"]{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+.thread-list{margin:0;padding:0;list-style:none;display:grid;gap:6px;counter-reset:st}
+.thread-list li{counter-increment:st}
+.stop{display:grid;grid-template-columns:28px 1fr;gap:2px 10px;width:100%;text-align:left;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:9px 12px;color:var(--ink);cursor:pointer;font:400 14px var(--f-body)}
+.stop::before{content:counter(st);grid-row:span 3;align-self:center;width:24px;height:24px;border-radius:50%;background:var(--panel);border:1px solid var(--gold-dim);color:var(--gold);font:600 12px var(--f-code);display:grid;place-items:center}
+.stop:hover,.stop:focus-visible{border-color:var(--gold);outline:none}
+.stop .where{color:var(--muted);font-size:12px}
+.stop .num{font:600 13px var(--f-code);color:var(--gold);overflow-wrap:anywhere}
 .sum-body{display:flex;flex-direction:column;gap:12px;min-width:0}
 .sum-body h3{margin:8px 0 0;font:700 17px var(--f-display);color:var(--ink)}
 .sm-tiles{display:flex;gap:10px;flex-wrap:wrap}

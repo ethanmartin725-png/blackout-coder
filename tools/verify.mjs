@@ -266,6 +266,27 @@ for (const lane of BC.lanes.filter((l) => l.lang === "dax")) {
   }
 }
 
+// Threads ("How it connects", data/threads.js): every station must name a real lane or track and
+// step, and its quote must appear word for word in that step's generated output, so a thread
+// cannot drift from the numbers the tracks produce.
+let threadStations = 0;
+const threadIds = new Set();
+for (const th of BC.threads || []) {
+  if (!th.id || !th.name || !Array.isArray(th.stations) || th.stations.length < 2) { fail(`thread ${th.id || "?"}: needs an id, a name and at least two stations`); continue; }
+  if (threadIds.has(th.id)) fail(`thread ${th.id}: duplicate id`);
+  threadIds.add(th.id);
+  for (const [gid, title, quote, note] of th.stations) {
+    threadStations++;
+    const where = `thread ${th.id}, station ${gid} "${title}"`;
+    const g = [...BC.lanes, ...BC.tracks].find((x) => x.id === gid);
+    const l = g && g.lessons.find((x) => x.t === title);
+    if (!g) fail(`${where}: no lane or track ${gid}`);
+    else if (!l) fail(`${where}: no step with that title`);
+    else if (!quote || !(l.out || "").includes(quote)) fail(`${where}: "${quote}" is not in the step's output; update the thread or the step`);
+    if (!note || /\u2014/.test(note)) fail(`${where}: needs a note, without em-dash asides`);
+  }
+}
+
 // Glossary for the explain panel (data/glossary.js): well-formed entries, unique keys, no em-dash
 // asides, every entry used by some lesson in its language, and most lines explained.
 let glossLines = 0, glossHit = 0;
@@ -336,7 +357,7 @@ else {
   }
 }
 
-const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds, ${nativeCount.cpp} C++ and ${nativeCount.java} Java compiles, ${ladderParsed} ladder and ${stParsed} Structured Text parses, ${plcSims} PLC scenarios, ${daxRun} DAX and M outputs, ${glossHit}/${glossLines} code lines explained (${(100 * glossHit / Math.max(1, glossLines)).toFixed(1)}%)`;
+const summary = `${BC.lanes.length} lanes, ${BC.tracks.length} tracks, ${lessons} lessons, ${pyFiles.length} Python checks, ${jsFiles.length} JavaScript checks, ${csBuilt} C# builds, ${nativeCount.cpp} C++ and ${nativeCount.java} Java compiles, ${ladderParsed} ladder and ${stParsed} Structured Text parses, ${plcSims} PLC scenarios, ${daxRun} DAX and M outputs, ${threadStations} thread stations, ${glossHit}/${glossLines} code lines explained (${(100 * glossHit / Math.max(1, glossLines)).toFixed(1)}%)`;
 for (const w of warns) console.warn("warn  " + w);
 if (errors.length) { for (const e of errors) console.error("FAIL  " + e); console.error(`\n${errors.length} problem(s). ${summary}`); process.exit(1); }
 console.log(`All lessons pass. ${summary}`);
