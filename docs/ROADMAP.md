@@ -6,7 +6,8 @@
 - [x] License: MIT (`LICENSE`).
 - [x] Hosting: GitHub access was suspended on 2026-11-08 and restored on 2026-11-09; GitHub Pages deploys from `main` again. `.gitlab-ci.yml` stays as a fallback host; it pins Node 22.23.4 from nodejs.org, checked against the published SHA-256.
 - [x] CI actions updated to their Node 24 majors (checkout v7, setup-node v7 with Node 22, setup-python v7, setup-dotnet v6, setup-java v6, configure-pages v6, upload-pages-artifact v5, deploy-pages v5).
-- [ ] Test on the devices friends will actually use: a Windows laptop in Chrome/Edge, an iPhone, an Android phone.
+- [x] Sharing prep: a Start here card for first visits (by background: PLCs, SQL, Python, DAX, Power Query M, or a project), an About screen (illustrative data, how outputs are made, progress stays in the browser, MIT), a Report a problem link that opens the GitHub issue template with the lesson in the title, and one scrolling row of tabs on phones. Checked at 390, 412, 768, 1024 and 1366 px in Chromium.
+- [ ] Test on the devices friends will actually use: a Windows laptop in Chrome/Edge, an iPhone, an Android phone. Emulated widths pass; real devices (Safari, touch keyboards) still need a person: `docs/DEVICE_CHECKLIST.md`.
 - [ ] Share the link and collect feedback through GitHub Issues (a lesson-problem template is in `.github/ISSUE_TEMPLATE/`).
 
 ## Next content

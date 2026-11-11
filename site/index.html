@@ -126,6 +126,9 @@
     <div class="ref-foot">
       <span>Clean run: 90%+ accuracy and no peeks. Three clean runs at your rank moves you up. Each lane and project keeps its own rank. Progress saves in this browser; save it to a file to move it to another device.</span>
       <span class="foot-actions">
+        <button class="linkish" id="startBtn" type="button">Start here</button>
+        <button class="linkish" id="aboutBtn" type="button">About</button>
+        <a class="linkish" id="reportLink" href="https://github.com/ethanmartin725-png/blackout-coder/issues/new?template=lesson-problem.md" target="_blank" rel="noopener">Report a problem</a>
         <button class="linkish" id="soundBtn" aria-pressed="false">Sound: off</button>
         <button class="linkish" id="saveProg">Save progress</button>
         <button class="linkish" id="loadProg">Load progress</button>
@@ -136,6 +139,50 @@
   </section>
 </div>
 <div class="toast" id="toast" hidden></div>
+<div class="sum-wrap" id="welcome" hidden>
+  <section class="sum intro" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
+    <div class="sum-head">
+      <div><span class="eyebrow">Start here</span><h2 id="welcomeTitle">Copy it. Then write it.</h2>
+        <p>Blackout Coder teaches code the way typing tutors and math drills did, with examples from a barrel plant.</p></div>
+      <button class="btn" id="welcomeClose" type="button">Close</button>
+    </div>
+    <ol class="intro-steps">
+      <li><b>Type the code you see.</b> Each line turns green when it matches. The goal above tells you what the code does.</li>
+      <li><b>Rank up.</b> Three clean runs (90% accuracy, no peeks) move you to the next rank.</li>
+      <li><b>Watch it go dark.</b> At each rank more of the code is blacked out, until you write it from the goal alone.</li>
+    </ol>
+    <h3 class="intro-h">Where to start</h3>
+    <div class="intro-picks">
+      <button class="pick" data-go="found:ladder" type="button"><b>I work with PLCs</b><span>PLC Ladder, with a simulator</span></button>
+      <button class="pick" data-go="found:sql" type="button"><b>I pull data</b><span>SQL</span></button>
+      <button class="pick" data-go="found:python" type="button"><b>I analyse data</b><span>Python with pandas</span></button>
+      <button class="pick" data-go="found:dax" type="button"><b>I build reports</b><span>DAX for Power BI</span></button>
+      <button class="pick" data-go="found:m" type="button"><b>I shape data for reports</b><span>Power Query M</span></button>
+      <button class="pick" data-go="proj:t-plc" type="button"><b>I want a project</b><span>PLC &amp; HMI: a conveyor from first rung to screen</span></button>
+    </div>
+    <p class="intro-note">Every number comes from one sample plant whose figures are illustrative, not from a real plant. Your progress stays in this browser. Find this again under Start here, below the lesson.</p>
+  </section>
+</div>
+<div class="sum-wrap" id="aboutDlg" hidden>
+  <section class="sum intro" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+    <div class="sum-head">
+      <div><span class="eyebrow">About</span><h2 id="aboutTitle">Blackout Coder</h2>
+        <p>Coding lessons grounded in plant work: PLC and HMI, SQL pulls, OEE loss reports, shift handoffs, Power BI, maintenance, inventory, lean.</p></div>
+      <button class="btn" id="aboutClose" type="button">Close</button>
+    </div>
+    <div class="intro-body">
+      <h3 class="intro-h">The sample plant</h3>
+      <p>Every lane and project uses the same plant: three machines (Conveyor 3, Hoop Driver 1 and Char Station 2), one week of faults and barrel counts, and the tables built from them. Rates, margins, suppliers, prices and every other figure are illustrative, not real plant data. Where a lesson invents a number to make a point, it says so.</p>
+      <h3 class="intro-h">Where the outputs come from</h3>
+      <p>Every output shown was produced by running the code, never typed by hand. SQL runs on SQL Server 2022; Python, C#, C++, Java and JavaScript run for real. DAX, Power Query M, PLC ladder, Structured Text and Ignition run in teaching models built for this site; DAX and M are checked against the same question asked of SQL Server, and Ignition scripts run in real Jython 2.7.</p>
+      <h3 class="intro-h">Your progress</h3>
+      <p>Progress is kept in this browser only. Nothing is sent anywhere. Use Save progress to move it to another device, and Load progress there.</p>
+      <h3 class="intro-h">Something wrong?</h3>
+      <p>Report a problem opens a new issue on GitHub with the lesson filled in. It needs a free GitHub account. Typos, code that would not work on a real line, and confusing explanations are all worth reporting.</p>
+      <p class="intro-note">Open source under the MIT license.</p>
+    </div>
+  </section>
+</div>
 <div class="sum-wrap" id="summary" hidden>
   <section class="sum" role="dialog" aria-modal="true" aria-labelledby="sumTitle">
     <div class="sum-head">

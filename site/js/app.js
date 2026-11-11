@@ -681,6 +681,9 @@ function renderNav(){
   document.querySelectorAll('#modes button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.m===S.mode)));
   const list=inTrack()?TRACKS:LANES;
   $('langs').innerHTML=list.map(l=>`<button role="tab" class="${l.soon?'soon':''}" aria-selected="${l.id===lane.id}" data-id="${l.id}">${esc(l.name)}${l.soon?'<small>Soon</small>':''}</button>`).join('');
+  // On a phone the tabs are one scrolling row: bring the selected one into view without moving the page.
+  const sel=$('langs').querySelector('[aria-selected="true"]'),bar=$('langs');
+  if(sel&&bar.scrollWidth>bar.clientWidth){const r=sel.getBoundingClientRect(),b=bar.getBoundingClientRect();bar.scrollLeft+=r.left-b.left-(b.width-r.width)/2;}
 }
 function renderMap(){
   const w=$('mapWrap');
@@ -762,6 +765,11 @@ function resetAttempt(){
   renderAll(analyze(''));
   explainNow();
 }
+// "Report a problem" opens a GitHub issue with the lesson-problem template and the lesson in the title.
+function renderReport(){
+  const where=`${lane.name}, ${inTrack()?'step':'lesson'} ${idx+1}: ${lesson.t}`;
+  $('reportLink').href=`https://github.com/ethanmartin725-png/blackout-coder/issues/new?template=lesson-problem.md&title=${encodeURIComponent(where)}`;
+}
 function loadLesson(){
   lane=laneObj();
   if(inTrack())S.track=lane.id;else S.lane=lane.id;
@@ -775,7 +783,7 @@ function loadLesson(){
   document.documentElement.style.setProperty('--rows',Math.max(lines.length,inTrack()&&pre?6:8)+1);
   ta.style.tabSize=ld.tab;
   $('resetBtn').textContent=`Reset progress for ${lane.name}`;
-  renderNav();renderGoal();renderMap();renderRanks();renderCtx();renderTarget();renderRef();resetAttempt();
+  renderNav();renderGoal();renderMap();renderRanks();renderCtx();renderTarget();renderRef();resetAttempt();renderReport();
 }
 function finish(){
   complete=true;endT=performance.now();ta.readOnly=true;clearInterval(timer);ta.scrollLeft=0;hl.scrollLeft=0;
@@ -993,6 +1001,25 @@ $('progFile').addEventListener('change',async e=>{
   flash(`Loaded progress for ${n} lane${n===1?'':'s'} and project${n===1?'':'s'}; higher ranks and better scores kept.${k?` ${k} not in this version, skipped.`:''}`);
 });
 
+/* ---------- start here and about ---------- */
+// The Start here card opens by itself only for a first visit: nothing started and never dismissed.
+let dlgOpener=null;
+function openDlg(id){dlgOpener=document.activeElement;$(id).hidden=false;$(id).querySelector('.btn').focus();}
+function closeDlg(id){$(id).hidden=true;if(id==='welcome'&&!S.welcomed){S.welcomed=1;save();}if(dlgOpener&&dlgOpener.focus)dlgOpener.focus();}
+for(const [id,btn] of [['welcome','welcomeClose'],['aboutDlg','aboutClose']]){
+  $(btn).addEventListener('click',()=>closeDlg(id));
+  $(id).addEventListener('click',e=>{if(e.target===$(id))closeDlg(id);});
+  $(id).addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closeDlg(id);}});
+}
+$('startBtn').addEventListener('click',()=>openDlg('welcome'));
+$('aboutBtn').addEventListener('click',()=>openDlg('aboutDlg'));
+$('welcome').querySelectorAll('.pick').forEach(b=>b.addEventListener('click',()=>{
+  const [mode,id]=b.dataset.go.split(':');
+  S.mode=mode;if(mode==='proj')S.track=id;else S.lane=id;
+  closeDlg('welcome');save();loadLesson();ta.focus();
+}));
+
 renderSound();
 loadLesson();
+if(!S.welcomed&&!Object.keys(S.per).some(k=>S.per[k].lesson>0||S.per[k].earned>0||Object.keys(S.per[k].best||{}).length))openDlg('welcome');
 })();
