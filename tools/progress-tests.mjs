@@ -141,6 +141,62 @@ export function runProgressTests(C) {
     const e = C.trackSummary(lessons, {});
     return e.done === 0 && e.overall.acc === null && e.revisit.length === 0 && e.gains.length === 0 ? "" : JSON.stringify(e.overall);
   });
+  // seen: the date each lesson was last finished
+  t("seen dates round-trip", () => {
+    const per = { python: py({ seen: { "Print a message": "2026-11-01" } }) };
+    const r = read(C.progressFile(per, "2026-11-09T18:00:00Z"));
+    return r.ok && r.per.python.seen["Print a message"] === "2026-11-01" ? "" : JSON.stringify(r);
+  });
+  t("a damaged seen date refuses the file", () => (read(file({ python: py({ seen: { "Print a message": "11/01/2026" } }) })).ok ? "accepted" : ""));
+  t("seen for a lesson this version lacks is skipped", () => {
+    const r = read(file({ python: py({ seen: { "Gone lesson": "2026-11-01", "Print a message": "2026-11-02" } }) }));
+    return r.ok && Object.keys(r.per.python.seen).join() === "Print a message" ? "" : JSON.stringify(r);
+  });
+  t("merge keeps the later seen date", () => {
+    const m = C.mergeProgress({ python: py({ seen: { "Print a message": "2026-11-05", "Write a function": "2026-11-01" } }) },
+      { python: py({ seen: { "Print a message": "2026-11-02", "Write a function": "2026-11-03", "Variables and math": "2026-10-30" } }) });
+    const s = m.python.seen;
+    return s["Print a message"] === "2026-11-05" && s["Write a function"] === "2026-11-03" && s["Variables and math"] === "2026-10-30" ? "" : JSON.stringify(s);
+  });
+
+  // pickDrill: weakness (100 - best accuracy) plus staleness (days, capped at 28; undated counts as 28)
+  const G = [
+    { id: "a", name: "A", lessons: [1, 2, 3, 4].map((k) => ({ t: "a" + k })) },
+    { id: "b", name: "B", lessons: [1, 2, 3].map((k) => ({ t: "b" + k })) },
+    { id: "c", name: "C", lessons: [1, 2].map((k) => ({ t: "c" + k })) },
+  ];
+  const sc = (acc) => ({ acc, wpm: 30 });
+  const today = "2026-11-12";
+  const per = {
+    a: { best: { a1: sc(80), a2: sc(70), a3: sc(60), a4: sc(99) }, seen: { a1: today, a2: today, a3: today, a4: "2026-11-11" } },
+    b: { best: { b1: sc(100), b2: sc(95) }, seen: { b1: "2026-10-22", b2: "2026-09-01" } },
+    c: { best: { c1: sc(90) } },
+  };
+  const ids = (xs) => xs.map((x) => x.t).join();
+  t("drill scores weakness plus staleness", () => {
+    const d = C.pickDrill(per, G, today, 9);
+    const want = { a3: 40, b2: 33, a2: 30, c1: 38, b1: 21, a1: 20, a4: 2 };
+    for (const x of d) if (want[x.t] !== x.score) return `${x.t} scored ${x.score}, want ${want[x.t]}`;
+    return "";
+  });
+  t("drill takes the highest scores, two per lane at most while others remain", () => {
+    const d = C.pickDrill(per, G, today, 5);
+    return ids(d) === "a3,c1,b2,a2,b1" ? "" : ids(d);
+  });
+  t("drill fills past the cap when only one lane is left", () => {
+    const d = C.pickDrill({ a: per.a }, G, today, 5);
+    return ids(d) === "a3,a2,a1,a4" ? "" : ids(d);
+  });
+  t("drill is the same for the same day and progress", () => (ids(C.pickDrill(per, G, today)) === ids(C.pickDrill(per, G, today)) ? "" : "differs"));
+  t("drill skips unfinished and unknown lessons", () => {
+    const d = C.pickDrill({ a: { best: { gone: sc(10), a1: sc(50) } }, z: { best: { z1: sc(0) } } }, G, today);
+    return ids(d) === "a1" ? "" : ids(d);
+  });
+  t("drill with nothing finished is empty", () => (C.pickDrill({}, G, today).length === 0 ? "" : "not empty"));
+  t("drill reasons say why", () => {
+    const d = C.pickDrill(per, G, today, 9), r = Object.fromEntries(d.map((x) => [x.t, C.drillReason(x)]));
+    return r.b2 === "Best 95% accuracy, last typed 72 days ago" && r.c1 === "Best 90% accuracy, not typed since dates were kept" && r.a3 === "Best 60% accuracy, typed today" && r.a4 === "Best 99% accuracy, last typed 1 day ago" ? "" : JSON.stringify(r);
+  });
   return fails;
 }
 

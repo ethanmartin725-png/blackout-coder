@@ -62,6 +62,7 @@
 
 - [x] Progress export/import as a JSON file, since progress lives in one browser: Save and Load in the footer; loading merges, keeping the higher rank and each lesson's better score, and refuses a damaged file (`tools/progress-tests.mjs`).
 - [x] "Explain this line": a panel under the editor for the cursor's line, from the lesson's terms and a per-language glossary (99.0% of code lines). Never explains blacked-out code.
+- [x] Daily drill: five finished lessons to revisit, weakest and longest-untouched first (100 less best accuracy, plus days since last typed, capped at 28), at most two from one lane or track, typed at each lane's rank and counted like any run. Progress now keeps the date each lesson was last finished.
 - [x] How it connects: five threads (Hoop Driver 1's misfeeds, low air, the bottleneck, char flares, staves), 36 stations across 15 tracks and the Ladder lane, each quoting a number from its step's generated output and opening that step. The verifier holds every quote to its output.
 - [x] Optional sound effects (keystroke, error, lesson complete), off by default; synthesized, no audio files.
 - [x] Track completion summary: best accuracy and WPM per step, per-language means, first run to best, steps to revisit. A full history of every attempt (a trend over time) is not stored; add it if first-to-best proves too thin.

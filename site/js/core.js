@@ -31,7 +31,8 @@ function targetLines(code){const T=[];code.split('\n').forEach((t,i)=>{if(t.trim
 /* ---------- progress files ----------
    Progress lives in one browser's localStorage. These turn it into a file and back, so a learner
    can move it to another device or keep a copy. No DOM here, so tools/progress-tests.mjs can test it.
-   per: {groupId: {lesson, earned, rank, prog, best: {title: {acc, wpm}}}}, as app.js keeps it. */
+   per: {groupId: {lesson, earned, rank, prog, best: {title: {acc, wpm}}, seen: {title: 'YYYY-MM-DD'}}},
+   as app.js keeps it. seen is the date each lesson was last finished; files saved before it have none. */
 const PROGRESS_APP='blackout-coder',PROGRESS_FORMAT=1;
 function progressFile(per,now){return JSON.stringify({app:PROGRESS_APP,format:PROGRESS_FORMAT,exported:now,progress:per},null,1);}
 // Check a file against the lanes and tracks this version has. Returns {ok:false,error} or
@@ -58,6 +59,15 @@ function readProgressFile(text,groups,need,maxRank){
       if(titles.has(t))best[t]=copyScore(b);
     }
     per[id]={lesson:Math.min(p.lesson,g.lessons.length-1),earned:p.earned,rank:p.rank,prog:p.prog,best};
+    if(p.seen!==undefined){
+      if(typeof p.seen!=='object'||p.seen===null||Array.isArray(p.seen))return {ok:false,error:bad};
+      const seen={};
+      for(const [t,d] of Object.entries(p.seen)){
+        if(!isDay(d))return {ok:false,error:bad};
+        if(titles.has(t))seen[t]=d;
+      }
+      per[id].seen=seen;
+    }
   }
   return {ok:true,per,skipped};
 }
@@ -83,6 +93,7 @@ function recordRun(best,title,run){
 // (with its progress toward the next), and each lesson keeps its better score (accuracy, then speed).
 // A step's first run is this browser's when it has one, otherwise the file's.
 // The current lesson position stays, unless this browser has nothing for that lane or track yet.
+const isDay=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&!isNaN(Date.parse(d+'T00:00:00Z'));
 function mergeProgress(cur,inc){
   const out=JSON.parse(JSON.stringify(cur||{}));
   for(const [id,b] of Object.entries(inc)){
@@ -96,8 +107,37 @@ function mergeProgress(cur,inc){
       if(betterRun(s,x)){a.best[t]=copyScore({...s,first});}
       else if(!x.first&&first)a.best[t]=copyScore({...x,first});
     }
+    if(b.seen){a.seen=a.seen||{};for(const [t,d] of Object.entries(b.seen))if(!a.seen[t]||d>a.seen[t])a.seen[t]=d;}
   }
   return out;
+}
+/* ---------- daily drill ----------
+   Picks the lessons to revisit: every lesson finished at least once scores its weakness (100 less its
+   best accuracy) plus its staleness (days since it was last finished, capped at 28; a score saved before
+   dates were kept counts as 28). Highest first, at most two from one lane or track while others are
+   left, ties broken by a hash of the day so the same day and progress give the same drill. No DOM. */
+const DRILL_N=5,DRILL_STALE_CAP=28,DRILL_PER_GROUP=2;
+function daysBetween(a,b){return Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/864e5);}
+function pickDrill(per,groups,today,n){
+  n=n||DRILL_N;const c=[];
+  for(const g of groups){
+    const p=per[g.id];if(!p||!p.best)continue;
+    g.lessons.forEach((l,i)=>{
+      const b=p.best[l.t];if(!b)return;
+      const d=p.seen&&p.seen[l.t],ago=d?Math.max(0,daysBetween(d,today)):null;
+      const stale=ago===null?DRILL_STALE_CAP:Math.min(DRILL_STALE_CAP,ago);
+      c.push({id:g.id,i,t:l.t,acc:b.acc,ago,score:(100-b.acc)+stale,tie:hash(today+'|'+g.id+'|'+l.t)});
+    });
+  }
+  c.sort((a,b)=>b.score-a.score||a.tie-b.tie);
+  const out=[],count={};
+  for(const x of c){if(out.length>=n)break;if((count[x.id]||0)>=DRILL_PER_GROUP)continue;count[x.id]=(count[x.id]||0)+1;out.push(x);}
+  for(const x of c){if(out.length>=n)break;if(!out.includes(x))out.push(x);} // one lane only: fill past the cap
+  return out.map(({tie,...x})=>x);
+}
+function drillReason(x){
+  const when=x.ago===null?'not typed since dates were kept':x.ago===0?'typed today':`last typed ${x.ago} day${x.ago===1?'':'s'} ago`;
+  return `Best ${x.acc}% accuracy, ${when}`;
 }
 /* ---------- track summary ----------
    Everything the summary page shows, from a track's lessons and its best scores. No DOM.
@@ -163,5 +203,5 @@ function explainLine(line,lang,terms,gloss,max){
   const shown=kept.filter(x=>uniq.includes(x)),busy=shown.filter(x=>!FILLER.has(x.key));
   return (busy.length?busy:shown).slice(0,max||5);
 }
-g.BCcore={TOK,tokenize,hash,rng,sig,analyzeText,isCompleteFor,targetLines,progressFile,readProgressFile,mergeProgress,betterRun,recordRun,trackSummary,codeOnly,findKey,findEntry,explainLine};
+g.BCcore={TOK,tokenize,hash,rng,sig,analyzeText,isCompleteFor,targetLines,progressFile,readProgressFile,mergeProgress,betterRun,recordRun,pickDrill,drillReason,isDay,trackSummary,codeOnly,findKey,findEntry,explainLine};
 })(globalThis);

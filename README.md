@@ -6,9 +6,9 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 
 ## What's inside
 
-**Foundations**: eleven single-language lanes (Python, PLC ladder, SQL, C#, C++, Java, HTML, JavaScript, Structured Text, CSS, Ignition), 355 lessons.
+**Foundations**: thirteen single-language lanes (Python, PLC ladder, SQL, C#, C++, Java, HTML, JavaScript, Structured Text, CSS, Ignition, DAX, Power Query M), 472 lessons.
 
-**Projects**: twelve tracks, 208 steps, that build one connected system for a sample cooperage line:
+**Projects**: twenty-eight tracks, 447 steps, that build one connected system for a sample cooperage line:
 
 | Track | Steps | Builds |
 |---|---|---|
@@ -24,8 +24,26 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 | Line Status Screen | 15 | The Ignition logic behind Conveyor 3's operator screen: expression bindings for state, color, OEE and shift; scripts for fault logging by id, an interlocked reset, setpoints, an audit trail, the Pareto query and the shift change |
 | TPM Loss Hunt | 15 | Python on the plant database: the six big losses, one cause across three machines, the OEE week rebuilt as a loss waterfall, a SMED study and a one-page A3 |
 | Downtime Entry | 18 | An operator form for the stops the PLC never sees, in HTML, CSS and JavaScript: validation, a log table, totals and undo |
+| High-Performance HMI | 18 | A Level 1 overview in HTML, CSS and JavaScript: a display hierarchy, grey for normal, analog indicators with a normal band, and ISA-18.2 alarms |
+| Savings Tracker | 15 | Cost-savings projects from baseline to realized: weekly actuals, hard and soft savings, overlap, and a workbook with live totals |
+| Takt and Line Balance | 14 | Takt, ideal and actual cycles, the bottleneck, a Yamazumi chart in Excel and a rebalance |
+| Changeover / SMED | 14 | Conveyor 3's guide change from 15 to 6 minutes: internal and external work, a changeover log and the dollars |
+| Procurement Spend | 14 | Spend cubes, price compliance, a three-way match and material cost per barrel from purchasing tables |
+| OEE Report in Power BI | 16 | Power Query shaping and DAX measures that rebuild the OEE week, each held to SQL Server by a twin query |
+| SPC and Control Charts | 14 | X-bar and R, I-MR and p charts on char depth and barrels, capability, and limits set from clean data |
+| Automated Capture | 14 | PLC events to SQL through Ignition: cleaning glitches, late and duplicate rows, and an idempotent MERGE |
+| Maintenance / CMMS | 14 | Work orders: MTBF, MTTR, PM compliance, the backlog and maintenance cost per barrel |
+| Inventory / WIP | 14 | Stock moves: days of cover, safety stock, order-up-to levels, cash tied up and ABC |
+| Kaizen / A3 | 14 | Hoop Driver 1's misfeeds through an A3: cause Pareto, before and after with an exact rate test, and the saving |
+| Energy / Utilities | 14 | Compressed air and propane: specific power, an air balance, the leaks, and payback |
+| S&OP / Capacity | 14 | Demand against capacity: the bottleneck, levers in good barrels and a level plan with stock |
+| Lean Basics | 14 | WIP counts, Little's Law, a value stream timeline, standard work, 5S audits and an SQDC board |
+| Barrel Cost Model | 18 | A standard cost per barrel by station: material, labour, maintenance, energy and overhead, what an OEE point does to cost and to cash, scrap and variances |
+| Root Cause: Char Flares | 18 | A root cause analysis tested against the data: a fishbone as rows, causes rejected by test, a flame signal that finds the cause, a 5-Why chain and an action register |
 
 Three clean runs (90%+ accuracy, no peeks) at a rank unlock the next one. Each lane and track keeps its own rank. Progress saves in the browser, per device; Save progress and Load progress at the bottom of each lesson move it between devices as a JSON file.
+
+**Daily drill** picks five lessons you have already typed to revisit, weakest and longest-untouched first, at most two from one lane or track. Each is typed at its lane's current rank and counts like any run. **How it connects** follows one problem (Hoop Driver 1's misfeeds, low air, the bottleneck, char flares, staves) through every track that works on it.
 
 ## Run it locally
 

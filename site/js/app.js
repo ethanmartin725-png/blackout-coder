@@ -783,7 +783,7 @@ function loadLesson(){
   document.documentElement.style.setProperty('--rows',Math.max(lines.length,inTrack()&&pre?6:8)+1);
   ta.style.tabSize=ld.tab;
   $('resetBtn').textContent=`Reset progress for ${lane.name}`;
-  renderNav();renderGoal();renderMap();renderRanks();renderCtx();renderTarget();renderRef();resetAttempt();renderReport();
+  renderNav();renderGoal();renderMap();renderRanks();renderCtx();renderTarget();renderRef();resetAttempt();renderReport();renderDrillBar();
 }
 function finish(){
   complete=true;endT=performance.now();ta.readOnly=true;clearInterval(timer);ta.scrollLeft=0;hl.scrollLeft=0;
@@ -799,9 +799,12 @@ function finish(){
   }else if(p.earned>=6)msg='Master rank. Every lesson is written from the goal.';
   else msg=`Practice run. Switch back to ${RANKS[p.earned].name} to earn progress.`;
   BCcore.recordRun(p.best,lesson.t,{acc,wpm,rank:runRank});
+  (p.seen=p.seen||{})[lesson.t]=today();
+  const drillRun=!!S.drill&&onDrillItem();
+  if(drillRun)S.drill.runs[S.drill.i]={acc,wpm};
   save();
   $('dWpm').textContent=wpm;$('dAcc').textContent=acc;$('dTime').textContent=fmtTime(ms);$('dPeek').textContent=peeks;$('dMsg').textContent=msg;
-  $('doneNext').textContent=inTrack()?'Next step':'Next lesson';
+  $('doneNext').textContent=drillRun?(S.drill.i<S.drill.items.length-1?'Next drill lesson':'Drill results'):inTrack()?'Next step':'Next lesson';
   $('doneSum').hidden=!(inTrack()&&idx===lane.lessons.length-1);
   $('done').hidden=false;$('doneNext').focus();
   SOUND.done();
@@ -934,7 +937,7 @@ $('map').addEventListener('click',e=>{const b=e.target.closest('.step');if(b)goT
 $('lessonSel').addEventListener('change',e=>goTo(+e.target.value));
 $('prevBtn').addEventListener('click',()=>nextLesson(-1));
 $('nextBtn').addEventListener('click',()=>nextLesson(1));
-$('doneNext').addEventListener('click',()=>nextLesson(1));
+$('doneNext').addEventListener('click',()=>{if(S.drill&&onDrillItem()&&S.drill.runs[S.drill.i])drillNext();else nextLesson(1);});
 $('doneSum').addEventListener('click',openSummary);
 $('sumBtn').addEventListener('click',openSummary);
 $('sumClose').addEventListener('click',closeSummary);
@@ -1006,7 +1009,7 @@ $('progFile').addEventListener('change',async e=>{
 let dlgOpener=null;
 function openDlg(id){dlgOpener=document.activeElement;$(id).hidden=false;$(id).querySelector('.btn').focus();}
 function closeDlg(id){$(id).hidden=true;if(id==='welcome'&&!S.welcomed){S.welcomed=1;save();}if(dlgOpener&&dlgOpener.focus)dlgOpener.focus();}
-for(const [id,btn] of [['welcome','welcomeClose'],['aboutDlg','aboutClose'],['threadsDlg','threadsClose']]){
+for(const [id,btn] of [['welcome','welcomeClose'],['aboutDlg','aboutClose'],['threadsDlg','threadsClose'],['drillDlg','drillClose']]){
   $(btn).addEventListener('click',()=>closeDlg(id));
   $(id).addEventListener('click',e=>{if(e.target===$(id))closeDlg(id);});
   $(id).addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closeDlg(id);}});
@@ -1024,18 +1027,90 @@ function renderThreads(){
   }).join('');
 }
 $('threadPicks').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.thread=b.dataset.id;save();renderThreads();});
-$('threadList').addEventListener('click',e=>{
-  const b=e.target.closest('.stop');if(!b)return;
-  const th=THREADS.find(t=>t.id===S.thread)||THREADS[0],[gid,title]=th.stations[+b.dataset.i];
+// Open one lane's or track's lesson by title: used by How it connects and the daily drill.
+function openStep(gid,title){
   const isTrack=TRACKS.some(t=>t.id===gid);
   S.mode=isTrack?'proj':'found';if(isTrack)S.track=gid;else S.lane=gid;
   const g=(isTrack?TRACKS:LANES).find(x=>x.id===gid);
   if(!S.per[gid])S.per[gid]={lesson:0,earned:0,rank:0,prog:0,best:{}};
   S.per[gid].lesson=Math.max(0,g.lessons.findIndex(l=>l.t===title));
-  closeDlg('threadsDlg');save();loadLesson();
+  save();loadLesson();
   document.querySelector('.goal').scrollIntoView({block:'start'});
+}
+$('threadList').addEventListener('click',e=>{
+  const b=e.target.closest('.stop');if(!b)return;
+  const th=THREADS.find(t=>t.id===S.thread)||THREADS[0],[gid,title]=th.stations[+b.dataset.i];
+  closeDlg('threadsDlg');openStep(gid,title);
 });
 $('threadsBtn').addEventListener('click',()=>{renderThreads();openDlg('threadsDlg');});
+/* ---------- daily drill ----------
+   Picks come from BCcore.pickDrill (tested in tools/progress-tests.mjs): weakest and stalest lessons
+   first, at most two from one lane or track. A drill run counts like any run (best score, rank
+   progress); each lesson is typed at its own lane's or track's current rank. S.drill holds the
+   picks, the place reached, each run, and where every lane and track was, restored at the end. */
+const GROUPS=[...LANES,...TRACKS].filter(g=>!g.soon);
+const today=()=>new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
+const gName=id=>(GROUPS.find(g=>g.id===id)||{name:id}).name;
+const drillItem=()=>S.drill&&S.drill.items[S.drill.i];
+const onDrillItem=()=>{const it=drillItem();return !!it&&it.id===lane.id&&it.t===lesson.t;};
+function renderDrillBar(){
+  const bar=$('drillBar');$('drillBtn').setAttribute('aria-pressed',String(!!S.drill));
+  if(!S.drill){bar.hidden=true;return;}
+  const d=S.drill,it=drillItem(),on=onDrillItem();
+  bar.innerHTML=`<strong>Daily drill · ${d.i+1} of ${d.items.length}</strong><span class="why">${on?esc(it.reason):`Next: ${esc(gName(it.id))} · ${esc(it.t)}`}</span>`+
+    `<span class="acts">${on?'<button class="btn" type="button" data-a="skip">Skip</button>':'<button class="btn gold" type="button" data-a="back">Back to the drill</button>'}<button class="btn" type="button" data-a="end">End drill</button></span>`;
+  bar.hidden=false;
+}
+function renderDrillPicks(){
+  const picks=BCcore.pickDrill(S.per,GROUPS,today());
+  $('drillEyebrow').textContent='Daily drill';
+  $('drillTitle').textContent=picks.length?`${picks.length===1?'One':picks.length===5?'Five':picks.length} to revisit`:'Nothing to revisit yet';
+  $('drillLead').textContent=picks.length?'Your weakest and longest-untouched lessons, at most two from one lane or project. Each is typed at that lane\'s current rank, and counts like any run.':'Finish a lesson first: the drill picks from lessons you have already typed.';
+  $('drillBody').innerHTML=picks.length?`<ol class="drill-list">${picks.map(x=>`<li><span class="where">${esc(gName(x.id))} · ${esc(x.t)}</span><span>${esc(BCcore.drillReason(x))}</span></li>`).join('')}</ol>`:'';
+  $('drillActs').innerHTML=picks.length?'<button class="btn gold" type="button" id="drillStart">Start the drill</button>':'';
+  return picks;
+}
+function startDrill(picks){
+  const ret={mode:S.mode,lane:S.lane,track:S.track,pos:{}};
+  for(const [id,p] of Object.entries(S.per))ret.pos[id]=p.lesson;
+  S.drill={day:today(),i:0,ret,runs:[],items:picks.map(x=>{const b=S.per[x.id].best[x.t];return {id:x.id,t:x.t,reason:BCcore.drillReason(x),before:{acc:b.acc,wpm:b.wpm}};})};
+  closeDlg('drillDlg');const it=drillItem();openStep(it.id,it.t);
+}
+function drillNext(){
+  const d=S.drill;d.i++;
+  if(d.i>=d.items.length){endDrill();return;}
+  const it=drillItem();openStep(it.id,it.t);
+}
+function endDrill(){
+  const d=S.drill;if(!d)return;
+  const rows=d.items.map((it,k)=>{const r=d.runs[k];
+    const delta=r?r.acc-it.before.acc:null,cls=delta>0?'up':delta<0?'down':'';
+    return `<tr><td>${esc(gName(it.id))}<br><small>${esc(it.t)}</small></td><td class="n">${it.before.acc}%, ${it.before.wpm} WPM</td>`+
+      `<td class="n">${r?`${r.acc}%, ${r.wpm} WPM`:r===null?'Skipped':'Not reached'}</td><td class="n ${cls}">${r?(delta>0?'+':'')+delta:''}</td></tr>`;}).join('');
+  const done=d.runs.filter(Boolean),mean=k=>done.length?Math.round(done.reduce((a,r)=>a+r[k],0)/done.length*10)/10:null;
+  $('drillEyebrow').textContent='Daily drill';
+  $('drillTitle').textContent='Drill results';
+  $('drillLead').textContent=done.length?`${done.length} of ${d.items.length} typed: mean accuracy ${mean('acc')}%, mean ${mean('wpm')} WPM. Each run counted toward its lane's best score and rank.`:'No lessons typed in this drill.';
+  $('drillBody').innerHTML=`<div class="drill-scroll"><table class="drill-res"><thead><tr><th>Lesson</th><th class="n">Best before</th><th class="n">This run</th><th class="n">Change</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  $('drillActs').innerHTML='';
+  // Put every lane and track back where it was.
+  S.mode=d.ret.mode;S.lane=d.ret.lane;S.track=d.ret.track;
+  for(const [id,pos] of Object.entries(d.ret.pos))if(S.per[id])S.per[id].lesson=pos;
+  S.drill=null;save();loadLesson();openDlg('drillDlg');
+}
+function openDrill(){
+  if(S.drill){const it=drillItem();if(!onDrillItem())openStep(it.id,it.t);document.querySelector('.goal').scrollIntoView({block:'start'});return;}
+  const picks=renderDrillPicks();openDlg('drillDlg');
+  const st=$('drillStart');if(st)st.addEventListener('click',()=>startDrill(picks));
+}
+$('drillBtn').addEventListener('click',openDrill);
+$('drillLink').addEventListener('click',openDrill);
+$('drillBar').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b||!S.drill)return;
+  if(b.dataset.a==='skip'){S.drill.runs[S.drill.i]=null;drillNext();}
+  else if(b.dataset.a==='back'){const it=drillItem();openStep(it.id,it.t);}
+  else if(b.dataset.a==='end')endDrill();
+});
 $('startBtn').addEventListener('click',()=>openDlg('welcome'));
 $('aboutBtn').addEventListener('click',()=>openDlg('aboutDlg'));
 $('welcome').querySelectorAll('.pick').forEach(b=>b.addEventListener('click',()=>{

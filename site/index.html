@@ -18,13 +18,18 @@
       <small>Copy it. Then write it.</small>
     </div>
     <div class="nav">
-      <div class="modes" id="modes" role="group" aria-label="Mode">
-        <button data-m="found" aria-pressed="true">Foundations</button>
-        <button data-m="proj" aria-pressed="false">Projects</button>
+      <div class="mode-row">
+        <div class="modes" id="modes" role="group" aria-label="Mode">
+          <button data-m="found" aria-pressed="true">Foundations</button>
+          <button data-m="proj" aria-pressed="false">Projects</button>
+        </div>
+        <button class="drill-btn" id="drillBtn" type="button">Daily drill</button>
       </div>
       <nav class="langs" id="langs" role="tablist" aria-label="Lane"></nav>
     </div>
   </header>
+
+  <div class="drill-bar" id="drillBar" hidden></div>
 
   <section class="goal" aria-label="Lesson goal">
     <div class="goal-label">GOAL</div>
@@ -129,6 +134,7 @@
         <button class="linkish" id="startBtn" type="button">Start here</button>
         <button class="linkish" id="aboutBtn" type="button">About</button>
         <button class="linkish" id="threadsBtn" type="button">How it connects</button>
+        <button class="linkish" id="drillLink" type="button">Daily drill</button>
         <a class="linkish" id="reportLink" href="https://github.com/ethanmartin725-png/blackout-coder/issues/new?template=lesson-problem.md" target="_blank" rel="noopener">Report a problem</a>
         <button class="linkish" id="soundBtn" aria-pressed="false">Sound: off</button>
         <button class="linkish" id="saveProg">Save progress</button>
@@ -162,6 +168,17 @@
       <button class="pick" data-go="proj:t-plc" type="button"><b>I want a project</b><span>PLC &amp; HMI: a conveyor from first rung to screen</span></button>
     </div>
     <p class="intro-note">Every number comes from one sample plant whose figures are illustrative, not from a real plant. Your progress stays in this browser. Find this again under Start here, below the lesson.</p>
+  </section>
+</div>
+<div class="sum-wrap" id="drillDlg" hidden>
+  <section class="sum intro" role="dialog" aria-modal="true" aria-labelledby="drillTitle">
+    <div class="sum-head">
+      <div><span class="eyebrow" id="drillEyebrow">Daily drill</span><h2 id="drillTitle">Five to revisit</h2>
+        <p id="drillLead"></p></div>
+      <button class="btn" id="drillClose" type="button">Close</button>
+    </div>
+    <div id="drillBody"></div>
+    <div class="drill-acts" id="drillActs"></div>
   </section>
 </div>
 <div class="sum-wrap" id="threadsDlg" hidden>

@@ -54,6 +54,27 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
 .langs button small{font:600 9.5px var(--f-body);letter-spacing:.1em;text-transform:uppercase;margin-left:6px;opacity:.85}
 
 /* goal marquee */
+.mode-row{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;justify-content:flex-end}
+.drill-btn{background:var(--panel);border:1px solid var(--gold-dim);border-radius:6px;padding:6px 12px;font:600 11.5px var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--gold);cursor:pointer}
+.drill-btn:hover,.drill-btn:focus-visible{border-color:var(--gold);outline:none}
+.drill-btn[aria-pressed="true"]{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+.drill-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;background:var(--panel);border:1px solid var(--gold-dim);border-left:3px solid var(--gold);border-radius:6px;padding:8px 12px;font-size:13px;color:var(--muted)}
+.drill-bar strong{color:var(--gold);font:600 12px var(--f-body);letter-spacing:.12em;text-transform:uppercase}
+.drill-bar .why{flex:1 1 220px;min-width:0}
+.drill-bar .acts{display:flex;gap:8px;margin-left:auto}
+.drill-bar .btn{padding:4px 10px;font-size:12.5px}
+.drill-list{margin:0;padding:0;list-style:none;display:grid;gap:6px;counter-reset:dr}
+.drill-list li{counter-increment:dr;display:grid;grid-template-columns:28px minmax(0,1fr);gap:2px 10px;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:9px 12px;font-size:14px}
+.drill-list li::before{content:counter(dr);grid-row:span 2;align-self:center;width:24px;height:24px;border-radius:50%;background:var(--panel);border:1px solid var(--gold-dim);color:var(--gold);font:600 12px var(--f-code);display:grid;place-items:center}
+.drill-list .where{color:var(--muted);font-size:12px}
+.drill-acts{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.drill-res{width:100%;border-collapse:collapse;font-size:13.5px}
+.drill-res th,.drill-res td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+.drill-res th{color:var(--muted);font-weight:600;font-size:12px}
+.drill-res td.n,.drill-res th.n{text-align:right;font-family:var(--f-code);white-space:nowrap}
+.drill-res .up{color:var(--ok)}
+.drill-res .down{color:var(--bad)}
+.drill-scroll{overflow-x:auto}
 .goal{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:16px;align-items:center;background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);border-top:3px solid var(--gold);border-radius:8px;padding:14px 18px}
 .goal-label{font:26px/1 var(--f-lcd);color:var(--bg);background:var(--gold);padding:4px 10px 3px;border-radius:3px;letter-spacing:.1em}
 .goal-meta{display:block;font:600 11px var(--f-body);color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:3px}
@@ -355,6 +376,7 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
 @media (max-width:600px){
   /* One row of tabs that scrolls sideways, so 26 projects do not push the lesson off the screen. */
   .top,.nav{min-width:0;max-width:100%}
+  .mode-row{justify-content:flex-start}
   .langs{flex-wrap:nowrap;overflow-x:auto;max-width:100%;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
   .langs button{flex:0 0 auto;white-space:nowrap}
   .ex{grid-template-columns:1fr;gap:0}
