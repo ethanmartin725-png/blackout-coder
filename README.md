@@ -44,7 +44,7 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 
 Three clean runs (90%+ accuracy, no peeks) at a rank unlock the next one. Each lane and track keeps its own rank. Progress saves in the browser, per device; Save progress and Load progress at the bottom of each lesson move it between devices as a JSON file.
 
-**Daily drill** picks five lessons you have already typed to revisit, weakest and longest-untouched first, at most two from one lane or track. Each is typed at its lane's current rank and counts like any run. **How it connects** follows one problem (Hoop Driver 1's misfeeds, low air, the bottleneck, char flares, staves) through every track that works on it.
+**Daily drill** picks five lessons you have already typed to revisit, weakest and longest-untouched first, at most two from one lane or track. Each is typed at its lane's current rank and counts like any run. **How it connects** follows one problem (Hoop Driver 1's misfeeds, low air, the bottleneck, char flares, staves) through every track that works on it. Keyboard and screen readers work throughout: Escape then Tab leaves the editor, and blacked-out code reads as "blank".
 
 ## Run it locally
 

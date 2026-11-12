@@ -54,6 +54,8 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
 .langs button small{font:600 9.5px var(--f-body);letter-spacing:.1em;text-transform:uppercase;margin-left:6px;opacity:.85}
 
 /* goal marquee */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+.tgt:focus-visible,.ctx pre:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
 .mode-row{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;justify-content:flex-end}
 .drill-btn{background:var(--panel);border:1px solid var(--gold-dim);border-radius:6px;padding:6px 12px;font:600 11.5px var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--gold);cursor:pointer}
 .drill-btn:hover,.drill-btn:focus-visible{border-color:var(--gold);outline:none}
@@ -127,7 +129,7 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
 .code{font:14px/var(--lh) var(--f-code);tab-size:4}
 .ctx{border-bottom:1px dashed var(--line);background:rgba(0,0,0,.2)}
 .ctx-head{display:flex;justify-content:space-between;gap:8px;padding:6px 14px 2px;font:600 10.5px var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
-.ctx pre{margin:0;padding:2px 16px 10px;max-height:calc(6 * var(--lh) + 12px);overflow:auto;opacity:.62;color:var(--ink-2)}
+.ctx pre{margin:0;padding:2px 16px 10px;max-height:calc(6 * var(--lh) + 12px);overflow:auto;opacity:.72;color:var(--ink-2)}
 .editor{position:relative;height:calc(var(--rows) * var(--lh) + 32px);background:var(--well)}
 .hl,.ta{position:absolute;inset:0;margin:0;padding:16px;font:inherit;white-space:pre;border:0;letter-spacing:0;word-spacing:0}
 .hl{overflow:hidden;pointer-events:none;color:var(--ink)}
@@ -142,7 +144,8 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
 .hl .l-bad{background:rgba(255,125,125,.09);box-shadow:inset 3px 0 0 var(--bad)}
 .tgt{margin:0;padding:16px;height:calc(var(--rows) * var(--lh) + 32px);overflow:auto;user-select:none;-webkit-user-select:none;color:var(--ink-2)}
 .tgt .ln.cur{background:var(--cur);box-shadow:inset 3px 0 0 var(--gold)}
-.tgt .ln.td{opacity:.42}
+.tgt .ln.td{opacity:.72}
+.tgt .ln.td::after{content:"  \2713";content:"  \2713" / "";color:var(--ok);opacity:.9} /* a done cue that is not only dimming; silent to screen readers */
 .c-kw{color:var(--c-kw)} .c-str{color:var(--c-str)} .c-num{color:var(--c-num)} .c-fn{color:var(--c-fn)} .c-tag{color:var(--c-tag)} .c-attr{color:var(--c-attr)} .c-sym{color:var(--c-sym)}
 .tgt .m{color:transparent !important;background:var(--mask);border-radius:2px}
 .tgt.peek .m{color:inherit !important;background:rgba(214,170,71,.16)}
@@ -151,7 +154,7 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
 /* completion card */
 .finish{position:absolute;inset:0;display:grid;place-items:center;padding:16px;background:rgba(7,16,33,.82);z-index:3}
 .done-card{background:var(--panel-2);border:1px solid var(--gold-dim);border-top:3px solid var(--gold);border-radius:8px;padding:18px 20px;max-width:400px;width:100%;display:flex;flex-direction:column;gap:10px;animation:pop .25s ease-out}
-.done-card h3{margin:0;font:700 22px var(--f-display);color:var(--gold)}
+.done-card h2{margin:0;font:700 22px var(--f-display);color:var(--gold)}
 .done-card .row{display:flex;gap:18px;flex-wrap:wrap}
 .done-card .row div{font:28px/1 var(--f-lcd);color:var(--ink)}
 .done-card .row small{display:block;font:600 10px var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:2px}

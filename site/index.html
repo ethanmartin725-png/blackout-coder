@@ -29,6 +29,7 @@
     </div>
   </header>
 
+  <main id="main">
   <div class="drill-bar" id="drillBar" hidden></div>
 
   <section class="goal" aria-label="Lesson goal">
@@ -54,16 +55,17 @@
     <div class="rank-cap" id="rankCap"></div>
   </section>
 
-  <main class="bench">
+  <div class="bench">
     <div class="panel user">
       <div class="panel-head"><strong>Your code</strong><span class="hint" id="modeHint"></span></div>
-      <div class="ctx" id="ctxU" hidden><div class="ctx-head"><span>Built in earlier steps</span><span class="ctx-n"></span></div><pre class="code"></pre></div>
+      <div class="ctx" id="ctxU" hidden><div class="ctx-head"><span>Built in earlier steps</span><span class="ctx-n"></span></div><pre class="code" tabindex="0" aria-label="Code built in earlier steps"></pre></div>
       <div class="editor code" id="editor">
         <pre class="hl" id="hl" aria-hidden="true"></pre>
-        <textarea class="ta" id="ta" spellcheck="false" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" aria-label="Type your code here"></textarea>
+        <textarea class="ta" id="ta" spellcheck="false" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" aria-label="Type your code here" aria-describedby="editorHelp"></textarea>
+        <p class="sr-only" id="editorHelp">Tab indents. To leave the editor, press Escape, then Tab. Control Enter checks your code.</p>
         <div class="finish" id="done" hidden>
           <div class="done-card" role="dialog" aria-labelledby="doneTitle">
-            <h3 id="doneTitle">Lesson complete</h3>
+            <h2 id="doneTitle">Lesson complete</h2>
             <div class="row">
               <div><span id="dWpm">0</span><small>WPM</small></div>
               <div><span id="dAcc">0</span>%<small>Accuracy</small></div>
@@ -86,10 +88,10 @@
     </div>
     <div class="panel target">
       <div class="panel-head"><strong id="tgtHead">Code to match</strong><span class="hint" id="maskHint"></span></div>
-      <div class="ctx" id="ctxT" hidden><div class="ctx-head"><span>Built in earlier steps</span><span class="ctx-n"></span></div><pre class="code"></pre></div>
-      <pre class="tgt code" id="tgt"></pre>
+      <div class="ctx" id="ctxT" hidden><div class="ctx-head"><span>Built in earlier steps</span><span class="ctx-n"></span></div><pre class="code" tabindex="0" aria-label="Code built in earlier steps"></pre></div>
+      <pre class="tgt code" id="tgt" tabindex="0" aria-label="Code to match"></pre>
     </div>
-  </main>
+  </div>
 
   <section class="strip">
     <div class="stats">
@@ -144,8 +146,10 @@
       </span>
     </div>
   </section>
+  </main>
 </div>
 <div class="toast" id="toast" hidden></div>
+<div class="sr-only" id="announce" role="status" aria-live="polite"></div>
 <div class="sum-wrap" id="welcome" hidden>
   <section class="sum intro" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
     <div class="sum-head">

@@ -84,7 +84,10 @@ function renderTarget(){
         else if(seen.has(tk.t))r*=0.6;
         masked=r<R.w;seen.add(tk.t);
       }
-      s+=`<span class="${hlClass(toks,j)}${masked?' m':''}" data-t="${esc(tk.t)}">${esc(tk.t)}</span>`;
+      // A masked token keeps its text for the eye (drawn as a bar) and for Peek, but a screen
+      // reader hears "blank" instead, so the blackout holds for everyone.
+      s+=masked?`<span class="${hlClass(toks,j)} m" data-t="${esc(tk.t)}"><span class="mt" aria-hidden="true">${esc(tk.t)}</span><span class="sr-only mb"> blank </span></span>`
+               :`<span class="${hlClass(toks,j)}" data-t="${esc(tk.t)}">${esc(tk.t)}</span>`;
     });
     html+=`<span class="ln" data-k="${blank?-1:k}">${s||' '}</span>`;
     if(!blank)k++;
@@ -92,9 +95,13 @@ function renderTarget(){
   tgt.innerHTML=html;
   const pct=Math.round(R.w*100);
   $('maskHint').textContent=R.w===0?'Nothing hidden':(R.w===1?'Everything hidden':`${pct}% of words hidden${R.s?' · some symbols':''}`);
-  $('modeHint').textContent=R.live?'Live coloring · Tab indents · Enter auto-indents':'No live coloring · Ctrl+Enter to check';
+  $('modeHint').textContent=R.live?'Live coloring · Tab indents · Esc then Tab leaves':'No live coloring · Ctrl+Enter to check · Esc then Tab leaves';
   $('peekBtn').disabled=R.w===0;
   $('peekBtn').style.opacity=R.w===0?.45:1;
+}
+function peekSr(on){
+  tgt.querySelectorAll('.m .mt').forEach(x=>x.setAttribute('aria-hidden',String(!on)));
+  tgt.querySelectorAll('.m .mb').forEach(x=>{if(on)x.setAttribute('aria-hidden','true');else x.removeAttribute('aria-hidden');});
 }
 function renderCtx(){
   ['ctxU','ctxT'].forEach(id=>{
@@ -145,7 +152,10 @@ function renderStats(){
   $('sWpm').textContent=startT&&min>0.03?Math.round((typed/5)/min):0;
   $('sAcc').textContent=typed?Math.max(0,Math.round(100*(typed-errors)/typed))+'%':'--';
   $('sTime').textContent=fmtTime(ms);
-  $('sLines').textContent=(lastA?lastA.doneK.size:0)+'/'+cur.T.length;
+  const nDone=lastA?lastA.doneK.size:0;
+  $('sLines').textContent=nDone+'/'+cur.T.length;
+  if(nDone>(renderStats.last||0)&&!complete)announce(`Line ${nDone} of ${cur.T.length} done`);
+  renderStats.last=nDone;
   $('sPeek').textContent=peeks;
 }
 function renderAll(a){lastA=a;renderHL(a);markTarget(a);renderStats();renderLiveViz();}
@@ -680,7 +690,7 @@ function simDraw(){
 function renderNav(){
   document.querySelectorAll('#modes button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.m===S.mode)));
   const list=inTrack()?TRACKS:LANES;
-  $('langs').innerHTML=list.map(l=>`<button role="tab" class="${l.soon?'soon':''}" aria-selected="${l.id===lane.id}" data-id="${l.id}">${esc(l.name)}${l.soon?'<small>Soon</small>':''}</button>`).join('');
+  $('langs').innerHTML=list.map(l=>`<button role="tab" class="${l.soon?'soon':''}" aria-selected="${l.id===lane.id}" tabindex="${l.id===lane.id?0:-1}" data-id="${l.id}">${esc(l.name)}${l.soon?'<small>Soon</small>':''}</button>`).join('');
   // On a phone the tabs are one scrolling row: bring the selected one into view without moving the page.
   const sel=$('langs').querySelector('[aria-selected="true"]'),bar=$('langs');
   if(sel&&bar.scrollWidth>bar.clientWidth){const r=sel.getBoundingClientRect(),b=bar.getBoundingClientRect();bar.scrollLeft+=r.left-b.left-(b.width-r.width)/2;}
@@ -758,6 +768,7 @@ function explainNow(){
 
 /* ---------- lifecycle ---------- */
 function resetAttempt(){
+  renderStats.last=0;
   ta.value='';ta.readOnly=false;typed=errors=peeks=0;startT=endT=0;complete=false;checked=false;
   $('done').hidden=true;clearInterval(timer);timer=null;tgt.classList.remove('peek');
   const R=RANKS[P().rank];
@@ -808,6 +819,7 @@ function finish(){
   $('doneSum').hidden=!(inTrack()&&idx===lane.lessons.length-1);
   $('done').hidden=false;$('doneNext').focus();
   SOUND.done();
+  announce(`Lesson complete. ${acc}% accuracy, ${wpm} words a minute. ${msg}`);
   renderStats();markTarget(lastA);renderRanks();renderGoal();renderMap();renderLiveViz();
 }
 /* ---------- track summary ----------
@@ -895,7 +907,11 @@ ta.addEventListener('input',e=>{
 });
 // The cursor moves without input on clicks and arrow keys.
 for(const ev of ['click','keyup','focus'])ta.addEventListener(ev,e=>{if(ev!=='keyup'||!['Shift','Control','Alt','Meta'].includes(e.key))explainNow();});
+let escArmed=false; // Esc, then Tab, moves focus out of the editor instead of indenting
 ta.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){escArmed=true;return;}
+  if(e.key==='Tab'&&escArmed){escArmed=false;return;} // let the browser move focus
+  if(!['Shift','Control','Alt','Meta'].includes(e.key))escArmed=false;
   if(complete)return;
   if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();doCheck();return;}
   if(e.key==='Tab'&&!e.shiftKey&&!e.ctrlKey&&!e.altKey){e.preventDefault();typed++;insert(' '.repeat(ld.tab));return;}
@@ -924,10 +940,19 @@ function doCheck(){
   const n=lastA.doneK.size,t=cur.T.length;
   flash(n===t?'Every line matches.':`${n} of ${t} lines match. Red lines need another look.`);
 }
-function flash(msg){const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(flash._t);flash._t=setTimeout(()=>{t.hidden=true;},2600);}
+// Screen-reader announcements: one polite live region (#announce). Cleared first so a repeated message is read again.
+function announce(msg){const a=$('announce');a.textContent='';clearTimeout(announce._t);announce._t=setTimeout(()=>{a.textContent=msg;},60);}
+function flash(msg){announce(msg);const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(flash._t);flash._t=setTimeout(()=>{t.hidden=true;},2600);}
 
 /* ---------- controls ---------- */
 $('modes').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.dataset.m===S.mode)return;S.mode=b.dataset.m;save();loadLesson();});
+// Tabs are one Tab stop; Left/Right/Home/End move between them, Enter or Space opens one.
+$('langs').addEventListener('keydown',e=>{
+  const tabs=[...$('langs').querySelectorAll('[role="tab"]')],i=tabs.indexOf(document.activeElement);if(i<0)return;
+  const to={ArrowRight:(i+1)%tabs.length,ArrowLeft:(i-1+tabs.length)%tabs.length,Home:0,End:tabs.length-1}[e.key];
+  if(to===undefined)return;e.preventDefault();
+  tabs[i].tabIndex=-1;tabs[to].tabIndex=0;tabs[to].focus();tabs[to].scrollIntoView({block:'nearest',inline:'nearest'});
+});
 $('langs').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   if(b.classList.contains('soon')){flash(`${b.firstChild.textContent} is coming soon.`);return;}
@@ -964,7 +989,7 @@ $('checkBtn').addEventListener('click',()=>{doCheck();ta.focus();});
 $('peekBtn').addEventListener('click',()=>{
   if(complete||RANKS[P().rank].w===0)return;
   peeks++;renderStats();tgt.classList.add('peek');clearTimeout(peekTimer);
-  peekTimer=setTimeout(()=>tgt.classList.remove('peek'),2000);ta.focus();
+  peekSr(true);peekTimer=setTimeout(()=>{tgt.classList.remove('peek');peekSr(false);},2000);ta.focus();
 });
 $('ranks').addEventListener('click',e=>{
   const b=e.target.closest('.rk');if(!b)return;const i=+b.dataset.i,p=P();
@@ -1012,7 +1037,14 @@ function closeDlg(id){$(id).hidden=true;if(id==='welcome'&&!S.welcomed){S.welcom
 for(const [id,btn] of [['welcome','welcomeClose'],['aboutDlg','aboutClose'],['threadsDlg','threadsClose'],['drillDlg','drillClose']]){
   $(btn).addEventListener('click',()=>closeDlg(id));
   $(id).addEventListener('click',e=>{if(e.target===$(id))closeDlg(id);});
-  $(id).addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closeDlg(id);}});
+  $(id).addEventListener('keydown',e=>{
+    if(e.key==='Escape'){e.preventDefault();closeDlg(id);return;}
+    if(e.key!=='Tab')return; // keep focus inside the open dialog
+    const f=[...$(id).querySelectorAll('a[href],button:not([disabled]),input:not([type="hidden"]),select,textarea,[tabindex]:not([tabindex="-1"])')].filter(x=>x.offsetParent!==null);
+    if(!f.length)return;const first=f[0],last=f[f.length-1];
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+  });
 }
 /* ---------- how it connects ---------- */
 // Threads (data/threads.js) follow one problem across lanes and tracks. Each stop opens its step.

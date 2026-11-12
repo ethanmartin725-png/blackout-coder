@@ -20,4 +20,14 @@ On each device:
 7. Save progress, then Load progress from the saved file. On an iPhone the file goes to Files.
 8. Turn Sound on and finish a lesson: a chime should play (iPhone: the silent switch mutes it).
 
+9. Screen reader (NVDA with Chrome on Windows; VoiceOver with Safari on a Mac or iPhone): open a
+   lesson at Student rank or above and read the Code to match panel. Hidden words should be read as
+   "blank"; press Peek and they should be read for two seconds. Typing a line to the end should
+   announce "Line 1 of N done", and finishing should announce the accuracy and speed.
+10. Keyboard only: Tab into the typing box, type, press Escape and then Tab: focus should leave the
+   box. In the lane tabs, Left and Right should move between tabs and Enter open one. In About,
+   Tab should stay inside the dialog until Escape closes it.
+11. Colour: with a colour-blindness filter (Chrome DevTools, Rendering, Emulate vision deficiencies,
+   Deuteranopia), finished lines should still be told apart by their check mark and the Lines count.
+
 Note anything odd as a GitHub issue with the device and browser, using Report a problem.
