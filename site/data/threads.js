@@ -43,6 +43,8 @@ BC.addThreads([
       ["t-sop", "Find the bottleneck", "6,314", "6,314 good barrels a week, the fewest of the three machines."],
       ["t-cost", "Absorption or cash", "3681.56", "A point of OEE on the sold-out bottleneck is $3,681.56 of cash, against $103.79 of absorbed cost."],
       ["t-sop", "Demand against capacity", "686", "686 barrels a week short of demand on average."],
+      ["t-heijunka", "Time left for changeovers", "314.4", "Feeding the bottleneck's level plan leaves Conveyor 3 314.4 minutes a week for changeovers."],
+      ["t-heijunka", "Cost by frequency", "578.79", "With the SMED clamps, every size every shift is the cheapest schedule that fits: $578.79 a week."],
       ["t-lean", "Standard work for Hoop Driver 1", "53.45", "Staging and walking during the hoop drive cut its cycle to 53.45 s."],
       ["ladder", "Time the press cycle", "65980", "The PLC times every cycle against the 65.45 s ideal."],
     ],
