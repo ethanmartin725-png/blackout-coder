@@ -55,9 +55,11 @@ BC.addThreads([
       ["t-savings", "Baseline in dollars", "2480.94", "Char Station 2's flares: 70.05 minutes, $2,480.94 a week (P4)."],
       ["t-spc", "Signals against fault_log", "[2, 3, 4, 10, 17, 20]", "Char depth runs deep in exactly the shifts that had a flare."],
       ["t-energy", "Propane per barrel", "0.5535", "Flare hours burn 0.5535 gallons of propane a barrel against 0.46."],
-      ["t-cost", "Price and usage variances", "82.32", "The extra gallons show up as an $82.32 unfavourable usage variance, 31 of the 35 gallons in flare hours."],
+      ["t-cost", "Price and usage variances", "82.32", "The extra gallons show up as an $82.32 unfavourable usage variance, all 35 of them the flares."],
       ["t-maint", "Backlog aging", "Burner B", "The Burner B igniter work order, opened at 05:52 in the handoff note."],
       ["ladder", "One relight, then lockout", "Retry_Used=1", "In the PLC: one automatic relight after a full purge, then lockout."],
+      ["t-rca", "Flame signal at each flare", "0.66", "Every flare hour has Burner B under 1.5 uA and Burner A steady: the igniter, not the gas train."],
+      ["t-rca", "The 5-Why chain", "burner maker", "Five whys end at the monthly PM standard, which checks neither the igniter nor the flame."],
     ],
   },
   {

@@ -19,6 +19,7 @@
 #   - demand_plan for the S&OP / Capacity track: DEMAND_DDL and seeded_demand() below, illustrative
 #   - wip_count and audit_5s for the Lean Basics track: WIP_DDL, AUDIT_DDL, seeded_wip(), seeded_audits(), illustrative
 #   - char_depth for the SPC track: CHAR_DEPTH_DDL and seeded_char_depth() below, illustrative
+#   - rca_node and flame_signal for the Root Cause track: RCA_DDL, FLAME_DDL, seeded_rca(), seeded_flame(), illustrative
 # A lesson that itself creates a table runs against an empty database instead.
 #
 # Server: a local SQL Server 2022, e.g.
@@ -612,6 +613,94 @@ def seeded_audits():
     return rows
 
 
+# The Root Cause track's investigation record and Char Station 2's flame-rod readings. The track types
+# these same CREATEs (build28.py checks they match). Illustrative.
+RCA_DDL = """CREATE TABLE rca_node (
+    node_id INT PRIMARY KEY,
+    parent_id INT NULL,
+    kind VARCHAR(5) NOT NULL,
+    category VARCHAR(12) NULL,
+    text VARCHAR(100) NOT NULL,
+    status VARCHAR(8) NOT NULL,
+    evidence VARCHAR(100) NULL
+);"""
+FLAME_DDL = """CREATE TABLE flame_signal (
+    hour_end DATETIME NOT NULL,
+    burner CHAR(1) NOT NULL,
+    avg_ua DECIMAL(4,2) NOT NULL,
+    min_ua DECIMAL(4,2) NOT NULL,
+    relights TINYINT NOT NULL,
+    PRIMARY KEY (hour_end, burner)
+);"""
+IGNITER_CHANGED = datetime.datetime(2026, 11, 8, 14)
+
+
+def seeded_rca():
+    """The char-flare investigation as the team starts it: eight candidate causes on a fishbone, all
+    open, and the 5-Why chain from the problem down, each step with its evidence. Illustrative."""
+    causes = [
+        ("Man", "Night crews run the burners differently"),
+        ("Machine", "Burner B igniter worn, spark too weak to relight"),
+        ("Machine", "Gas pressure switch trips falsely (WO 14 overdue)"),
+        ("Method", "Monthly burner PM has no igniter or flame check"),
+        ("Material", "Wet staves smother the flame"),
+        ("Measurement", "Dirty flame rod reads low"),
+        ("Environment", "Low air pressure starves the burner"),
+        ("Environment", "Cold night air leans the flame"),
+    ]
+    rows = [(i, None, "cause", cat, text, "open", None) for i, (cat, text) in enumerate(causes, start=1)]
+    whys = [
+        ("Char Station 2 stops on a char flare, 8 times in the OEE week", "fault_log: 8 flares, 70.05 min"),
+        ("Burner B loses its flame and does not relight", "flame_signal: B under 1.5 uA in every flare hour"),
+        ("Its igniter sparks too weakly to relight", "Handoff note 05:52 on 11-07; relights fail"),
+        ("The electrode has worn and its gap has opened", "WO 42 igniter replacement, to confirm at the change"),
+        ("Nobody checks the gap or the flame signal", "Monthly burner PM (WO 2) lists neither"),
+        ("The PM standard was written without the burner maker's checks", "Root cause: fix the standard"),
+    ]
+    for k, (text, ev) in enumerate(whys):
+        rows.append((10 + k, None if k == 0 else 9 + k, "why", None, text, "open", ev))
+    return rows
+
+
+def seeded_flame():
+    """Hourly flame-rod current for Char Station 2's two burners, 2026-10-31 06:00 to 11-14 06:00,
+    stamped at the hour's end like energy_log. Canonical: the flare hours (every Char flare in
+    fault_log, plus the Shift Handoff's open flare at 13:41:15 on 11-07). Illustrative: everything else.
+    Burner A holds about 4.5 uA. Burner B fades from 3.9 to 2.7 uA until its igniter is changed at
+    14:00 on 11-08, reads 0.6 uA lower from 20:00 to 06:00, and drops under the 1.5 uA dropout line in
+    every flare hour (three failed relights) and in two near-miss hours that relit once. After the
+    change it reads about 4.4 uA."""
+    import random
+    D = datetime.datetime
+    start, end = D(2026, 10, 31, 6), D(2026, 11, 14, 6)
+    flares = [s for m, f, s, e in seeded_faults() if f == "Char flare"] + [D(2026, 11, 7, 13, 41, 15)]
+    flare_hours = {s.replace(minute=0, second=0) + datetime.timedelta(hours=1) for s in flares}
+    near_miss = {D(2026, 11, 4, 3), D(2026, 11, 5, 23)}
+    rng = random.Random(2028)
+    span = (IGNITER_CHANGED - start).total_seconds()
+    rows = []
+    h = start + datetime.timedelta(hours=1)
+    while h <= end:
+        a = rng.gauss(4.5, 0.12)
+        rows.append((h, "A", round(a, 2), round(a - rng.uniform(0.2, 0.5), 2), 0))
+        hour = (h - datetime.timedelta(hours=1)).hour
+        night = hour >= 20 or hour < 6
+        if h <= IGNITER_CHANGED:
+            b = 3.9 - 1.2 * (h - start).total_seconds() / span - (0.6 if night else 0) + rng.gauss(0, 0.1)
+            if h in flare_hours:
+                low, relights = rng.uniform(0.6, 1.2), 3
+            elif h in near_miss:
+                low, relights = rng.uniform(1.30, 1.45), 1
+            else:
+                low, relights = max(b - rng.uniform(0.3, 0.6), rng.uniform(1.6, 1.8)), 0
+        else:
+            b = rng.gauss(4.4, 0.12)
+            low, relights = b - rng.uniform(0.2, 0.5), 0
+        rows.append((h, "B", round(b, 2), round(low, 2), relights))
+        h += datetime.timedelta(hours=1)
+    return rows
+
+
 def statements(sql):
     """Split on a semicolon at the end of a line. Fine for these lessons; not a general SQL parser."""
     return [s.strip() for s in re.split(r";[ \t]*(?:\n|$)", sql) if s.strip()]
@@ -673,6 +762,10 @@ if not creates_table:
     cur.executemany("INSERT INTO wip_count VALUES (%s, %s, %s)", seeded_wip())
     cur.execute(AUDIT_DDL)
     cur.executemany("INSERT INTO audit_5s VALUES (%s, %s, %s, %s)", seeded_audits())
+    cur.execute(RCA_DDL)
+    cur.executemany("INSERT INTO rca_node VALUES (%s, %s, %s, %s, %s, %s, %s)", seeded_rca())
+    cur.execute(FLAME_DDL)
+    cur.executemany("INSERT INTO flame_signal VALUES (%s, %s, %s, %s, %s)", seeded_flame())
     cur.execute(CHAR_DEPTH_DDL)
     cur.executemany("INSERT INTO char_depth VALUES (%s, %s, %s)", seeded_char_depth())
     for s in statements(PURCHASING_DDL):
