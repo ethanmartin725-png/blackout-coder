@@ -8,7 +8,7 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 
 **Foundations**: thirteen single-language lanes (Python, PLC ladder, SQL, C#, C++, Java, HTML, JavaScript, Structured Text, CSS, Ignition, DAX, Power Query M), 472 lessons.
 
-**Projects**: twenty-nine tracks, 462 steps, that build one connected system for a sample cooperage line:
+**Projects**: thirty tracks, 477 steps, that build one connected system for a sample cooperage line:
 
 | Track | Steps | Builds |
 |---|---|---|
@@ -41,6 +41,7 @@ The goal sits in the top bar. The code to match is on the right; you type it on 
 | Barrel Cost Model | 18 | A standard cost per barrel by station: material, labour, maintenance, energy and overhead, what an OEE point does to cost and to cash, scrap and variances |
 | Root Cause: Char Flares | 18 | A root cause analysis tested against the data: a fishbone as rows, causes rejected by test, a flame signal that finds the cause, a 5-Why chain and an action register |
 | Heijunka and Scheduling | 15 | Levelling Conveyor 3's 53 and 30-gal mix: the changeover budget, EPEI, batch size against cycle stock, what a changeover really costs, a levelled pattern and board |
+| Weekly Ops Review | 15 | The capstone: a weekly review pack from the plant's data and every track's results, with sources and as-of dates, an Excel one-pager and a PowerPoint deck built with python-pptx |
 
 Three clean runs (90%+ accuracy, no peeks) at a rank unlock the next one. Each lane and track keeps its own rank. Progress saves in the browser, per device; Save progress and Load progress at the bottom of each lesson move it between devices as a JSON file.
 

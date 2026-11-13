@@ -45,6 +45,7 @@ BC.addThreads([
       ["t-sop", "Demand against capacity", "686", "686 barrels a week short of demand on average."],
       ["t-heijunka", "Time left for changeovers", "314.4", "Feeding the bottleneck's level plan leaves Conveyor 3 314.4 minutes a week for changeovers."],
       ["t-heijunka", "Cost by frequency", "578.79", "With the SMED clamps, every size every shift is the cheapest schedule that fits: $578.79 a week."],
+      ["t-review", "Biggest gaps in dollars", "44,588", "In the weekly review, closing the bottleneck's OEE gap is worth $44,588 a week, the biggest weekly line."],
       ["t-lean", "Standard work for Hoop Driver 1", "53.45", "Staging and walking during the hoop drive cut its cycle to 53.45 s."],
       ["ladder", "Time the press cycle", "65980", "The PLC times every cycle against the 65.45 s ideal."],
     ],
