@@ -30,4 +30,12 @@ On each device:
 11. Colour: with a colour-blindness filter (Chrome DevTools, Rendering, Emulate vision deficiencies,
    Deuteranopia), finished lines should still be told apart by their check mark and the Lines count.
 
+12. Offline: open the site online, then open Use offline. Install it (Chrome or Edge: the button or
+   the address-bar icon; iPhone: Share, Add to Home Screen; Android: menu, Install app). Turn on
+   airplane mode, open the installed app, and type a lesson to the end. The fonts should look the
+   same as online, and the progress should still be there after closing and reopening the app.
+13. On a laptop, download the zip from Use offline, unzip it, turn off Wi-Fi and open index.html.
+   Type a lesson; reload; the score should still be there. Use offline should say it is the
+   downloaded copy.
+
 Note anything odd as a GitHub issue with the device and browser, using Report a problem.

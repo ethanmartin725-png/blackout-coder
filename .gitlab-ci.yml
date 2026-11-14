@@ -35,6 +35,9 @@ pages:
     # GitLab Pages serves the "public" folder
     - rm -rf public
     - cp -r site public
+    # The site as one zip for offline use (the "Use offline" card links to it)
+    - apk add --no-cache zip > /dev/null
+    - (cd site && zip -qr -X ../public/blackout-coder-offline.zip . -x sw.js)
   artifacts:
     paths:
       - public

@@ -1034,7 +1034,7 @@ $('progFile').addEventListener('change',async e=>{
 let dlgOpener=null;
 function openDlg(id){dlgOpener=document.activeElement;$(id).hidden=false;$(id).querySelector('.btn').focus();}
 function closeDlg(id){$(id).hidden=true;if(id==='welcome'&&!S.welcomed){S.welcomed=1;save();}if(dlgOpener&&dlgOpener.focus)dlgOpener.focus();}
-for(const [id,btn] of [['welcome','welcomeClose'],['aboutDlg','aboutClose'],['threadsDlg','threadsClose'],['drillDlg','drillClose']]){
+for(const [id,btn] of [['welcome','welcomeClose'],['aboutDlg','aboutClose'],['threadsDlg','threadsClose'],['drillDlg','drillClose'],['offlineDlg','offlineClose']]){
   $(btn).addEventListener('click',()=>closeDlg(id));
   $(id).addEventListener('click',e=>{if(e.target===$(id))closeDlg(id);});
   $(id).addEventListener('keydown',e=>{
@@ -1075,6 +1075,27 @@ $('threadList').addEventListener('click',e=>{
   closeDlg('threadsDlg');openStep(gid,title);
 });
 $('threadsBtn').addEventListener('click',()=>{renderThreads();openDlg('threadsDlg');});
+/* ---------- use offline ----------
+   sw.js keeps a copy of every file so the site opens with no connection; the deploy also publishes the
+   whole site as blackout-coder-offline.zip. On a downloaded copy (file://) there is no service worker
+   and no zip to offer, so the card says which copy this is. */
+const FILE_COPY=location.protocol==='file:';
+let installEvt=null;
+if('serviceWorker' in navigator&&!FILE_COPY)navigator.serviceWorker.register('sw.js').catch(()=>{});
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;$('installBtn').hidden=false;});
+window.addEventListener('appinstalled',()=>{installEvt=null;$('installBtn').hidden=true;renderOffline();});
+async function renderOffline(){
+  const st=$('offlineStatus'),standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+  $('offlineZip').hidden=FILE_COPY;$('offlineInstall').hidden=FILE_COPY||standalone;
+  $('installBtn').hidden=!installEvt;
+  if(FILE_COPY){st.textContent='This is a downloaded copy: it already works with no connection. Its progress is kept apart from the website\'s.';return;}
+  let n=0;try{const c=await caches.open('blackout-coder');n=(await c.keys()).length;}catch(e){}
+  st.textContent=standalone?`You are using the installed app. ${n} files are saved on this device, so it opens with no connection.`
+    :n?`${n} files are already saved in this browser, so this page also opens offline at the same address. Installing gives it its own icon.`
+    :'Nothing is saved on this device yet. Pick one of the two ways below while you are online.';
+}
+$('installBtn').addEventListener('click',async()=>{if(!installEvt)return;installEvt.prompt();await installEvt.userChoice.catch(()=>{});installEvt=null;renderOffline();});
+$('offlineBtn').addEventListener('click',()=>{renderOffline();openDlg('offlineDlg');});
 /* ---------- daily drill ----------
    Picks come from BCcore.pickDrill (tested in tools/progress-tests.mjs): weakest and stalest lessons
    first, at most two from one lane or track. A drill run counts like any run (best score, rank

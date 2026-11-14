@@ -35,6 +35,25 @@ for (const s of srcs) {
   catch (e) { fail(`${s}: ${e.message}`); }
 }
 
+// 1b. Offline: everything index.html and fonts.css load is a local file that exists (the service worker
+// caches exactly these), the manifest is valid with its icons present, and the font licence ships.
+for (const m of index.matchAll(/(?:src|href)="([^"#?]+)"/g)) {
+  const ref = m[1];
+  if (/^[a-z]+:/i.test(ref)) { if (!ref.startsWith("https://github.com/")) fail(`index.html loads ${ref} from the network; keep it local so the site works offline`); continue; }
+  if (ref === "blackout-coder-offline.zip") continue; // built by the deploy (pages.yml, .gitlab-ci.yml), not committed
+  if (!fs.existsSync(path.join(SITE, ref))) fail(`index.html references missing file ${ref}`);
+}
+{
+  const css = fs.readFileSync(path.join(SITE, "fonts/fonts.css"), "utf8");
+  for (const m of css.matchAll(/url\(([^)]+)\)/g))
+    if (!fs.existsSync(path.join(SITE, "fonts", m[1]))) fail(`fonts/fonts.css references missing font ${m[1]} (paths are relative to fonts/)`);
+  if (!fs.existsSync(path.join(SITE, "fonts/OFL.txt"))) fail("fonts/OFL.txt is missing: the fonts' licence must ship with them");
+  let man = null;
+  try { man = JSON.parse(fs.readFileSync(path.join(SITE, "manifest.webmanifest"), "utf8")); } catch (e) { fail(`manifest.webmanifest is not valid JSON: ${e.message}`); }
+  if (man) for (const ic of man.icons || []) if (!fs.existsSync(path.join(SITE, ic.src))) fail(`manifest icon ${ic.src} is missing`);
+  if (!fs.existsSync(path.join(SITE, "sw.js"))) fail("sw.js is missing: the site would not work offline");
+}
+
 // 2. Every data file must be listed in index.html
 const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) =>
   e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);

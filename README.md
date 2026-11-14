@@ -47,6 +47,13 @@ Three clean runs (90%+ accuracy, no peeks) at a rank unlock the next one. Each l
 
 **Daily drill** picks five lessons you have already typed to revisit, weakest and longest-untouched first, at most two from one lane or track. Each is typed at its lane's current rank and counts like any run. **How it connects** follows one problem (Hoop Driver 1's misfeeds, low air, the bottleneck, char flares, staves) through every track that works on it. Keyboard and screen readers work throughout: Escape then Tab leaves the editor, and blacked-out code reads as "blank".
 
+## Use it offline
+
+Footer, **Use offline**:
+
+- **Install it as an app** (laptop, phone or tablet): visit once while online, then Install in Chrome or Edge, or Share then Add to Home Screen on an iPhone. It opens with no connection, keeps your progress and updates itself when you are back online.
+- **Download a copy** (laptop): one zip of the whole site. Unzip it and open `index.html`. It keeps its own progress; Save progress and Load progress carry it between the website and the copy.
+
 ## Run it locally
 
 No build step and no install. Either:

@@ -5,9 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Blackout Coder</title>
 <meta name="description" content="Learn to code by copying real plant code, then writing it as more of it blacks out.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caladea:wght@400;700&family=JetBrains+Mono:wght@400;600&family=Public+Sans:wght@400;500;600;700&family=VT323&display=swap">
+<meta name="theme-color" content="#0a1528">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -137,6 +139,7 @@
         <button class="linkish" id="aboutBtn" type="button">About</button>
         <button class="linkish" id="threadsBtn" type="button">How it connects</button>
         <button class="linkish" id="drillLink" type="button">Daily drill</button>
+        <button class="linkish" id="offlineBtn" type="button">Use offline</button>
         <a class="linkish" id="reportLink" href="https://github.com/ethanmartin725-png/blackout-coder/issues/new?template=lesson-problem.md" target="_blank" rel="noopener">Report a problem</a>
         <button class="linkish" id="soundBtn" aria-pressed="false">Sound: off</button>
         <button class="linkish" id="saveProg">Save progress</button>
@@ -172,6 +175,32 @@
       <button class="pick" data-go="proj:t-plc" type="button"><b>I want a project</b><span>PLC &amp; HMI: a conveyor from first rung to screen</span></button>
     </div>
     <p class="intro-note">Every number comes from one sample plant whose figures are illustrative, not from a real plant. Your progress stays in this browser. Find this again under Start here, below the lesson.</p>
+  </section>
+</div>
+<div class="sum-wrap" id="offlineDlg" hidden>
+  <section class="sum intro" role="dialog" aria-modal="true" aria-labelledby="offlineTitle">
+    <div class="sum-head">
+      <div><span class="eyebrow">Use offline</span><h2 id="offlineTitle">Take it on a plane</h2>
+        <p id="offlineStatus"></p></div>
+      <button class="btn" id="offlineClose" type="button">Close</button>
+    </div>
+    <div class="offline-ways">
+      <div id="offlineInstall">
+        <h3>Install it as an app</h3>
+        <p>Works on a laptop, phone or tablet. Install it while you are online; it then opens with no connection, keeps your progress, and picks up new lessons the next time you are online.</p>
+        <button class="btn gold" id="installBtn" type="button" hidden>Install Blackout Coder</button>
+        <ul class="intro-note" id="installHow">
+          <li><b>iPhone or iPad:</b> in Safari, tap Share, then Add to Home Screen.</li>
+          <li><b>Android:</b> in Chrome, open the menu, then Install app.</li>
+          <li><b>Laptop:</b> in Chrome or Edge, click the install icon at the right of the address bar.</li>
+        </ul>
+      </div>
+      <div id="offlineZip">
+        <h3>Download a copy</h3>
+        <p>For a laptop: the whole site in one zip file. Unzip it anywhere and open <code>index.html</code> in your browser. The copy keeps its own progress; use Save progress here and Load progress there to carry it across.</p>
+        <a class="btn" id="zipLink" href="blackout-coder-offline.zip" download>Download the zip</a>
+      </div>
+    </div>
   </section>
 </div>
 <div class="sum-wrap" id="drillDlg" hidden>

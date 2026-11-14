@@ -47,8 +47,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/configure-pages@v6
+      # The site as one zip for offline use (the "Use offline" card links to it). Built here, not
+      # committed: a copy of site/ plus a zip of site/ inside it.
+      - name: Add the offline zip
+        run: |
+          cp -r site _site
+          (cd site && zip -qr -X ../_site/blackout-coder-offline.zip . -x sw.js)
+          ls -la _site/blackout-coder-offline.zip
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: site
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v5

@@ -56,6 +56,13 @@ button:focus-visible,select:focus-visible,.term:focus-visible{outline:2px solid 
 /* goal marquee */
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 .tgt:focus-visible,.ctx pre:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+.offline-ways{display:grid;gap:12px}
+.offline-ways>div{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:grid;gap:8px;justify-items:start}
+.offline-ways h3{margin:0;font:700 16px var(--f-display);color:var(--ink)}
+.offline-ways p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.5}
+.offline-ways ul{margin:0;padding-left:18px;display:grid;gap:4px}
+.offline-ways code{font:13px var(--f-code);color:var(--gold)}
+a.btn{text-decoration:none;display:inline-block}
 .mode-row{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;justify-content:flex-end}
 .drill-btn{background:var(--panel);border:1px solid var(--gold-dim);border-radius:6px;padding:6px 12px;font:600 11.5px var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--gold);cursor:pointer}
 .drill-btn:hover,.drill-btn:focus-visible{border-color:var(--gold);outline:none}
